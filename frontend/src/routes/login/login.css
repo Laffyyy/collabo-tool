@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Login page specific styles using Tailwind utilities */
+@layer components {
+  .login-container {
+    @apply min-h-screen bg-white flex items-center justify-center p-4;
+    background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);
+  }
+
+  .login-wrapper {
+    @apply w-full max-w-md relative;
+  }
+
+  .login-card {
+    @apply bg-white rounded-3xl shadow-2xl p-8 border;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(20, 184, 166, 0.1);
+  }
+
+  .login-footer {
+    @apply text-center mt-8;
+  }
+
+  .login-footer-text {
+    @apply text-sm text-gray-500;
+  }
+
+  .login-footer-link {
+    @apply font-medium transition-colors cursor-pointer bg-transparent border-none;
+    color: #14b8a6;
+  }
+
+  .login-footer-link:hover {
+    color: #0d9488;
+    text-decoration: underline;
+  }
+}
+
+/* Login form animations */
+@layer utilities {
+  .login-fade-in {
+    animation: loginFadeIn 0.5s ease-in-out;
+  }
+
+  .login-slide-up {
+    animation: loginSlideUp 0.6s ease-out;
+  }
+}
+
+@keyframes loginFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loginSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
