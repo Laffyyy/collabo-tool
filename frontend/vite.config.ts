@@ -3,6 +3,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	server: {
+		host: '0.0.0.0', // <- 👈 This exposes it to the local network
+		port: 5173, // optional: you can set a fixed port if needed
+		allowedHosts: ['.ngrok-free.app'],
+	},
 	plugins: [tailwindcss(), sveltekit()],
 	test: {
 		projects: [
