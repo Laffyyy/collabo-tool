@@ -1,95 +1,80 @@
 # Copilot Instructions for Collabo-Tool
 
 ## Project Overview
-This is a hackathon collaboration tool built with SvelteKit 5, TypeScript, and Tailwind CSS 4. The project follows a frontend-only architecture currently, with a structured approach to component organization.
+Frontend-only hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**. Features complete login flow with component-based architecture and comprehensive testing setup.
 
-## Architecture & Project Structure
+## Architecture & Key Patterns
 
-### Core Framework Stack
-- **SvelteKit 5** with TypeScript and Vite
-- **Tailwind CSS 4** with forms and typography plugins (`@import 'tailwindcss'` in `app.css`)
-- **Vitest** for testing with browser-based testing using Playwright
-- **ESLint + Prettier** with Svelte-specific configurations
+### Core Stack
+- **SvelteKit 5** with file-based routing (`frontend/src/routes/`)
+- **Tailwind CSS 4** via `@import 'tailwindcss'` in `app.css` with forms/typography plugins
+- **Vitest** dual-project setup: browser tests (`.svelte.test.ts`) and Node tests (`.test.ts/.spec.ts`)
+- **lucide-svelte** for consistent iconography
 
-### Directory Structure Pattern
+### Component Architecture Pattern
+Follow the login page example (`/routes/login/`):
+- **Page components**: `+page.svelte` with state management and navigation
+- **Sub-components**: Co-located with props interfaces and `$bindable()` for two-way binding
+- **Styling**: Inline Tailwind classes with fallback to `<style>` blocks (avoid `@apply` directives)
+
+Example from `LoginForm.svelte`:
+```typescript
+interface LoginFormProps {
+  loginUsername: string;
+  loginPassword: string;
+  onSubmit: (event: Event) => void;
+}
+
+let { loginUsername = $bindable(), onSubmit }: LoginFormProps = $props();
 ```
-frontend/src/
-├── lib/           # Shared library code ($lib alias)
-│   ├── api/       # API layer (currently empty)
-│   ├── components/ # Reusable components (currently empty)
-│   ├── context/   # Svelte context/stores (currently empty)
-│   └── utils/     # Utility functions (currently empty)
-└── routes/        # SvelteKit file-based routing
-```
+
+### Svelte 5 Runes (Critical)
+- Use `$state()` for reactive variables, `$props()` for component props
+- Use `$bindable()` for two-way binding between parent/child components
+- Render children with `{@render children()}` pattern in layouts
 
 ## Development Workflows
 
-### Running the Project
+### Essential Commands
 ```bash
 cd frontend
-npm run dev -- --open  # Development server with auto-open
+npm run dev -- --open    # Dev server with auto-open (port 5173, exposed to network)
+npm run test:unit         # Watch mode testing
+npm run lint             # ESLint + Prettier
+npm run check            # Svelte type checking
 ```
 
 ### Testing Strategy
-- **Svelte Component Tests**: Use `.svelte.test.ts` suffix, run in browser environment
-- **Server/Utility Tests**: Use `.test.ts` or `.spec.ts` suffix, run in Node environment
-- Test commands: `npm run test:unit` (watch mode) or `npm test` (single run)
+- **Browser tests**: `ComponentName.svelte.test.ts` using `vitest-browser-svelte`
+- **Server/utility tests**: `filename.test.ts` in Node environment
+- Use `render(Component)` and `page.getByRole()` for browser testing
 
-### Code Quality
-```bash
-npm run lint     # ESLint + Prettier check
-npm run format   # Auto-format with Prettier
-npm run check    # Svelte type checking
-```
+### Navigation & State
+- **Demo behavior**: All form submissions show `alert()` dialogs (no backend)
+- **Navigation**: Use `goto('/path')` from `$app/navigation`
+- **Routes**: Complete auth flow exists (`/login`, `/otp`, `/dashboard`, `/first-time`, etc.)
 
-## Key Conventions
+## Critical Configuration Details
 
-### Svelte 5 Patterns
-- Use `$props()` runes syntax in components (see `+layout.svelte`)
-- Render children with `{@render children()}` pattern
-- Import styles in layout: `import '../app.css'` in `+layout.svelte`
+### Vite Config Features
+- **Network exposure**: `host: '0.0.0.0'` for local network access
+- **Dual test projects**: Separate browser/Node environments in same config
+- **Tailwind integration**: Via `tailwindcss()` Vite plugin
 
-### Testing Patterns
-- Svelte component tests use `vitest-browser-svelte` with `render()` function
-- Browser tests use `page.getByRole()` for element selection
-- Example: `render(Page); page.getByRole('heading', { level: 1 })`
+### Styling Approach
+- **Primary**: Inline Tailwind classes with custom values (e.g., `focus:border-[#01c0a4]`)
+- **Fallback**: Component `<style>` blocks for complex styling
+- **Avoid**: `@apply` directives in component styles (setup issues noted)
 
-### File Naming
-- Route files: `+page.svelte`, `+layout.svelte` (SvelteKit convention)
-- Component tests: `ComponentName.svelte.test.ts`
-- Other tests: `filename.spec.ts` or `filename.test.ts`
+### TypeScript Setup
+- Extends `.svelte-kit/tsconfig.json` with `$lib` alias for `src/lib/`
+- ESLint configured with `no-undef: 'off'` for TypeScript compatibility
+- Module resolution: "bundler" mode
 
-## Configuration Notes
+## Project State & Conventions
+- **Empty directories**: `lib/{api,components,context,utils}` exist but unused
+- **Component co-location**: Keep related components in route directories
+- **Props patterns**: Always define TypeScript interfaces for component props
+- **File naming**: Follow SvelteKit conventions (`+page.svelte`, `+layout.svelte`)
 
-### Tailwind CSS 4
-- Uses new `@import 'tailwindcss'` syntax in `app.css`
-- Includes `@plugin '@tailwindcss/forms'` and `@plugin '@tailwindcss/typography'`
-- Configured through Vite plugin: `tailwindcss()` in `vite.config.ts`
-
-### TypeScript Configuration
-- Extends `.svelte-kit/tsconfig.json`
-- Path aliases handled by SvelteKit (`$lib` for `src/lib/`)
-- Strict mode enabled with module resolution: "bundler"
-
-### Vitest Multi-Project Setup
-- **Client tests**: Browser environment with Playwright for `.svelte.test.ts` files
-- **Server tests**: Node environment for `.test.ts/.spec.ts` files
-- Setup file: `vitest-setup-client.ts` for browser environment
-
-## Current State
-This is an early-stage hackathon project with foundational structure in place. The project includes:
-
-### Implemented Features
-- **Login Page** (`/login`): Complete UI-only login form with modern design
-  - Components: `LoginForm.svelte`, `LoginHeader.svelte`, `LoginBackground.svelte`
-  - Features: Username/password fields, password visibility toggle, responsive design
-  - No backend integration - displays demo alerts when submitted
-  - Uses lucide-svelte icons and custom CSS (not Tailwind @apply due to setup issues)
-
-### Development Notes
-- **CSS Approach**: Use regular CSS instead of `@apply` directives in component `<style>` blocks
-- **Icons**: Use `lucide-svelte` package for consistent iconography
-- **Demo Behavior**: All form submissions and navigation show alert dialogs since this is frontend-only
-- **Missing Directories**: `api/`, `components/`, `context/`, `utils/` are structured but empty
-
-When adding features, follow the established patterns and maintain the separation between client and server test environments. For new pages, follow the component-based architecture seen in the login implementation.
+When implementing new features, follow the established component co-location pattern from `/login` and maintain the demo-only navigation behavior until backend integration.
