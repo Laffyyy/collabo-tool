@@ -46,42 +46,86 @@
 
 <style>
 	.dashboard-container {
-		@apply min-h-screen bg-gradient-to-br from-slate-50 via-white to-teal-50 p-8;
+		min-height: 100vh;
+		background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);
+		padding: 2rem;
 	}
 	
 	.dashboard-header {
-		@apply flex justify-between items-center mb-8;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 2rem;
 	}
 	
 	.dashboard-title {
-		@apply text-3xl font-bold text-gray-800;
+		font-size: 1.875rem;
+		line-height: 2.25rem;
+		font-weight: 700;
+		color: #1f2937;
 	}
 	
 	.dashboard-logout-btn {
-		@apply bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors;
+		background-color: #dc2626;
+		color: white;
+		padding: 0.5rem 1.5rem;
+		border-radius: 0.5rem;
+		font-weight: 500;
+		border: none;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+	
+	.dashboard-logout-btn:hover {
+		background-color: #b91c1c;
 	}
 	
 	.dashboard-content {
-		@apply bg-white rounded-2xl shadow-lg p-8;
+		background-color: white;
+		border-radius: 1rem;
+		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+		padding: 2rem;
 	}
 	
 	.dashboard-message {
-		@apply text-lg text-gray-600 mb-8;
+		font-size: 1.125rem;
+		line-height: 1.75rem;
+		color: #4b5563;
+		margin-bottom: 2rem;
 	}
 	
 	.dashboard-navigation {
-		@apply space-y-4;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 	}
 	
 	.dashboard-nav-title {
-		@apply text-xl font-semibold text-gray-800 mb-4;
+		font-size: 1.25rem;
+		line-height: 1.75rem;
+		font-weight: 600;
+		color: #1f2937;
+		margin-bottom: 1rem;
 	}
 	
 	.dashboard-nav-buttons {
-		@apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 1rem;
 	}
 	
 	.dashboard-nav-btn {
-		@apply bg-[#01c0a4] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#00a085] transition-colors;
+		background-color: #01c0a4;
+		color: white;
+		padding: 0.75rem 1.5rem;
+		border-radius: 0.5rem;
+		font-weight: 500;
+		border: none;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+	
+	.dashboard-nav-btn:hover {
+		background-color: #00a085;
 	}
 </style>

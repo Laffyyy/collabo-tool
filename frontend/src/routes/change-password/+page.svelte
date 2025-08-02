@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	
 	let changePasswordNew = $state('');
 	let changePasswordConfirm = $state('');
@@ -8,6 +9,13 @@
 	let changePasswordsMatch = $state(false);
 	let changePasswordIsLoading = $state(false);
 	let changePasswordShowCancelModal = $state(false);
+	let changePasswordFromForgotPassword = $state(false);
+	
+	onMount(() => {
+		// Check if coming from forgot password flow
+		const urlParams = new URLSearchParams(window.location.search);
+		changePasswordFromForgotPassword = urlParams.get('from') === 'forgot-password';
+	});
 	
 	const changePasswordValidatePassword = () => {
 		const errors: string[] = [];
@@ -50,8 +58,12 @@
 			// Simulate API call
 			await new Promise(resolve => setTimeout(resolve, 2000));
 			
-			// Redirect to dashboard after successful password change
-			goto('/dashboard');
+			// Navigate based on source
+			if (changePasswordFromForgotPassword) {
+				goto('/login');
+			} else {
+				goto('/dashboard');
+			}
 		}
 	};
 	

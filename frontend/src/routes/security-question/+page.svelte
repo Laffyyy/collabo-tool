@@ -25,7 +25,7 @@
 		const isCorrect = Math.random() > 0.3; // 70% success rate for demo
 		
 		if (isCorrect) {
-			goto('/change-password');
+			goto('/change-password?from=forgot-password');
 		} else {
 			securityQuestionAttempts++;
 			if (securityQuestionAttempts >= securityQuestionMaxAttempts) {

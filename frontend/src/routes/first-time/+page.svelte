@@ -55,7 +55,7 @@
 			// Simulate API call
 			await new Promise(resolve => setTimeout(resolve, 2000));
 			
-			goto('/dashboard');
+			goto('/change-password?from=first-time');
 		}
 	};
 	
