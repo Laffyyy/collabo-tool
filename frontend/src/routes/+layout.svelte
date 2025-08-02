@@ -7,7 +7,9 @@
 	
 	// Pages that should not show navigation
 	const noNavPages = ['/login', '/forgot-password', '/otp', '/security-question', '/change-password', '/first-time', '/chat'];
-	let showNavigation = $derived(!noNavPages.includes($page.url.pathname));
+	// Admin pages handle their own navigation
+	const isAdminPage = $derived($page.url.pathname.startsWith('/admin/'));
+	let showNavigation = $derived(!noNavPages.includes($page.url.pathname) && !isAdminPage);
 </script>
 
 {#if showNavigation}

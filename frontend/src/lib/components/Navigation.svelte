@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Users, Bell, Search, User, Megaphone, Clock, AlertTriangle } from 'lucide-svelte';
+	import { Users, Bell, Search, User, Megaphone, Clock, AlertTriangle, ChevronDown, Settings, UserCog, Building2, MessageSquare, Radio, Globe, FileText } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
 	import { broadcastStore } from '$lib/stores/broadcast.svelte.ts';
 
 	let showNotifications = $state(false);
 	let showProfile = $state(false);
+	let showAdminDropdown = $state(false);
 	
 	// Subscribe to broadcast store with proper reactive pattern
 	let broadcasts = $derived($broadcastStore?.unreadBroadcasts || []);
@@ -35,6 +36,11 @@
 		showNotifications = false;
 		goto('/broadcast');
 	};
+
+	const navigateToAdminPage = (page: string) => {
+		showAdminDropdown = false;
+		goto(`/admin/${page}`);
+	};
 </script>
 
 <header class="bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between shadow-sm">
@@ -60,12 +66,77 @@
 		>
 			Broadcast
 		</button>
-		<button class="text-gray-600 hover:text-[#01c0a4] font-medium transition-colors">
-			Files
-		</button>
-		<button class="text-gray-600 hover:text-[#01c0a4] font-medium transition-colors">
-			Calendar
-		</button>
+		
+		<!-- Admin Controls Dropdown -->
+		<div class="relative">
+			<button 
+				onclick={() => showAdminDropdown = !showAdminDropdown}
+				class="flex items-center space-x-1 text-gray-600 hover:text-[#01c0a4] font-medium transition-colors"
+			>
+				<span>Admin Controls</span>
+				<ChevronDown class="w-4 h-4" />
+			</button>
+
+			<!-- Admin Dropdown -->
+			{#if showAdminDropdown}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div 
+					class="fixed inset-0 z-40" 
+					onclick={() => showAdminDropdown = false}
+				></div>
+				
+				<div class="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-2">
+					<button 
+						onclick={() => navigateToAdminPage('user-management')}
+						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+					>
+						<UserCog class="w-4 h-4" />
+						<span>User Management</span>
+					</button>
+					
+					<button 
+						onclick={() => navigateToAdminPage('ou-management')}
+						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+					>
+						<Building2 class="w-4 h-4" />
+						<span>OU Management</span>
+					</button>
+					
+					<button 
+						onclick={() => navigateToAdminPage('chat-management')}
+						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+					>
+						<MessageSquare class="w-4 h-4" />
+						<span>Chat Management</span>
+					</button>
+					
+					<button 
+						onclick={() => navigateToAdminPage('broadcast-management')}
+						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+					>
+						<Radio class="w-4 h-4" />
+						<span>Broadcast Management</span>
+					</button>
+					
+					<button 
+						onclick={() => navigateToAdminPage('global-configuration')}
+						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+					>
+						<Globe class="w-4 h-4" />
+						<span>Global Configuration</span>
+					</button>
+					
+					<button 
+						onclick={() => navigateToAdminPage('admin-logs')}
+						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+					>
+						<FileText class="w-4 h-4" />
+						<span>Admin Logs</span>
+					</button>
+				</div>
+			{/if}
+		</div>
 	</nav>
 
 	<!-- Right side actions -->
