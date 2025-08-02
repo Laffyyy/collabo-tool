@@ -28,6 +28,8 @@
     createdAt: Date;
     scheduledFor?: Date;
     requiresAcknowledgment: boolean;
+    responseType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+    choices?: string[];
     eventDate?: Date;
     acknowledgments: Acknowledgment[];
     isActive: boolean;
@@ -49,10 +51,11 @@
       content: 'Join us for our quarterly team meeting to discuss Q3 progress and Q4 planning. We\'ll cover project updates, team achievements, and upcoming initiatives.',
       priority: 'high' as const,
       targetRoles: ['admin', 'manager', 'supervisor'],
-      targetOUs: ['All'],
+      targetOUs: ['HR'],
       createdBy: '1',
       createdAt: new Date(Date.now() - 86400000), // 1 day ago
       requiresAcknowledgment: true,
+      responseType: 'preferred-date',
       eventDate: new Date(Date.now() + 604800000), // 1 week from now
       acknowledgments: [
         { userId: '2', acknowledgedAt: new Date(Date.now() - 43200000), attending: true },
@@ -66,10 +69,11 @@
       content: 'Scheduled system maintenance will occur this weekend from 2 AM to 6 AM. All systems will be temporarily unavailable during this time.',
       priority: 'medium' as const,
       targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      targetOUs: ['All'],
+      targetOUs: ['Team Lead'],
       createdBy: '1',
       createdAt: new Date(Date.now() - 172800000), // 2 days ago
       requiresAcknowledgment: false,
+      responseType: 'none',
       acknowledgments: [],
       isActive: true
     },
@@ -79,10 +83,11 @@
       content: 'Please review the updated remote work policy document. All team members must acknowledge receipt and understanding.',
       priority: 'low' as const,
       targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      targetOUs: ['All'],
+      targetOUs: ['HR'],
       createdBy: '1',
       createdAt: new Date(Date.now() - 259200000), // 3 days ago
       requiresAcknowledgment: true,
+      responseType: 'required',
       eventDate: undefined,
       acknowledgments: [
         { userId: '2', acknowledgedAt: new Date(Date.now() - 172800000), attending: undefined },
@@ -90,18 +95,64 @@
         { userId: '4', acknowledgedAt: new Date(Date.now() - 43200000), attending: undefined }
       ],
       isActive: true
+    },
+    {
+      id: '4',
+      title: 'Security Protocol Update',
+      content: 'New security measures are being implemented across all clusters. Please ensure compliance with the updated protocols.',
+      priority: 'high' as const,
+      targetRoles: ['admin', 'manager', 'supervisor'],
+      targetOUs: ['Cluster'],
+      createdBy: '1',
+      createdAt: new Date(Date.now() - 345600000), // 4 days ago
+      requiresAcknowledgment: true,
+      responseType: 'choices',
+      choices: ['I understand and will comply', 'I need more information', 'I have concerns about implementation'],
+      eventDate: undefined,
+      acknowledgments: [
+        { userId: '2', acknowledgedAt: new Date(Date.now() - 172800000), attending: undefined }
+      ],
+      isActive: true
+    },
+    {
+      id: '5',
+      title: 'Site-Wide Emergency Drill',
+      content: 'Emergency evacuation drill scheduled for next Friday. All personnel must participate.',
+      priority: 'high' as const,
+      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
+      targetOUs: ['Site Broadcast'],
+      createdBy: '1',
+      createdAt: new Date(Date.now() - 432000000), // 5 days ago
+      requiresAcknowledgment: true,
+      responseType: 'textbox',
+      eventDate: new Date(Date.now() + 432000000), // 5 days from now
+      acknowledgments: [
+        { userId: '2', acknowledgedAt: new Date(Date.now() - 172800000), attending: true },
+        { userId: '3', acknowledgedAt: new Date(Date.now() - 86400000), attending: true },
+        { userId: '4', acknowledgedAt: new Date(Date.now() - 43200000), attending: false }
+      ],
+      isActive: true
     }
   ]);
 
   let showCreateBroadcast = $state(false);
+  let selectedBroadcast = $state<Broadcast | null>(null);
+  let isAcknowledged = $state(false);
+  let preferredDate = $state('');
+  let selectedChoice = $state('');
+  let textResponse = $state('');
+  let activeTab = $state('HR');
   let newBroadcast = $state({
     title: '',
     content: '',
     priority: 'medium' as 'low' | 'medium' | 'high',
     targetRoles: [] as string[],
-    requiresAcknowledgment: false,
+    targetOU: '',
+    acknowledgmentType: 'none' as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
+    scheduleType: 'now' as 'now' | 'pick',
     eventDate: '',
-    scheduledFor: ''
+    scheduledFor: '',
+    choices: [''] as string[]
   });
 
   const roles = ['admin', 'manager', 'supervisor', 'support', 'frontline'];
@@ -111,10 +162,28 @@
     { value: 'high', label: 'High', color: 'text-red-600 bg-red-100' }
   ];
 
+  const tabs = [
+    { id: 'HR', label: 'HR' },
+    { id: 'Team Lead', label: 'Team Lead' },
+    { id: 'Cluster', label: 'Cluster' },
+    { id: 'Site Broadcast', label: 'Site Broadcast' }
+  ];
+
+  const targetOUs = [
+    'Human Resources',
+    'Information Technology',
+    'Operations',
+    'Finance',
+    'Marketing',
+    'Customer Service',
+    'Quality Assurance',
+    'Security'
+  ];
+
   // Computed values
   let sortedBroadcasts = $derived(
     [...broadcasts]
-      .filter(b => b.isActive)
+      .filter(b => b.isActive && b.targetOUs.includes(activeTab))
       .sort((a, b) => {
         // Sort by priority first (high > medium > low)
         const priorityOrder = { high: 3, medium: 2, low: 1 };
@@ -124,6 +193,13 @@
         // Then by creation date (newest first)
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       })
+  );
+
+  let tabCounts = $derived(
+    tabs.reduce((counts, tab) => {
+      counts[tab.id] = broadcasts.filter(b => b.isActive && b.targetOUs.includes(tab.id)).length;
+      return counts;
+    }, {} as Record<string, number>)
   );
 
   let canSendBroadcasts = $derived(currentUser.role === 'admin' || currentUser.role === 'manager');
@@ -137,29 +213,21 @@
         content: newBroadcast.content.trim(),
         priority: newBroadcast.priority,
         targetRoles: newBroadcast.targetRoles,
-        targetOUs: ['All'],
+        targetOUs: [activeTab],
         createdBy: currentUser.id,
         createdAt: new Date(),
-        scheduledFor: newBroadcast.scheduledFor ? new Date(newBroadcast.scheduledFor) : undefined,
-        requiresAcknowledgment: newBroadcast.requiresAcknowledgment,
-        eventDate: newBroadcast.eventDate ? new Date(newBroadcast.eventDate) : undefined,
+        scheduledFor: newBroadcast.scheduleType === 'pick' && newBroadcast.scheduledFor ? new Date(newBroadcast.scheduledFor) : undefined,
+        requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
+        responseType: newBroadcast.acknowledgmentType,
+        choices: newBroadcast.acknowledgmentType === 'choices' ? newBroadcast.choices.filter(choice => choice.trim()) : undefined,
+        eventDate: newBroadcast.scheduleType === 'pick' && newBroadcast.eventDate ? new Date(newBroadcast.eventDate) : undefined,
         acknowledgments: [],
         isActive: true
       };
 
       broadcasts = [broadcast, ...broadcasts];
       
-      // Reset form
-      newBroadcast = {
-        title: '',
-        content: '',
-        priority: 'medium',
-        targetRoles: [],
-        requiresAcknowledgment: false,
-        eventDate: '',
-        scheduledFor: ''
-      };
-      showCreateBroadcast = false;
+      closeCreateModal();
       
       alert('Broadcast created successfully!');
     }
@@ -200,6 +268,74 @@
   const exportCSV = (broadcast: Broadcast) => {
     alert('CSV export functionality would be implemented here.');
   };
+
+  const openBroadcastDetails = (broadcast: Broadcast) => {
+    selectedBroadcast = broadcast;
+    isAcknowledged = false; // Reset checkbox state
+    preferredDate = '';
+    selectedChoice = '';
+    textResponse = '';
+  };
+
+  const closeBroadcastDetails = () => {
+    selectedBroadcast = null;
+    isAcknowledged = false; // Reset checkbox state
+    preferredDate = '';
+    selectedChoice = '';
+    textResponse = '';
+  };
+
+  const confirmModal = () => {
+    if (selectedBroadcast && selectedBroadcast.requiresAcknowledgment) {
+      const existingAck = selectedBroadcast.acknowledgments.find(a => a.userId === currentUser.id);
+      if (!existingAck) {
+        let canSubmit = false;
+        let alertMessage = '';
+
+        switch (selectedBroadcast.responseType) {
+          case 'required':
+            canSubmit = isAcknowledged;
+            alertMessage = 'Broadcast acknowledged!';
+            break;
+          case 'preferred-date':
+            canSubmit = preferredDate.trim() !== '';
+            alertMessage = `Preferred date selected: ${preferredDate}`;
+            break;
+          case 'choices':
+            canSubmit = selectedChoice.trim() !== '';
+            alertMessage = `Response submitted: ${selectedChoice}`;
+            break;
+          case 'textbox':
+            canSubmit = textResponse.trim() !== '';
+            alertMessage = 'Response submitted successfully!';
+            break;
+        }
+
+        if (canSubmit) {
+          acknowledgeBroadcast(selectedBroadcast.id);
+          alert(alertMessage);
+        }
+      }
+    }
+    closeBroadcastDetails();
+  };
+
+  const closeCreateModal = () => {
+    showCreateBroadcast = false;
+    // Reset form
+    newBroadcast = {
+      title: '',
+      content: '',
+      priority: 'medium',
+      targetRoles: [],
+      targetOU: '',
+      acknowledgmentType: 'none',
+      scheduleType: 'now',
+      eventDate: '',
+      scheduledFor: '',
+      choices: ['']
+    };
+  };
 </script>
 
 <svelte:head>
@@ -226,159 +362,369 @@
 
   <!-- Create Broadcast Modal -->
   {#if showCreateBroadcast}
-    <div class="collaboration-card p-6 fade-in">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">Create New Broadcast</h2>
-      
-      <form onsubmit={(e) => { e.preventDefault(); createBroadcast(); }} class="space-y-4">
-        <!-- Title -->
-        <div>
-          <label for="title" class="block text-sm font-semibold text-gray-700 mb-2">Title</label>
-          <input
-            id="title"
-            bind:value={newBroadcast.title}
-            placeholder="Broadcast title"
-            required
-            class="input-field"
-          />
-        </div>
-
-        <!-- Content -->
-        <div>
-          <label for="content" class="block text-sm font-semibold text-gray-700 mb-2">Content</label>
-          <textarea
-            id="content"
-            bind:value={newBroadcast.content}
-            placeholder="Broadcast message"
-            required
-            rows="4"
-            class="input-field resize-none"
-          ></textarea>
-        </div>
-
-        <!-- Priority -->
-        <div>
-          <label for="priority" class="block text-sm font-semibold text-gray-700 mb-2">Priority</label>
-          <select id="priority" bind:value={newBroadcast.priority} class="input-field">
-            {#each priorities as priority}
-              <option value={priority.value}>{priority.label}</option>
-            {/each}
-          </select>
-        </div>
-
-        <!-- Target Roles -->
-        <div>
-          <span class="block text-sm font-semibold text-gray-700 mb-2">Target Roles</span>
-          <div class="grid grid-cols-2 gap-2">
-            {#each roles as role}
-              <label class="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  bind:group={newBroadcast.targetRoles}
-                  value={role}
-                  class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                />
-                <span class="text-sm capitalize">{role}</span>
-              </label>
-            {/each}
+    <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+        <!-- Modal Header -->
+        <div class="border-b border-gray-200 p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-800">Create New Broadcast</h2>
+              <p class="text-sm text-gray-600 mt-1">Send an announcement to your organization</p>
+            </div>
+            <button
+              onclick={closeCreateModal}
+              class="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+            >
+              ×
+            </button>
           </div>
         </div>
+        
+        <div class="p-6">
+          <form onsubmit={(e) => { e.preventDefault(); createBroadcast(); }} class="space-y-8">
+            
+            <!-- Section 1: Basic Information -->
+            <div class="bg-gray-50 rounded-lg p-5">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">1</span>
+                Basic Information
+              </h3>
+              
+              <div class="space-y-4">
+                <div>
+                  <label for="title" class="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+                  <input
+                    id="title"
+                    bind:value={newBroadcast.title}
+                    placeholder="Enter a clear, descriptive title"
+                    required
+                    class="input-field"
+                  />
+                </div>
 
-        <!-- Options -->
-        <div class="space-y-3">
-          <label class="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              bind:checked={newBroadcast.requiresAcknowledgment}
-              class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-            />
-            <span class="text-sm">Requires acknowledgment</span>
-          </label>
+                <div>
+                  <label for="content" class="block text-sm font-medium text-gray-700 mb-2">Message Content *</label>
+                  <textarea
+                    id="content"
+                    bind:value={newBroadcast.content}
+                    placeholder="Write your broadcast message here..."
+                    required
+                    rows="4"
+                    class="input-field resize-none"
+                  ></textarea>
+                </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label for="scheduledFor" class="block text-sm font-medium text-gray-700 mb-1">Schedule for</label>
-              <input
-                id="scheduledFor"
-                type="datetime-local"
-                bind:value={newBroadcast.scheduledFor}
-                class="input-field text-sm"
-              />
+                <div>
+                  <label for="priority" class="block text-sm font-medium text-gray-700 mb-2">Priority Level</label>
+                  <select id="priority" bind:value={newBroadcast.priority} class="input-field">
+                    {#each priorities as priority}
+                      <option value={priority.value}>{priority.label}</option>
+                    {/each}
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">High priority broadcasts will be highlighted with a red border</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <label for="eventDate" class="block text-sm font-medium text-gray-700 mb-1">Event date</label>
-              <input
-                id="eventDate"
-                type="datetime-local"
-                bind:value={newBroadcast.eventDate}
-                class="input-field text-sm"
-              />
-            </div>
-          </div>
-        </div>
 
-        <!-- Actions -->
-        <div class="flex space-x-3 pt-4">
-          <button type="submit" class="primary-button">
-            Create Broadcast
-          </button>
-          <button
-            type="button"
-            onclick={() => showCreateBroadcast = false}
-            class="secondary-button"
-          >
-            Cancel
-          </button>
+            <!-- Section 2: Target Audience -->
+            <div class="bg-gray-50 rounded-lg p-5">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">2</span>
+                Target Audience
+              </h3>
+              
+              <div class="space-y-4">
+                <div>
+                  <label for="targetOU" class="block text-sm font-medium text-gray-700 mb-2">Organizational Unit</label>
+                  <select id="targetOU" bind:value={newBroadcast.targetOU} class="input-field">
+                    <option value="">Select department or unit...</option>
+                    {#each targetOUs as ou}
+                      <option value={ou}>{ou}</option>
+                    {/each}
+                  </select>
+                </div>
+
+                <div>
+                  <span class="block text-sm font-medium text-gray-700 mb-3">Target Roles *</span>
+                  <div class="mb-3 p-3 bg-white rounded border border-gray-200">
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={newBroadcast.targetRoles.length === roles.length}
+                        onchange={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          if (target.checked) {
+                            newBroadcast.targetRoles = [...roles];
+                          } else {
+                            newBroadcast.targetRoles = [];
+                          }
+                        }}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm font-medium text-gray-700">Select All Roles</span>
+                    </label>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    {#each roles as role}
+                      <label class="flex items-center space-x-2 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          bind:group={newBroadcast.targetRoles}
+                          value={role}
+                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                        />
+                        <span class="text-sm capitalize font-medium">{role}</span>
+                      </label>
+                    {/each}
+                  </div>
+                  {#if newBroadcast.targetRoles.length === 0}
+                    <p class="text-xs text-red-500 mt-2">Please select at least one role</p>
+                  {/if}
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Response Settings -->
+            <div class="bg-gray-50 rounded-lg p-5">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">3</span>
+                Response Settings
+              </h3>
+              
+              <div class="space-y-4">
+                <div>
+                  <label for="acknowledgmentType" class="block text-sm font-medium text-gray-700 mb-2">Response Type</label>
+                  <select id="acknowledgmentType" bind:value={newBroadcast.acknowledgmentType} class="input-field">
+                    <option value="none">No Response Required</option>
+                    <option value="required">Requires Acknowledgment</option>
+                    <option value="preferred-date">Preferred Date Selection</option>
+                    <option value="choices">Multiple Choice Options</option>
+                    <option value="textbox">Text Response</option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {#if newBroadcast.acknowledgmentType === 'none'}
+                      Recipients will receive the broadcast without needing to respond
+                    {:else if newBroadcast.acknowledgmentType === 'required'}
+                      Recipients must acknowledge they have read the broadcast
+                    {:else if newBroadcast.acknowledgmentType === 'preferred-date'}
+                      Recipients can select their preferred date/time
+                    {:else if newBroadcast.acknowledgmentType === 'choices'}
+                      Recipients can choose from predefined options
+                    {:else if newBroadcast.acknowledgmentType === 'textbox'}
+                      Recipients can provide a written response
+                    {/if}
+                  </p>
+                </div>
+
+                <!-- Dynamic Choices Section -->
+                {#if newBroadcast.acknowledgmentType === 'choices'}
+                  <div class="bg-white rounded border border-gray-200 p-4">
+                    <span class="block text-sm font-medium text-gray-700 mb-3">Choice Options</span>
+                    <div class="space-y-3">
+                      {#each newBroadcast.choices as choice, index}
+                        <div class="flex space-x-2">
+                          <input
+                            type="text"
+                            bind:value={newBroadcast.choices[index]}
+                            placeholder="Option {index + 1}"
+                            class="input-field flex-1"
+                          />
+                          {#if newBroadcast.choices.length > 1}
+                            <button
+                              type="button"
+                              onclick={() => newBroadcast.choices.splice(index, 1)}
+                              class="px-3 py-2 text-red-600 hover:text-red-800 text-sm font-medium"
+                            >
+                              Remove
+                            </button>
+                          {/if}
+                        </div>
+                      {/each}
+                      {#if newBroadcast.choices.length < 8}
+                        <button
+                          type="button"
+                          onclick={() => newBroadcast.choices.push('')}
+                          class="text-sm text-[#01c0a4] hover:text-[#00a085] font-medium"
+                        >
+                          + Add Another Option
+                        </button>
+                      {:else}
+                        <p class="text-xs text-gray-500 italic">Maximum of 8 options allowed</p>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Section 4: Scheduling -->
+            <div class="bg-gray-50 rounded-lg p-5">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">4</span>
+                Scheduling
+              </h3>
+              
+              <div class="space-y-4">
+                <div>
+                  <span class="block text-sm font-medium text-gray-700 mb-3">When to send this broadcast?</span>
+                  <div class="space-y-3">
+                    <label class="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        bind:group={newBroadcast.scheduleType}
+                        value="now"
+                        class="mt-1 rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <div>
+                        <span class="text-sm font-medium">Send Immediately</span>
+                        <p class="text-xs text-gray-500">The broadcast will be sent as soon as you create it</p>
+                      </div>
+                    </label>
+                    <label class="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        bind:group={newBroadcast.scheduleType}
+                        value="pick"
+                        class="mt-1 rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <div>
+                        <span class="text-sm font-medium">Schedule for Later</span>
+                        <p class="text-xs text-gray-500">Choose a specific date and time to send the broadcast</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Schedule Details (conditional) -->
+                {#if newBroadcast.scheduleType === 'pick'}
+                  <div class="bg-white rounded border border-gray-200 p-4">
+                    <label for="scheduledFor" class="block text-sm font-medium text-gray-700 mb-2">Schedule Date & Time</label>
+                    <div 
+                      class="relative cursor-pointer"
+                      role="button"
+                      tabindex="0"
+                      onclick={() => document.getElementById('scheduledFor')?.focus()}
+                      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('scheduledFor')?.focus(); } }}
+                    >
+                      <input
+                        id="scheduledFor"
+                        type="datetime-local"
+                        bind:value={newBroadcast.scheduledFor}
+                        class="input-field cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-between pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onclick={closeCreateModal}
+                class="secondary-button"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim() || newBroadcast.targetRoles.length === 0}
+              >
+                {newBroadcast.scheduleType === 'now' ? 'Send Broadcast' : 'Schedule Broadcast'}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
   {/if}
+
+  <!-- Tabs -->
+  <div class="border-b border-gray-200 mb-6">
+    <nav class="-mb-px flex space-x-8">
+      {#each tabs as tab}
+        <button
+          onclick={() => activeTab = tab.id}
+          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === tab.id
+            ? 'border-[#01c0a4] text-[#01c0a4]'
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }"
+        >
+          {tab.label}
+          <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium {activeTab === tab.id
+            ? 'bg-[#01c0a4] text-white'
+            : 'bg-gray-100 text-gray-600'
+          }">
+            {tabCounts[tab.id] || 0}
+          </span>
+        </button>
+      {/each}
+    </nav>
+  </div>
 
   <!-- Broadcasts List -->
   <div class="space-y-4">
     {#each sortedBroadcasts as broadcast}
-      <div class="collaboration-card p-6 fade-in {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''}">
-        <div class="flex items-start justify-between mb-4">
-          <div class="flex-1">
+      <div 
+        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''}"
+        role="button"
+        tabindex="0"
+        onclick={() => openBroadcastDetails(broadcast)}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
+      >
+        <div class="flex items-start justify-between">
+          <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-3 mb-2">
-              <h3 class="text-xl font-bold text-gray-800">{broadcast.title}</h3>
-              <span class="px-2 py-1 rounded-full text-xs font-medium {getPriorityStyle(broadcast.priority)}">
+              <h3 class="text-lg font-bold text-gray-800 truncate">{broadcast.title}</h3>
+              <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
                 {broadcast.priority.toUpperCase()}
               </span>
               {#if broadcast.priority === 'high'}
-                <AlertTriangle class="w-5 h-5 text-red-500" />
+                <AlertTriangle class="w-4 h-4 text-red-500 flex-shrink-0" />
               {/if}
             </div>
-            <p class="text-gray-600 mb-3">{broadcast.content}</p>
+            
+            <!-- Content Preview -->
+            <div class="mb-3">
+              <p class="text-gray-600 text-sm line-clamp-2 break-words">
+                {broadcast.content}
+              </p>
+              {#if broadcast.content.length > 120}
+                <span class="text-xs text-gray-400 italic">Click to read more...</span>
+              {/if}
+            </div>
             
             <!-- Metadata -->
-            <div class="flex items-center space-x-4 text-sm text-gray-500">
+            <div class="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
               <div class="flex items-center space-x-1">
-                <Calendar class="w-4 h-4" />
-                <span>{formatDate(broadcast.createdAt)}</span>
+                <Calendar class="w-4 h-4 flex-shrink-0" />
+                <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
               </div>
               <div class="flex items-center space-x-1">
-                <Users class="w-4 h-4" />
-                <span>{broadcast.targetRoles.join(', ')}</span>
+                <Users class="w-4 h-4 flex-shrink-0" />
+                <span class="truncate">{broadcast.targetRoles.join(', ')}</span>
               </div>
               {#if broadcast.eventDate}
                 <div class="flex items-center space-x-1">
-                  <Clock class="w-4 h-4" />
-                  <span>Event: {formatDate(broadcast.eventDate)}</span>
+                  <Clock class="w-4 h-4 flex-shrink-0" />
+                  <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
                 </div>
               {/if}
             </div>
           </div>
 
-          <!-- Acknowledgment Status -->
+          <!-- Acknowledgment Count -->
           {#if broadcast.requiresAcknowledgment}
-            <div class="text-right">
-              <div class="text-sm text-gray-500 mb-2">
+            <div class="text-right flex-shrink-0 ml-4">
+              <div class="text-sm text-gray-500 mb-2 whitespace-nowrap">
                 {broadcast.acknowledgments.length} acknowledgments
               </div>
-              {#if canAccessAdmin}
+              {#if canAccessAdmin && broadcast.acknowledgments.length > 0}
                 <button 
-                  onclick={() => exportCSV(broadcast)}
-                  class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1"
+                  onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
+                  class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
                 >
                   <Download class="w-4 h-4" />
                   <span>Export CSV</span>
@@ -387,46 +733,6 @@
             </div>
           {/if}
         </div>
-
-        <!-- Acknowledgment Actions -->
-        {#if broadcast.requiresAcknowledgment}
-          {@const userAck = broadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
-          {#if !userAck}
-            <div class="flex items-center space-x-3">
-              <button
-                onclick={() => acknowledgeBroadcast(broadcast.id)}
-                class="primary-button text-sm py-2 px-4 flex items-center space-x-2"
-              >
-                <CheckCircle class="w-4 h-4" />
-                <span>Acknowledge</span>
-              </button>
-              {#if broadcast.eventDate}
-                <button
-                  onclick={() => acknowledgeBroadcast(broadcast.id, true)}
-                  class="secondary-button text-sm py-2 px-4"
-                >
-                  Attending
-                </button>
-                <button
-                  onclick={() => acknowledgeBroadcast(broadcast.id, false)}
-                  class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-xl hover:bg-gray-300 transition-colors text-sm"
-                >
-                  Not Attending
-                </button>
-              {/if}
-            </div>
-          {:else}
-            <div class="flex items-center space-x-2 text-green-600">
-              <CheckCircle class="w-5 h-5" />
-              <span class="text-sm font-medium">
-                Acknowledged {formatDate(userAck.acknowledgedAt)}
-                {#if userAck.attending !== undefined}
-                  • {userAck.attending ? 'Attending' : 'Not Attending'}
-                {/if}
-              </span>
-            </div>
-          {/if}
-        {/if}
       </div>
     {/each}
 
@@ -452,4 +758,198 @@
       </div>
     {/if}
   </div>
+
+  <!-- Broadcast Details Modal -->
+  {#if selectedBroadcast}
+    <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+        <div class="p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-start space-x-3 min-w-0 flex-1">
+              <div class="min-w-0 flex-1">
+                <h2 class="text-2xl font-bold text-gray-800 break-words pr-4">{selectedBroadcast.title}</h2>
+                <div class="flex items-center space-x-2 mt-2">
+                  <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(selectedBroadcast.priority)}">
+                    {selectedBroadcast.priority.toUpperCase()}
+                  </span>
+                  {#if selectedBroadcast.priority === 'high'}
+                    <AlertTriangle class="w-5 h-5 text-red-500 flex-shrink-0" />
+                  {/if}
+                </div>
+              </div>
+            </div>
+            {#if selectedBroadcast.requiresAcknowledgment}
+              {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
+              {#if !userAck}
+                <button
+                  onclick={closeBroadcastDetails}
+                  class="text-gray-400 hover:text-gray-600 text-2xl font-bold flex-shrink-0 ml-2"
+                >
+                  ×
+                </button>
+              {/if}
+            {:else}
+              <button
+                onclick={closeBroadcastDetails}
+                class="text-gray-400 hover:text-gray-600 text-2xl font-bold flex-shrink-0 ml-2"
+              >
+                ×
+              </button>
+            {/if}
+          </div>
+
+          <!-- Content -->
+          <div class="mb-6">
+            <p class="text-gray-700 text-lg leading-relaxed break-words">{selectedBroadcast.content}</p>
+          </div>
+
+          <!-- Metadata -->
+          <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="flex items-center space-x-2 text-sm text-gray-600">
+                <Calendar class="w-4 h-4 flex-shrink-0" />
+                <span class="break-words">Created: {formatDate(selectedBroadcast.createdAt)}</span>
+              </div>
+              <div class="flex items-center space-x-2 text-sm text-gray-600">
+                <Users class="w-4 h-4 flex-shrink-0" />
+                <span class="break-words">Target: {selectedBroadcast.targetRoles.join(', ')}</span>
+              </div>
+              {#if selectedBroadcast.eventDate}
+                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                  <Clock class="w-4 h-4 flex-shrink-0" />
+                  <span class="break-words">Event: {formatDate(selectedBroadcast.eventDate)}</span>
+                </div>
+              {/if}
+              {#if selectedBroadcast.requiresAcknowledgment}
+                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                  <CheckCircle class="w-4 h-4 flex-shrink-0" />
+                  <span class="break-words">{selectedBroadcast.acknowledgments.length} acknowledgments</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          <!-- Acknowledgment Actions -->
+          {#if selectedBroadcast.requiresAcknowledgment}
+            {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
+            <div class="mb-6">
+              {#if !userAck}
+                <div class="p-4 bg-gray-50 rounded-lg">
+                  {#if selectedBroadcast.responseType === 'required'}
+                    <!-- Simple Acknowledgment -->
+                    <label class="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        bind:checked={isAcknowledged}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] w-5 h-5"
+                      />
+                      <span class="text-gray-700 font-medium">I acknowledge receipt of this broadcast</span>
+                    </label>
+                  {:else if selectedBroadcast.responseType === 'preferred-date'}
+                    <!-- Preferred Date Selection -->
+                    <div>
+                      <label for="preferredDate" class="block text-sm font-medium text-gray-700 mb-2">Select your preferred date/time</label>
+                      <div 
+                        class="relative cursor-pointer"
+                        role="button"
+                        tabindex="0"
+                        onclick={() => document.getElementById('preferredDate')?.focus()}
+                        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('preferredDate')?.focus(); } }}
+                      >
+                        <input
+                          id="preferredDate"
+                          type="datetime-local"
+                          bind:value={preferredDate}
+                          class="input-field cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
+                    <!-- Multiple Choice Options -->
+                    <div>
+                      <span class="block text-sm font-medium text-gray-700 mb-3">Please select your response:</span>
+                      <div class="space-y-2">
+                        {#each selectedBroadcast.choices as choice}
+                          <label class="flex items-start space-x-3 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="radio"
+                              bind:group={selectedChoice}
+                              value={choice}
+                              class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] mt-1 flex-shrink-0"
+                            />
+                            <span class="text-sm break-words">{choice}</span>
+                          </label>
+                        {/each}
+                      </div>
+                    </div>
+                  {:else if selectedBroadcast.responseType === 'textbox'}
+                    <!-- Text Response -->
+                    <div>
+                      <label for="textResponse" class="block text-sm font-medium text-gray-700 mb-2">Your response:</label>
+                      <textarea
+                        id="textResponse"
+                        bind:value={textResponse}
+                        placeholder="Enter your feedback or response here..."
+                        rows="4"
+                        class="input-field resize-none"
+                      ></textarea>
+                    </div>
+                  {/if}
+                </div>
+              {:else}
+                <div class="flex items-center space-x-2 text-green-600 p-4 bg-green-50 rounded-lg">
+                  <CheckCircle class="w-5 h-5" />
+                  <span class="font-medium">
+                    Acknowledged {formatDate(userAck.acknowledgedAt)}
+                    {#if userAck.attending !== undefined}
+                      • {userAck.attending ? 'Attending' : 'Not Attending'}
+                    {/if}
+                  </span>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Confirm Button -->
+          <div class="flex justify-end pt-4 border-t border-gray-200">
+            {#if selectedBroadcast.requiresAcknowledgment}
+              {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
+              {#if userAck}
+                <button
+                  onclick={closeBroadcastDetails}
+                  class="primary-button"
+                >
+                  Close
+                </button>
+              {:else}
+                {@const canConfirm = (() => {
+                  switch (selectedBroadcast.responseType) {
+                    case 'required': return isAcknowledged;
+                    case 'preferred-date': return preferredDate.trim() !== '';
+                    case 'choices': return selectedChoice.trim() !== '';
+                    case 'textbox': return textResponse.trim() !== '';
+                    default: return false;
+                  }
+                })()}
+                <button
+                  onclick={confirmModal}
+                  disabled={!canConfirm}
+                  class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Confirm
+                </button>
+              {/if}
+            {:else}
+              <button
+                onclick={closeBroadcastDetails}
+                class="primary-button"
+              >
+                Close
+              </button>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>

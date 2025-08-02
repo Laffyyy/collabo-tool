@@ -37,6 +37,8 @@ cd frontend
 npm run dev -- --open  # Development server with auto-open
 ```
 
+**Network Configuration**: The dev server is configured to expose on `0.0.0.0:5173` with ngrok support for external access. This allows testing on mobile devices and sharing previews during development.
+
 ### Testing Strategy
 - **Svelte Component Tests**: Use `.svelte.test.ts` suffix, run in browser environment
 - **Server/Utility Tests**: Use `.test.ts` or `.spec.ts` suffix, run in Node environment
@@ -82,7 +84,8 @@ npm run check    # Svelte type checking
 
 ### Component Naming and Organization
 - **Navigation**: `Navigation.svelte` in `$lib/components/` for main app header
-- **Page Components**: Use descriptive subcomponents for complex pages (e.g., `LoginForm.svelte`, `LoginBackground.svelte`)
+- **Page Components**: Use descriptive subcomponents for complex pages (e.g., `LoginForm.svelte`, `LoginBackground.svelte`, `LoginHeader.svelte`)
+- **Subcomponent Pattern**: Break complex pages into focused components within the same route directory
 - **Reusable Patterns**: Extract common UI patterns into `$lib/components/`
 
 ### TypeScript Integration
@@ -96,6 +99,7 @@ npm run check    # Svelte type checking
 - **Permission Gates**: Use derived getters like `canAccessAdmin`, `canSendBroadcasts`
 - **Demo Behavior**: All authentication is frontend-only with mock data
 - **Route Protection**: Pages check authentication state and redirect accordingly
+- **Navigation Hiding**: Layout uses `noNavPages` array to hide navigation on auth routes and chat
 
 ## Configuration Notes
 
@@ -153,6 +157,7 @@ npm run check    # Svelte type checking
 - **AuthStore**: User management, role permissions, login state
 - **BroadcastStore**: Broadcast creation, acknowledgment tracking, admin features
 - **Mock Data**: Comprehensive demo data for users, conversations, broadcasts
+- **Initialization Pattern**: Stores initialize with demo data in constructor, use realistic timestamps and user IDs
 
 ### UI Design System
 - **Color Palette**: Primary `#01c0a4` (aqua green), secondary greys, red for priorities
