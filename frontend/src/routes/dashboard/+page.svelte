@@ -24,6 +24,9 @@
 		<div class="dashboard-navigation">
 			<h2 class="dashboard-nav-title">Test Navigation:</h2>
 			<div class="dashboard-nav-buttons">
+				<button onclick={() => goto('/chat')} class="dashboard-nav-btn">
+					Go to Messages
+				</button>
 				<button onclick={() => goto('/otp')} class="dashboard-nav-btn">
 					Test OTP Page
 				</button>
