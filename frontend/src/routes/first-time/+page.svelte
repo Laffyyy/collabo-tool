@@ -143,12 +143,12 @@
 
 <!-- Terms Modal -->
 {#if $firstTimeShowTermsModal}
-	<div class="firsttime-modal-overlay">
-		<div class="firsttime-modal">
-			<h3 class="firsttime-modal-title">Terms of Service & PII Protection</h3>
-			<div class="firsttime-modal-content">
+	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+			<h3 class="text-lg font-bold text-gray-800 mb-4">Terms of Service & PII Protection</h3>
+			<div class="text-gray-600 mb-6 space-y-3">
 				<p>By using this system, you agree to:</p>
-				<ul>
+				<ul class="list-disc list-inside space-y-1 ml-4">
 					<li>Protect your login credentials</li>
 					<li>Not share your account with others</li>
 					<li>Report any security incidents</li>
@@ -156,18 +156,19 @@
 				</ul>
 				<p>Your personal information is protected and will not be shared with third parties.</p>
 			</div>
-			<div class="firsttime-modal-checkbox">
+			<div class="flex items-center gap-3 mb-6">
 				<input
 					type="checkbox"
 					id="firsttime-terms"
 					bind:checked={$firstTimeTermsAccepted}
+					class="w-4 h-4 text-[#01c0a4] border-gray-300 rounded focus:ring-[#01c0a4]"
 				/>
-				<label for="firsttime-terms">I agree to the terms and conditions</label>
+				<label for="firsttime-terms" class="text-sm text-gray-700">I agree to the terms and conditions</label>
 			</div>
 			<button
 				onclick={firstTimeAcceptTerms}
 				disabled={!$firstTimeTermsAccepted}
-				class="firsttime-modal-accept"
+				class="w-full bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 focus:outline-none focus:ring-4 focus:ring-[#01c0a4]/20 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 			>
 				Accept & Continue
 			</button>
@@ -177,13 +178,13 @@
 
 <!-- Cancel Confirmation Modal -->
 {#if $firstTimeShowCancelModal}
-	<div class="firsttime-modal-overlay">
-		<div class="firsttime-modal">
-			<h3 class="firsttime-modal-title">Cancel Setup?</h3>
-			<p class="firsttime-modal-text">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="firsttime-modal-actions">
-				<button onclick={firstTimeConfirmCancel} class="firsttime-modal-confirm">Yes, Cancel</button>
-				<button onclick={() => firstTimeShowCancelModal.set(false)} class="firsttime-modal-dismiss">Continue Setup</button>
+	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Setup?</h3>
+			<p class="text-gray-600 mb-6">Your progress will be lost. Are you sure you want to cancel?</p>
+			<div class="flex flex-col gap-3">
+				<button onclick={firstTimeConfirmCancel} class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes, Cancel</button>
+				<button onclick={() => firstTimeShowCancelModal.set(false)} class="w-full border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">Continue Setup</button>
 			</div>
 		</div>
 	</div>

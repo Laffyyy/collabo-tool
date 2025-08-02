@@ -8,6 +8,7 @@
 		loginShowPassword: boolean;
 		onSubmit: (event: Event) => void;
 		onTogglePassword: () => void;
+		onForgotPassword: () => void;
 	}
 	
 	let {
@@ -15,7 +16,8 @@
 		loginPassword = $bindable(),
 		loginShowPassword = $bindable(),
 		onSubmit,
-		onTogglePassword
+		onTogglePassword,
+		onForgotPassword
 	}: LoginFormProps = $props();
 </script>
 
@@ -23,7 +25,7 @@
 	<!-- Email field -->
 	<div class="space-y-2">
 		<label for="loginUsername" class="block text-sm font-semibold text-gray-700">
-			Email address
+			Username
 		</label>
 		<div class="relative">
 			<input
@@ -67,7 +69,7 @@
 	
 	<!-- Forgot password link -->
 	<div class="text-right">
-		<button type="button" class="text-sm font-medium text-[#01c0a4] hover:text-[#00a085] transition-colors duration-200 hover:underline bg-transparent border-none cursor-pointer" onclick={() => goto('/forgot-password')}>
+		<button type="button" class="text-sm font-medium text-[#01c0a4] hover:text-[#00a085] transition-colors duration-200 hover:underline bg-transparent border-none cursor-pointer" onclick={onForgotPassword}>
 			Forgot your password?
 		</button>
 	</div>

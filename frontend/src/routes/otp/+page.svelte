@@ -219,13 +219,13 @@
 
 <!-- Cancel Confirmation Modal -->
 {#if otpShowCancelModal}
-	<div class="otp-modal-overlay">
-		<div class="otp-modal">
-			<h3 class="otp-modal-title">Cancel Verification?</h3>
-			<p class="otp-modal-text">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="otp-modal-actions">
-				<button onclick={otpConfirmCancel} class="otp-modal-confirm">Yes, Cancel</button>
-				<button onclick={() => otpShowCancelModal = false} class="otp-modal-dismiss">Continue</button>
+	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Verification?</h3>
+			<p class="text-gray-600 mb-6">Your progress will be lost. Are you sure you want to cancel?</p>
+			<div class="flex flex-col gap-3">
+				<button onclick={otpConfirmCancel} class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes, Cancel</button>
+				<button onclick={() => otpShowCancelModal = false} class="w-full border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">Continue</button>
 			</div>
 		</div>
 	</div>

@@ -8,6 +8,13 @@
 	let loginPassword = $state('');
 	let loginShowPassword = $state(false);
 	
+	// Forgot password modal state
+	let showForgotPasswordModal = $state(false);
+	let forgotPasswordEmail = $state('');
+	let forgotPasswordIsLoading = $state(false);
+	let forgotPasswordError = $state('');
+	let forgotPasswordSuccess = $state(false);
+	
 	const handleLoginSubmit = (event: Event) => {
 		event.preventDefault();
 		// Navigate to OTP page after successful login
@@ -17,12 +24,67 @@
 	const toggleLoginPasswordVisibility = () => {
 		loginShowPassword = !loginShowPassword;
 	};
+	
+	const openForgotPasswordModal = () => {
+		showForgotPasswordModal = true;
+		forgotPasswordEmail = '';
+		forgotPasswordError = '';
+		forgotPasswordSuccess = false;
+	};
+	
+	const closeForgotPasswordModal = () => {
+		showForgotPasswordModal = false;
+		forgotPasswordEmail = '';
+		forgotPasswordError = '';
+		forgotPasswordIsLoading = false;
+		forgotPasswordSuccess = false;
+	};
+	
+	const forgotPasswordValidateEmail = (email: string) => {
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		return emailRegex.test(email);
+	};
+	
+	const forgotPasswordHandleSubmit = async () => {
+		if (!forgotPasswordValidateEmail(forgotPasswordEmail)) {
+			forgotPasswordError = 'Please enter a valid email address';
+			return;
+		}
+		
+		forgotPasswordIsLoading = true;
+		forgotPasswordError = '';
+		
+		// Simulate API call
+		await new Promise(resolve => setTimeout(resolve, 1500));
+		
+		forgotPasswordIsLoading = false;
+		forgotPasswordSuccess = true;
+		
+		// Auto-close modal after showing success message
+		setTimeout(() => {
+			closeForgotPasswordModal();
+			goto('/security-question');
+		}, 2000);
+	};
+	
+	const forgotPasswordHandleKeydown = (event: KeyboardEvent) => {
+		if (!showForgotPasswordModal) return;
+		
+		if (event.key === 'Enter') {
+			forgotPasswordHandleSubmit();
+		}
+		if (event.key === 'Escape') {
+			closeForgotPasswordModal();
+		}
+	};
 </script>
 
 <svelte:head>
 	<title>Login - Private Organization Portal</title>
 	<meta name="description" content="Sign in to access your workspace" />
 </svelte:head>
+
+<svelte:window onkeydown={forgotPasswordHandleKeydown} />
 
 <div class="min-h-screen flex items-center justify-center p-4" style="background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);">
 	<LoginBackground />
@@ -37,6 +99,7 @@
 				bind:loginShowPassword
 				onSubmit={handleLoginSubmit}
 				onTogglePassword={toggleLoginPasswordVisibility}
+				onForgotPassword={openForgotPasswordModal}
 			/>
 		</div>
 		
@@ -52,4 +115,68 @@
 			</p>
 		</div>
 	</div>
+	
+	<!-- Forgot Password Modal -->
+	{#if showForgotPasswordModal}
+		<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+			<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+				<div class="text-center mb-6">
+					<h2 class="text-xl font-bold text-gray-800 mb-2">Reset Password</h2>
+					<p class="text-gray-600">Enter your registered email address</p>
+				</div>
+				
+				<div class="space-y-4">
+					{#if forgotPasswordSuccess}
+						<div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-lg text-sm text-center">
+							<div class="flex items-center justify-center mb-2">
+								<svg class="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+								</svg>
+								<span class="font-semibold">Reset link sent!</span>
+							</div>
+							<p>A password reset link has been sent to your registered email address. Please check your inbox and follow the instructions.</p>
+						</div>
+					{:else}
+						{#if forgotPasswordError}
+							<div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
+								{forgotPasswordError}
+							</div>
+						{/if}
+						
+						<div>
+							<label class="block text-sm font-semibold text-gray-700 mb-2" for="forgotEmail">
+								Email Address
+							</label>
+							<input
+								type="email"
+								bind:value={forgotPasswordEmail}
+								class="w-full px-4 py-3 bg-gray-50/50 border-2 border-gray-200 rounded-xl focus:border-[#01c0a4] focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
+								id="forgotEmail"
+								placeholder="Enter your email"
+								disabled={forgotPasswordIsLoading}
+							/>
+						</div>
+						
+						<div class="flex flex-col gap-3 pt-2">
+							<button
+								onclick={forgotPasswordHandleSubmit}
+								disabled={forgotPasswordIsLoading || !forgotPasswordEmail.trim()}
+								class="w-full bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 focus:outline-none focus:ring-4 focus:ring-[#01c0a4]/20 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+							>
+								{forgotPasswordIsLoading ? 'Sending...' : 'Send Reset Code'}
+							</button>
+							
+							<button
+								onclick={closeForgotPasswordModal}
+								class="w-full border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200 transition-all duration-200 cursor-pointer disabled:opacity-50"
+								disabled={forgotPasswordIsLoading}
+							>
+								Cancel
+							</button>
+						</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
