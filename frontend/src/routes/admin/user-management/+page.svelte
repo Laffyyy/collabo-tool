@@ -4,7 +4,7 @@
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
-		FileText, AlertCircle, CheckCircle, Eye, EyeOff
+		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft
 	} from 'lucide-svelte';
 
 	// TypeScript interfaces
@@ -17,6 +17,8 @@
 		role: string;
 		status: string;
 		type: 'user' | 'admin';
+		supervisorId?: string;
+		managerId?: string;
 	}
 
 	interface BulkUserData {
@@ -34,6 +36,8 @@
 		email: string;
 		ou: string;
 		role: string;
+		supervisorId: string;
+		managerId: string;
 	}
 
 	interface BulkData {
@@ -44,7 +48,7 @@
 	// State management
 	let users = $state<UserData[]>([]);
 	let filteredUsers = $state<UserData[]>([]);
-	let currentTab = $state<string>('users');
+	let currentTab = $state<string>('frontline');
 	let searchQuery = $state<string>('');
 	let selectedOU = $state<string>('all');
 	let selectedRole = $state<string>('all');
@@ -64,8 +68,15 @@
 	let bulkPreviewTab = $state<string>('valid');
 	let showEditUserModal = $state<boolean>(false);
 	let showConfirmationModal = $state<boolean>(false);
+	let showTeamModal = $state<boolean>(false);
 	let confirmationAction = $state<string>('');
 	let selectedUser = $state<UserData | null>(null);
+	let teamModalUser = $state<UserData | null>(null);
+	
+	// Team modal navigation
+	let teamViewStack = $state<UserData[]>([]); // Stack for navigation
+	let currentTeamView = $state<UserData | null>(null);
+	let selectedSupervisorView = $state<UserData | null>(null); // Which supervisor's team we're viewing
 	
 	// Individual add form
 	let individualForm = $state<IndividualFormData>({
@@ -73,7 +84,9 @@
 		name: '',
 		email: '',
 		ou: '',
-		role: ''
+		role: '',
+		supervisorId: '',
+		managerId: ''
 	});
 	
 	// Bulk upload
@@ -86,7 +99,9 @@
 		name: '',
 		email: '',
 		ou: '',
-		role: ''
+		role: '',
+		supervisorId: '',
+		managerId: ''
 	});
 	
 	// Options
@@ -119,9 +134,21 @@
 	onMount(() => {
 		// Base users
 		const baseUsers: UserData[] = [
+			// Admin
 			{
 				id: '1',
 				employeeId: 'EMP001',
+				name: 'Alice Johnson',
+				email: 'alice.johnson@company.com',
+				ou: 'N/A',
+				role: 'Admin',
+				status: 'Active',
+				type: 'admin'
+			},
+			// Managers
+			{
+				id: '2',
+				employeeId: 'EMP002',
 				name: 'John Doe',
 				email: 'john.doe@company.com',
 				ou: 'Engineering',
@@ -130,66 +157,88 @@
 				type: 'user'
 			},
 			{
-				id: '2',
-				employeeId: 'EMP002',
-				name: 'Alice Johnson',
-				email: 'alice.johnson@company.com',
-				ou: 'N/A',
-				role: 'Admin',
-				status: 'Active',
-				type: 'admin'
-			},
-			{
 				id: '3',
 				employeeId: 'EMP003',
-				name: 'Bob Smith',
-				email: 'bob.smith@company.com',
+				name: 'Sarah Wilson',
+				email: 'sarah.wilson@company.com',
 				ou: 'Sales',
-				role: 'Frontline',
-				status: 'Locked',
-				type: 'user'
-			},
-			{
-				id: '4',
-				employeeId: 'EMP004',
-				name: 'Carol White',
-				email: 'carol.white@company.com',
-				ou: 'Support',
-				role: 'Support',
-				status: 'Deactivated',
-				type: 'user'
-			},
-			{
-				id: '5',
-				employeeId: 'EMP005',
-				name: 'David Brown',
-				email: 'david.brown@company.com',
-				ou: 'N/A',
-				role: 'Admin',
+				role: 'Manager',
 				status: 'Active',
-				type: 'admin'
+				type: 'user'
 			}
 		];
 
-		// Generate additional users
+		// Generate hierarchical users
 		const generatedUsers: UserData[] = [];
-		const nonAdminRoles = ['Manager', 'Supervisor', 'Frontline', 'Support'];
-		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance', 'IT'];
-		const sampleStatuses = ['Active', 'Inactive', 'Locked', 'Deactivated'];
+		let currentId = 4;
+		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance'];
+		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive']; // Mostly active
+		const frontlineRoles = ['Frontline', 'Support'];
+		
+		// Names for variety
+		const firstNames = ['Michael', 'Jennifer', 'David', 'Lisa', 'Robert', 'Karen', 'James', 'Susan', 'William', 'Jessica', 
+			'Thomas', 'Nancy', 'Daniel', 'Betty', 'Matthew', 'Helen', 'Anthony', 'Sandra', 'Mark', 'Donna',
+			'Donald', 'Carol', 'Steven', 'Ruth', 'Paul', 'Sharon', 'Andrew', 'Michelle', 'Joshua', 'Laura',
+			'Kenneth', 'Sarah', 'Kevin', 'Kimberly', 'Brian', 'Deborah', 'George', 'Dorothy', 'Edward', 'Lisa',
+			'Ronald', 'Nancy', 'Timothy', 'Karen', 'Jason', 'Betty', 'Jeffrey', 'Helen', 'Ryan', 'Sandra'];
+		
+		const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
+			'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
+			'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson',
+			'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores'];
 
-		for (let i = 0; i < 25; i++) {
-			const isAdmin = i % 7 === 0; // Every 7th user is admin
-			generatedUsers.push({
-				id: `${i + 6}`,
-				employeeId: `EMP${String(i + 6).padStart(3, '0')}`,
-				name: `User ${i + 6}`,
-				email: `user${i + 6}@company.com`,
-				ou: isAdmin ? 'N/A' : sampleOUs[i % sampleOUs.length],
-				role: isAdmin ? 'Admin' : nonAdminRoles[i % nonAdminRoles.length],
-				status: sampleStatuses[i % sampleStatuses.length],
-				type: isAdmin ? 'admin' : 'user'
-			});
-		}
+		// Get managers for supervisor assignment
+		const managers = baseUsers.filter(u => u.role === 'Manager');
+		
+		// Generate supervisors (5 per manager)
+		const supervisors: UserData[] = [];
+		managers.forEach((manager, managerIndex) => {
+			for (let i = 0; i < 5; i++) {
+				const firstName = firstNames[currentId % firstNames.length];
+				const lastName = lastNames[(currentId + managerIndex * 5 + i) % lastNames.length];
+				
+				const supervisor: UserData = {
+					id: currentId.toString(),
+					employeeId: `SUP${String(currentId).padStart(3, '0')}`,
+					name: `${firstName} ${lastName}`,
+					email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
+					ou: manager.ou,
+					role: 'Supervisor',
+					status: sampleStatuses[currentId % sampleStatuses.length],
+					type: 'user',
+					managerId: manager.id
+				};
+				
+				supervisors.push(supervisor);
+				generatedUsers.push(supervisor);
+				currentId++;
+			}
+		});
+
+		// Generate frontline/support users (20 per supervisor)
+		supervisors.forEach((supervisor, supervisorIndex) => {
+			for (let i = 0; i < 20; i++) {
+				const firstName = firstNames[(currentId + i) % firstNames.length];
+				const lastName = lastNames[(currentId + supervisorIndex * 20 + i) % lastNames.length];
+				const role = frontlineRoles[i % frontlineRoles.length];
+				
+				const frontlineUser: UserData = {
+					id: currentId.toString(),
+					employeeId: `EMP${String(currentId).padStart(3, '0')}`,
+					name: `${firstName} ${lastName}`,
+					email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
+					ou: supervisor.ou,
+					role: role,
+					status: sampleStatuses[currentId % sampleStatuses.length],
+					type: 'user',
+					supervisorId: supervisor.id,
+					managerId: supervisor.managerId
+				};
+				
+				generatedUsers.push(frontlineUser);
+				currentId++;
+			}
+		});
 
 		// Combine base users with generated users
 		users = [...baseUsers, ...generatedUsers];
@@ -199,11 +248,55 @@
 
 	// Computed values
 	const tabCounts = $derived({
-		users: users.filter(u => u.type === 'user' && u.status === 'Active').length,
+		frontline: users.filter(u => u.role === 'Frontline' && u.status === 'Active').length,
+		support: users.filter(u => u.role === 'Support' && u.status === 'Active').length,
+		supervisor: users.filter(u => u.role === 'Supervisor' && u.status === 'Active').length,
+		manager: users.filter(u => u.role === 'Manager' && u.status === 'Active').length,
 		admin: users.filter(u => u.type === 'admin' && u.status === 'Active').length,
 		deactivated: users.filter(u => u.status === 'Deactivated').length,
 		locked: users.filter(u => u.status === 'Locked').length
 	});
+
+	// Helper functions for hierarchy
+	const getUserById = (id: string) => users.find(u => u.id === id);
+	const getSupervisorName = (supervisorId?: string) => {
+		if (!supervisorId) return '';
+		const supervisor = getUserById(supervisorId);
+		return supervisor ? supervisor.name : '';
+	};
+	const getManagerName = (managerId?: string) => {
+		if (!managerId) return '';
+		const manager = getUserById(managerId);
+		return manager ? manager.name : '';
+	};
+
+	// Get available supervisors and managers for dropdowns
+	const availableSupervisors = $derived(users.filter(u => u.role === 'Supervisor' && u.status === 'Active'));
+	const availableManagers = $derived(users.filter(u => u.role === 'Manager' && u.status === 'Active'));
+
+	// Get selected supervisor's manager
+	const getSelectedSupervisorManager = (supervisorId: string) => {
+		const supervisor = getUserById(supervisorId);
+		return supervisor?.managerId ? getManagerName(supervisor.managerId) : '';
+	};
+
+	// Get team members for a user (for team modal)
+	const getTeamMembers = (userId: string) => {
+		const user = getUserById(userId);
+		if (!user) return [];
+		
+		if (user.role === 'Manager') {
+			// Get all supervisors and their team members under this manager
+			const supervisors = users.filter(u => u.managerId === userId && u.role === 'Supervisor');
+			const directReports = users.filter(u => u.managerId === userId && (u.role === 'Frontline' || u.role === 'Support'));
+			const indirectReports = users.filter(u => supervisors.some(s => s.id === u.supervisorId));
+			return [...supervisors, ...directReports, ...indirectReports];
+		} else if (user.role === 'Supervisor') {
+			// Get all frontline and support under this supervisor
+			return users.filter(u => u.supervisorId === userId);
+		}
+		return [];
+	};
 
 	const totalPages = () => Math.ceil(filteredUsers.length / itemsPerPage);
 	const paginatedUsers = () => filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -214,8 +307,17 @@
 
 		// Filter by tab
 		switch (currentTab) {
-			case 'users':
-				filtered = filtered.filter(u => u.type === 'user' && u.status === 'Active');
+			case 'frontline':
+				filtered = filtered.filter(u => u.role === 'Frontline' && u.status === 'Active');
+				break;
+			case 'support':
+				filtered = filtered.filter(u => u.role === 'Support' && u.status === 'Active');
+				break;
+			case 'supervisor':
+				filtered = filtered.filter(u => u.role === 'Supervisor' && u.status === 'Active');
+				break;
+			case 'manager':
+				filtered = filtered.filter(u => u.role === 'Manager' && u.status === 'Active');
 				break;
 			case 'admin':
 				filtered = filtered.filter(u => u.type === 'admin' && u.status === 'Active');
@@ -269,6 +371,15 @@
 			return;
 		}
 
+		// Auto-assign manager for Frontline/Support based on supervisor selection
+		let finalManagerId = individualForm.managerId;
+		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
+			const supervisor = getUserById(individualForm.supervisorId);
+			if (supervisor && supervisor.managerId) {
+				finalManagerId = supervisor.managerId;
+			}
+		}
+
 		const newUser: UserData = {
 			id: Date.now().toString(),
 			employeeId: individualForm.employeeId,
@@ -277,7 +388,9 @@
 			ou: isAdmin ? 'N/A' : individualForm.ou,
 			role: individualForm.role,
 			status: 'Active',
-			type: individualForm.role === 'Admin' ? 'admin' : 'user'
+			type: individualForm.role === 'Admin' ? 'admin' : 'user',
+			supervisorId: individualForm.supervisorId || undefined,
+			managerId: finalManagerId || undefined
 		};
 
 		users = [...users, newUser];
@@ -289,7 +402,9 @@
 			name: '',
 			email: '',
 			ou: '',
-			role: ''
+			role: '',
+			supervisorId: '',
+			managerId: ''
 		};
 		
 		showAddUserModal = false;
@@ -359,15 +474,32 @@
 	};
 
 	const downloadTemplate = () => {
-		// Create a simple CSV template
-		const csvContent = "Employee ID,Name,Email,OU,Role\nEMP001,John Doe,john.doe@company.com,Engineering,Manager\n";
-		const blob = new Blob([csvContent], { type: 'text/csv' });
-		const url = window.URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'user_template.csv';
-		a.click();
-		window.URL.revokeObjectURL(url);
+		// Create separate CSV templates for different roles
+		const frontlineSupportTemplate = "Employee ID,Name,Email,OU,Supervisor Name,Manager Name\nEMP001,John Smith,john.smith@company.com,Engineering,Bob Wilson,Alice Johnson\nEMP002,Mary Davis,mary.davis@company.com,Sales,Carol White,Sarah Wilson\n";
+		
+		const supervisorTemplate = "Employee ID,Name,Email,OU,Manager Name\nEMP100,Bob Wilson,bob.wilson@company.com,Engineering,Alice Johnson\nEMP101,Carol White,carol.white@company.com,Sales,Sarah Wilson\n";
+		
+		const managerTemplate = "Employee ID,Name,Email,OU\nEMP200,Alice Johnson,alice.johnson@company.com,Engineering\nEMP201,Sarah Wilson,sarah.wilson@company.com,Sales\n";
+
+		// Since we can't create actual Excel files with multiple sheets in the browser,
+		// we'll create three separate CSV files
+		const templates = [
+			{ name: 'frontline_support_template.csv', content: frontlineSupportTemplate },
+			{ name: 'supervisor_template.csv', content: supervisorTemplate },
+			{ name: 'manager_template.csv', content: managerTemplate }
+		];
+
+		templates.forEach(template => {
+			const blob = new Blob([template.content], { type: 'text/csv' });
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = template.name;
+			a.click();
+			window.URL.revokeObjectURL(url);
+		});
+
+		alert('Three template files have been downloaded:\n• frontline_support_template.csv\n• supervisor_template.csv\n• manager_template.csv');
 	};
 
 	const editUser = (user: UserData) => {
@@ -377,7 +509,9 @@
 			name: user.name,
 			email: user.email,
 			ou: user.ou,
-			role: user.role
+			role: user.role,
+			supervisorId: user.supervisorId || '',
+			managerId: user.managerId || ''
 		};
 		showEditUserModal = true;
 	};
@@ -409,6 +543,15 @@
 			return;
 		}
 
+		// Auto-assign manager for Frontline/Support based on supervisor selection
+		let finalManagerId = editForm.managerId;
+		if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
+			const supervisor = getUserById(editForm.supervisorId);
+			if (supervisor && supervisor.managerId) {
+				finalManagerId = supervisor.managerId;
+			}
+		}
+
 		const updatedUsers = users.map(u => 
 			u.id === selectedUser!.id ? { 
 				...u, 
@@ -416,7 +559,9 @@
 				email: editForm.email,
 				ou: isAdmin ? u.ou : editForm.ou, // Keep existing OU for admin users
 				role: isAdmin ? u.role : editForm.role, // Keep existing role for admin users
-				type: (isAdmin ? 'admin' : (editForm.role === 'Admin' ? 'admin' : 'user')) as 'admin' | 'user'
+				type: (isAdmin ? 'admin' : (editForm.role === 'Admin' ? 'admin' : 'user')) as 'admin' | 'user',
+				supervisorId: isAdmin ? undefined : (editForm.supervisorId || undefined),
+				managerId: isAdmin ? undefined : (finalManagerId || undefined)
 			} : u
 		);
 		users = updatedUsers;
@@ -430,6 +575,41 @@
 		selectedUser = user;
 		confirmationAction = action;
 		showConfirmationModal = true;
+	};
+
+	const showTeamInfo = (user: UserData) => {
+		teamModalUser = user;
+		currentTeamView = user;
+		selectedSupervisorView = null; // Reset supervisor view
+		teamViewStack = [user]; // Initialize with the root user
+		showTeamModal = true;
+	};
+
+	// Team navigation functions
+	const navigateToSupervisor = (supervisor: UserData) => {
+		selectedSupervisorView = supervisor;
+		// Don't change currentTeamView, keep the manager as the main view
+	};
+
+	const navigateBack = () => {
+		selectedSupervisorView = null; // Go back to manager's overview
+	};
+
+	const resetToRootView = () => {
+		selectedSupervisorView = null;
+		if (teamModalUser) {
+			currentTeamView = teamModalUser;
+		}
+	};
+
+	// Get direct supervisors under a manager
+	const getDirectSupervisors = (managerId: string) => {
+		return users.filter(u => u.managerId === managerId && u.role === 'Supervisor' && u.status === 'Active');
+	};
+
+	// Get team members under a supervisor
+	const getSupervisorTeam = (supervisorId: string) => {
+		return users.filter(u => u.supervisorId === supervisorId && (u.role === 'Frontline' || u.role === 'Support') && u.status === 'Active');
 	};
 
 	const executeConfirmedAction = () => {
@@ -585,35 +765,31 @@
 
 						<!-- Filters -->
 						<div class="flex flex-col sm:flex-row gap-2 flex-1">
-							<select
-								bind:value={selectedOU}
-								class="flex-1 max-w-[250px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
-							>
-								<option value="all">All OUs</option>
-								{#each ouOptions as ou}
-									<option value={ou}>{ou}</option>
-								{/each}
-							</select>
+							<!-- OU Filter - only show for non-admin tabs -->
+							{#if currentTab !== 'admin'}
+								<select
+									bind:value={selectedOU}
+									class="flex-1 max-w-[250px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								>
+									<option value="all">All OUs</option>
+									{#each ouOptions as ou}
+										<option value={ou}>{ou}</option>
+									{/each}
+								</select>
+							{/if}
 
-							<select
-								bind:value={selectedRole}
-								class="flex-1 max-w-[200px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
-							>
-								<option value="all">All Roles</option>
-								{#each roleOptions as role}
-									<option value={role}>{role}</option>
-								{/each}
-							</select>
-
-							<select
-								bind:value={selectedStatus}
-								class="flex-1 max-w-[120px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
-							>
-								<option value="all">All Status</option>
-								{#each statusOptions as status}
-									<option value={status}>{status}</option>
-								{/each}
-							</select>
+							<!-- Status Filter - only show for tabs that have mixed statuses (not locked, deactivated, or active role tabs) -->
+							{#if !['locked', 'deactivated', 'frontline', 'support', 'supervisor', 'manager', 'admin'].includes(currentTab)}
+								<select
+									bind:value={selectedStatus}
+									class="flex-1 max-w-[120px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								>
+									<option value="all">All Status</option>
+									{#each statusOptions as status}
+										<option value={status}>{status}</option>
+									{/each}
+								</select>
+							{/if}
 
 							<button
 								onclick={() => showAddUserModal = true}
@@ -631,13 +807,46 @@
 				<div class="border-b border-gray-200">
 					<nav class="flex space-x-6 px-4">
 						<button
-							onclick={() => changeTab('users')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'users' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							onclick={() => changeTab('frontline')}
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'frontline' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
 							<div class="flex items-center space-x-2">
 								<User class="w-4 h-4" />
-								<span>Users</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.users}</span>
+								<span>Frontline</span>
+								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.frontline}</span>
+							</div>
+						</button>
+
+						<button
+							onclick={() => changeTab('support')}
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'support' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						>
+							<div class="flex items-center space-x-2">
+								<User class="w-4 h-4" />
+								<span>Support</span>
+								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.support}</span>
+							</div>
+						</button>
+
+						<button
+							onclick={() => changeTab('supervisor')}
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'supervisor' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						>
+							<div class="flex items-center space-x-2">
+								<Users class="w-4 h-4" />
+								<span>Supervisor</span>
+								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.supervisor}</span>
+							</div>
+						</button>
+
+						<button
+							onclick={() => changeTab('manager')}
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'manager' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						>
+							<div class="flex items-center space-x-2">
+								<Shield class="w-4 h-4" />
+								<span>Manager</span>
+								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.manager}</span>
 							</div>
 						</button>
 
@@ -653,17 +862,6 @@
 						</button>
 
 						<button
-							onclick={() => changeTab('deactivated')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'deactivated' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
-						>
-							<div class="flex items-center space-x-2">
-								<UserX class="w-4 h-4" />
-								<span>Deactivated</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.deactivated}</span>
-							</div>
-						</button>
-
-						<button
 							onclick={() => changeTab('locked')}
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'locked' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
@@ -671,6 +869,17 @@
 								<Lock class="w-4 h-4" />
 								<span>Locked</span>
 								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.locked}</span>
+							</div>
+						</button>
+
+						<button
+							onclick={() => changeTab('deactivated')}
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'deactivated' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						>
+							<div class="flex items-center space-x-2">
+								<UserX class="w-4 h-4" />
+								<span>Deactivated</span>
+								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.deactivated}</span>
 							</div>
 						</button>
 					</nav>
@@ -712,8 +921,8 @@
 				{/if}
 
 				<!-- Table -->
-				<div class="w-full">
-					<table class="w-full table-fixed">
+				<div class="w-full overflow-x-auto">
+					<table class="w-full table-fixed min-w-[1200px]">
 						<thead class="bg-gray-50">
 							<tr>
 								<th class="w-12 px-3 py-3 text-left">
@@ -724,13 +933,19 @@
 										class="w-4 h-4 text-black bg-gray-100 border-gray-300 rounded focus:ring-black focus:ring-2"
 									/>
 								</th>
-								<th class="w-25 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-								<th class="w-46 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-								<th class="w-53 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-								<th class="w-35 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OU</th>
-								<th class="w-20 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-								<th class="w-20 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-								<th class="w-33 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
+								<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OU</th>
+								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+								{#if currentTab === 'frontline' || currentTab === 'support'}
+									<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
+									<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+								{:else if currentTab === 'supervisor'}
+									<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+								{/if}
+								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+								<th class="w-44 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
@@ -739,7 +954,7 @@
 									class="hover:bg-gray-50 {selectedRows.has(user.id) ? 'bg-blue-50' : ''} cursor-pointer" 
 									onclick={(e) => handleRowSelection(user.id, index, e)}
 								>
-									<td class="px-3 py-3 whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
+									<td class="w-12 px-3 py-3 whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
 										<input
 											type="checkbox"
 											checked={selectedRows.has(user.id)}
@@ -747,25 +962,37 @@
 											class="w-4 h-4 text-black bg-gray-100 border-gray-300 rounded focus:ring-black focus:ring-2"
 										/>
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+									<td class="w-24 px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
 										{user.employeeId}
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap">
+									<td class="w-40 px-3 py-3 whitespace-nowrap">
 										<div class="flex items-center">
 											<img src="/placeholder.svg?height=24&width=24" alt="" class="w-6 h-6 rounded-full mr-2" />
 											<div class="text-sm font-medium text-gray-900 truncate">{user.name}</div>
 										</div>
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 truncate">
+									<td class="w-48 px-3 py-3 whitespace-nowrap text-sm text-gray-500 truncate">
 										{user.email}
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+									<td class="w-24 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 										{user.ou}
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+									<td class="w-24 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 										{user.role}
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap">
+									{#if currentTab === 'frontline' || currentTab === 'support'}
+										<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+											{getSupervisorName(user.supervisorId)}
+										</td>
+										<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+											{getManagerName(user.managerId)}
+										</td>
+									{:else if currentTab === 'supervisor'}
+										<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+											{getManagerName(user.managerId)}
+										</td>
+									{/if}
+									<td class="w-24 px-3 py-3 whitespace-nowrap">
 										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {
 											user.status === 'Active' ? 'bg-green-100 text-green-800' :
 											user.status === 'Locked' ? 'bg-red-100 text-red-800' :
@@ -775,8 +1002,19 @@
 											{user.status}
 										</span>
 									</td>
-									<td class="px-3 py-3 whitespace-nowrap text-sm font-medium pr-6" onclick={(e) => e.stopPropagation()}>
-										<div class="flex items-center space-x-1 justify-end">
+									<td class="w-44 px-3 py-3 whitespace-nowrap text-sm font-medium" onclick={(e) => e.stopPropagation()}>
+										<div class="flex items-center space-x-1">
+											{#if user.role === 'Manager' || user.role === 'Supervisor'}
+												<button
+													onclick={() => showTeamInfo(user)}
+													class="flex items-center space-x-1 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
+													title="View team"
+												>
+													<Info class="w-3 h-3" />
+													<span>Team</span>
+												</button>
+											{/if}
+											
 											<button
 												onclick={() => editUser(user)}
 												class="flex items-center space-x-1 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
@@ -979,6 +1217,52 @@
 						</div>
 					</div>
 
+					{#if selectedUser.type !== 'admin'}
+						{#if editForm.role === 'Frontline' || editForm.role === 'Support'}
+							<div>
+								<label for="editSupervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+								<select
+									id="editSupervisor"
+									bind:value={editForm.supervisorId}
+									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								>
+									<option value="">Select Supervisor</option>
+									{#each users.filter((u: UserData) => u.role === 'Supervisor') as supervisor}
+										<option value={supervisor.id}>{supervisor.name}</option>
+									{/each}
+								</select>
+							</div>
+
+							{#if editForm.supervisorId}
+								{#key editForm.supervisorId}
+									{@const selectedSupervisor = getUserById(editForm.supervisorId)}
+									{#if selectedSupervisor && selectedSupervisor.managerId}
+										<div>
+											<label class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+												{getManagerName(selectedSupervisor.managerId)}
+											</div>
+										</div>
+									{/if}
+								{/key}
+							{/if}
+						{:else if editForm.role === 'Supervisor'}
+							<div>
+								<label for="editManager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+								<select
+									id="editManager"
+									bind:value={editForm.managerId}
+									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								>
+									<option value="">Select Manager</option>
+									{#each users.filter((u: UserData) => u.role === 'Manager') as manager}
+										<option value={manager.id}>{manager.name}</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
+					{/if}
+
 					<!-- Current Status Display -->
 					<div>
 						<div class="block text-sm font-medium text-gray-700 mb-2">Current Status</div>
@@ -1081,6 +1365,290 @@
 					} text-white rounded-lg hover:shadow-lg transition-all duration-200 capitalize"
 				>
 					{confirmationAction}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Team Modal -->
+{#if showTeamModal && teamModalUser}
+	<div 
+		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+		onclick={() => showTeamModal = false}
+		onkeydown={(e) => e.key === 'Escape' && (showTeamModal = false)}
+	>
+		<div 
+			class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto" 
+			role="document"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-6 border-b border-gray-200">
+				<div class="flex items-center space-x-3">
+					<div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+						<Users class="w-5 h-5 text-blue-600" />
+					</div>
+					<div>
+						<h2 class="text-xl font-semibold text-gray-900">
+							{selectedSupervisorView ? `${selectedSupervisorView.name}'s Team` : 
+							 teamModalUser?.role === 'Supervisor' ? `${teamModalUser.name}'s Team` :
+							 `${teamModalUser.name}'s Organization`}
+						</h2>
+						<p class="text-sm text-gray-500">
+							{selectedSupervisorView ? `Supervisor - ${selectedSupervisorView.ou}` : `${teamModalUser.role} - ${teamModalUser.ou}`}
+						</p>
+					</div>
+				</div>
+				{#if selectedSupervisorView}
+					<button
+						onclick={navigateBack}
+						class="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+					>
+						<ArrowLeft class="w-4 h-4" />
+						<span>Back to Overview</span>
+					</button>
+				{/if}
+			</div>
+
+			<!-- Content -->
+			<div class="p-6">
+				{#if selectedSupervisorView}
+					<!-- Supervisor's Team View -->
+					{@const supervisorTeam = getSupervisorTeam(selectedSupervisorView.id)}
+					
+					<!-- Supervisor Card -->
+					<div class="mb-6">
+						<div class="flex items-center justify-center mb-4">
+							<div class="bg-orange-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
+								<img src="/placeholder.svg?height=48&width=48" alt="{selectedSupervisorView.name}" class="w-12 h-12 rounded-full mx-auto mb-2 bg-white bg-opacity-20" />
+								<div class="font-semibold">{selectedSupervisorView.name}</div>
+								<div class="text-sm opacity-90">{selectedSupervisorView.role}</div>
+								<div class="text-xs opacity-75">{selectedSupervisorView.ou}</div>
+							</div>
+						</div>
+						
+						<!-- Vertical Connection Line -->
+						{#if supervisorTeam.length > 0}
+							<div class="flex justify-center">
+								<div class="w-0.5 h-8 bg-gray-300"></div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Team Members -->
+					{#if supervisorTeam.length > 0}
+						<div class="space-y-6">
+							<h3 class="text-lg font-medium text-gray-900 text-center">Team Members ({supervisorTeam.length})</h3>
+							
+							<!-- Single horizontal line -->
+							<div class="flex justify-center">
+								<div class="w-full max-w-6xl h-0.5 bg-gray-300"></div>
+							</div>
+
+							<!-- Team Member Cards -->
+							<div class="flex justify-center">
+								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+									{#each supervisorTeam as member}
+										<div class="bg-green-100 border border-green-200 rounded-lg p-3 text-center min-w-[160px]">
+											<img src="/placeholder.svg?height=32&width=32" alt="{member.name}" class="w-8 h-8 rounded-full mx-auto mb-2" />
+											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
+											<div class="text-xs text-gray-600">{member.role}</div>
+											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
+											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+						</div>
+					{:else}
+						<div class="text-center py-8">
+							<Users class="w-12 h-12 text-gray-400 mx-auto mb-4" />
+							<h3 class="text-lg font-medium text-gray-900 mb-2">No Team Members</h3>
+							<p class="text-gray-500">This supervisor doesn't have any direct reports yet.</p>
+						</div>
+					{/if}
+				{:else if teamModalUser?.role === 'Supervisor'}
+					<!-- Supervisor's Own Team View (when supervisor is the root user) -->
+					{@const supervisorTeam = getSupervisorTeam(teamModalUser.id)}
+					
+					<!-- Team Summary at Top -->
+					{#if supervisorTeam.length > 0}
+						<div class="mb-8 bg-gray-50 rounded-lg p-4">
+							<h4 class="font-medium text-gray-900 mb-3 text-center">Team Summary</h4>
+							<div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
+								<div class="bg-white rounded p-3">
+									<div class="text-2xl font-bold text-green-600">{supervisorTeam.filter(m => m.role === 'Frontline').length}</div>
+									<div class="text-xs text-gray-600">Frontline</div>
+								</div>
+								<div class="bg-white rounded p-3">
+									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter(m => m.role === 'Support').length}</div>
+									<div class="text-xs text-gray-600">Support</div>
+								</div>
+								<div class="bg-white rounded p-3">
+									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.length}</div>
+									<div class="text-xs text-gray-600">Total Team</div>
+								</div>
+							</div>
+						</div>
+					{/if}
+
+					<!-- Supervisor Card -->
+					<div class="mb-6">
+						<div class="flex items-center justify-center mb-4">
+							<div class="bg-orange-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+								<img src="/placeholder.svg?height=64&width=64" alt="{teamModalUser.name}" class="w-16 h-16 rounded-full mx-auto mb-3 bg-white bg-opacity-20" />
+								<div class="text-lg font-bold">{teamModalUser.name}</div>
+								<div class="text-sm opacity-90">{teamModalUser.role}</div>
+								<div class="text-xs opacity-75">{teamModalUser.ou}</div>
+							</div>
+						</div>
+						
+						<!-- Vertical Connection Line -->
+						{#if supervisorTeam.length > 0}
+							<div class="flex justify-center">
+								<div class="w-0.5 h-12 bg-gray-300"></div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Team Members -->
+					{#if supervisorTeam.length > 0}
+						<div class="space-y-6">
+							<h3 class="text-lg font-medium text-gray-900 text-center">Team Members ({supervisorTeam.length})</h3>
+							
+							<!-- Single horizontal line -->
+							<div class="flex justify-center">
+								<div class="w-full max-w-6xl h-0.5 bg-gray-300"></div>
+							</div>
+
+							<!-- Team Member Cards -->
+							<div class="flex justify-center">
+								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+									{#each supervisorTeam as member}
+										<div class="bg-green-100 border border-green-200 rounded-lg p-3 text-center min-w-[160px]">
+											<img src="/placeholder.svg?height=32&width=32" alt="{member.name}" class="w-8 h-8 rounded-full mx-auto mb-2" />
+											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
+											<div class="text-xs text-gray-600">{member.role}</div>
+											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
+											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+						</div>
+					{:else}
+						<div class="text-center py-8">
+							<Users class="w-12 h-12 text-gray-400 mx-auto mb-4" />
+							<h3 class="text-lg font-medium text-gray-900 mb-2">No Team Members</h3>
+							<p class="text-gray-500">This supervisor doesn't have any direct reports yet.</p>
+						</div>
+					{/if}
+				{:else}
+					<!-- Manager's Organization Overview -->
+					{@const directSupervisors = getDirectSupervisors(teamModalUser.id)}
+					
+					<!-- Manager Team Summary moved to top -->
+					<div class="mb-8 bg-gray-50 rounded-lg p-4">
+						<h4 class="font-medium text-gray-900 mb-3 text-center">Manager Team Summary</h4>
+						<div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
+							<div class="bg-white rounded p-3">
+								<div class="text-2xl font-bold text-blue-600">{directSupervisors.length}</div>
+								<div class="text-xs text-gray-600">Supervisors</div>
+							</div>
+							<div class="bg-white rounded p-3">
+								<div class="text-2xl font-bold text-green-600">
+									{directSupervisors.reduce((total, sup) => total + getSupervisorTeam(sup.id).length, 0)}
+								</div>
+								<div class="text-xs text-gray-600">Team Members</div>
+							</div>
+							<div class="bg-white rounded p-3">
+								<div class="text-2xl font-bold text-purple-600">
+									{directSupervisors.length + directSupervisors.reduce((total, sup) => total + getSupervisorTeam(sup.id).length, 0) + 1}
+								</div>
+								<div class="text-xs text-gray-600">Total People</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Manager Card at the top -->
+					<div class="mb-6">
+						<div class="flex items-center justify-center mb-4">
+							<div class="bg-blue-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+								<img src="/placeholder.svg?height=64&width=64" alt="{teamModalUser.name}" class="w-16 h-16 rounded-full mx-auto mb-3 bg-white bg-opacity-20" />
+								<div class="text-lg font-bold">{teamModalUser.name}</div>
+								<div class="text-sm opacity-90">{teamModalUser.role}</div>
+								<div class="text-xs opacity-75">{teamModalUser.ou}</div>
+							</div>
+						</div>
+						
+						<!-- Vertical Connection Line -->
+						{#if directSupervisors.length > 0}
+							<div class="flex justify-center">
+								<div class="w-0.5 h-12 bg-gray-300"></div>
+							</div>
+						{/if}
+					</div>
+
+					{#if directSupervisors.length > 0}
+						<!-- Single horizontal line -->
+						<div class="flex justify-center mb-8">
+							<div class="w-full max-w-5xl h-0.5 bg-gray-300"></div>
+						</div>
+
+						<!-- Supervisor Cards -->
+						<div class="space-y-6">
+							<h3 class="text-lg font-medium text-gray-900 text-center">Supervisors ({directSupervisors.length})</h3>
+							
+							<div class="flex justify-center">
+								<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 max-w-6xl">
+								{#each directSupervisors as supervisor}
+									{@const supervisorTeamCount = getSupervisorTeam(supervisor.id).length}
+									<button
+										onclick={() => navigateToSupervisor(supervisor)}
+										class="bg-orange-100 border border-orange-200 rounded-lg p-3 text-center hover:bg-orange-200 transition-colors cursor-pointer group min-w-[180px]"
+									>
+										<img src="/placeholder.svg?height=40&width=40" alt="{supervisor.name}" class="w-10 h-10 rounded-full mx-auto mb-2 group-hover:opacity-90 transition-opacity" />
+										<div class="font-medium text-gray-900 text-sm truncate" title="{supervisor.name}">{supervisor.name}</div>
+										<div class="text-xs text-gray-600">{supervisor.role}</div>
+										<div class="text-xs text-gray-500 truncate" title="{supervisor.ou}">{supervisor.ou}</div>
+										<div class="text-xs text-gray-500 mt-1 truncate" title="{supervisor.email}">{supervisor.email}</div>
+										
+										<!-- Team count indicator -->
+										<div class="mt-2 pt-2 border-t border-orange-300">
+											<div class="text-xs text-orange-700 font-medium">
+												{supervisorTeamCount} Team Member{supervisorTeamCount === 1 ? '' : 's'}
+											</div>
+											{#if supervisorTeamCount > 0}
+												<div class="text-xs text-orange-600 mt-1">Click to view team</div>
+											{/if}
+										</div>
+									</button>
+								{/each}
+							</div>
+						</div>
+					</div>
+					{:else}
+						<div class="text-center py-8">
+							<Users class="w-12 h-12 text-gray-400 mx-auto mb-4" />
+							<h3 class="text-lg font-medium text-gray-900 mb-2">No Team Structure</h3>
+							<p class="text-gray-500">This manager doesn't have any supervisors or direct reports yet.</p>
+						</div>
+					{/if}
+				{/if}
+			</div>
+
+			<!-- Footer -->
+			<div class="flex justify-end p-6 border-t border-gray-200">
+				<button
+					onclick={() => showTeamModal = false}
+					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+				>
+					Close
 				</button>
 			</div>
 		</div>
@@ -1195,6 +1763,50 @@
 								</div>
 							{/if}
 						</div>
+
+						{#if individualForm.role === 'Frontline' || individualForm.role === 'Support'}
+							<div>
+								<label for="supervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+								<select
+									id="supervisor"
+									bind:value={individualForm.supervisorId}
+									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								>
+									<option value="">Select Supervisor</option>
+									{#each users.filter((u: UserData) => u.role === 'Supervisor') as supervisor}
+										<option value={supervisor.id}>{supervisor.name}</option>
+									{/each}
+								</select>
+							</div>
+
+							{#if individualForm.supervisorId}
+								{#key individualForm.supervisorId}
+									{@const selectedSupervisor = getUserById(individualForm.supervisorId)}
+									{#if selectedSupervisor && selectedSupervisor.managerId}
+										<div>
+											<label class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+												{getManagerName(selectedSupervisor.managerId)}
+											</div>
+										</div>
+									{/if}
+								{/key}
+							{/if}
+						{:else if individualForm.role === 'Supervisor'}
+							<div>
+								<label for="manager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+								<select
+									id="manager"
+									bind:value={individualForm.managerId}
+									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								>
+									<option value="">Select Manager</option>
+									{#each users.filter((u: UserData) => u.role === 'Manager') as manager}
+										<option value={manager.id}>{manager.name}</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
 					</div>
 
 					<!-- Individual Add Footer -->
@@ -1222,10 +1834,18 @@
 									class="inline-flex items-center space-x-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors"
 								>
 									<Download class="w-5 h-5" />
-									<span>Download Template</span>
+									<span>Download Templates</span>
 								</button>
 							</div>
-							<p class="text-sm text-gray-600 mb-4">Download the template, fill it with user data, and upload it back.</p>
+							<div class="text-sm text-gray-600 mb-4 space-y-2">
+								<p class="font-medium">Three template files will be downloaded:</p>
+								<div class="text-left max-w-md mx-auto space-y-1">
+									<p><strong>• Frontline/Support:</strong> Includes Supervisor Name and Manager Name columns</p>
+									<p><strong>• Supervisor:</strong> Includes Manager Name column</p>
+									<p><strong>• Manager:</strong> Basic user information only</p>
+								</div>
+								<p class="mt-3">Fill the appropriate template with user data and upload it back.</p>
+							</div>
 						</div>
 
 						<div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
