@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import Navigation from '$lib/components/Navigation.svelte';
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
@@ -735,7 +734,6 @@
 </svelte:head>
 
 <div class="h-screen flex flex-col bg-gray-50">
-	<Navigation />
 	
 	<div class="flex-1 p-6 overflow-auto">
 		<div class="w-full max-w-[98%] mx-auto">
@@ -866,7 +864,7 @@
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'locked' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
 							<div class="flex items-center space-x-2">
-								<Lock class="w-4 h-4" />
+								<Shield class="w-4 h-4" />
 								<span>Locked</span>
 								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.locked}</span>
 							</div>
@@ -877,7 +875,7 @@
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'deactivated' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
 							<div class="flex items-center space-x-2">
-								<UserX class="w-4 h-4" />
+								<X class="w-4 h-4" />
 								<span>Deactivated</span>
 								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.deactivated}</span>
 							</div>
@@ -905,14 +903,14 @@
 									class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
 									title="Lock selected users"
 								>
-									<Lock class="w-3.5 h-3.5" />
+									<Shield class="w-3.5 h-3.5" />
 									<span>Lock</span>
 								</button>
 								<button
 									class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
 									title="Deactivate selected users"
 								>
-									<UserX class="w-3.5 h-3.5" />
+									<X class="w-3.5 h-3.5" />
 									<span>Deactivate</span>
 								</button>
 							</div>
@@ -922,7 +920,7 @@
 
 				<!-- Table -->
 				<div class="w-full overflow-x-auto">
-					<table class="w-full table-fixed min-w-[1200px]">
+					<table class="w-full table-fixed min-w-[1400px]">
 						<thead class="bg-gray-50">
 							<tr>
 								<th class="w-12 px-3 py-3 text-left">
@@ -933,19 +931,19 @@
 										class="w-4 h-4 text-black bg-gray-100 border-gray-300 rounded focus:ring-black focus:ring-2"
 									/>
 								</th>
-								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-								<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OU</th>
-								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
+								<th class="w-56 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+								<th class="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+								<th class="w-36 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OU</th>
+								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
 								{#if currentTab === 'frontline' || currentTab === 'support'}
-									<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
-									<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
+									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
 								{:else if currentTab === 'supervisor'}
-									<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
 								{/if}
-								<th class="w-24 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-								<th class="w-44 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+								<th class="w-28 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
@@ -962,37 +960,37 @@
 											class="w-4 h-4 text-black bg-gray-100 border-gray-300 rounded focus:ring-black focus:ring-2"
 										/>
 									</td>
-									<td class="w-24 px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+									<td class="w-32 px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
 										{user.employeeId}
 									</td>
-									<td class="w-40 px-3 py-3 whitespace-nowrap">
+									<td class="w-56 px-3 py-3 whitespace-nowrap">
 										<div class="flex items-center">
 											<img src="/placeholder.svg?height=24&width=24" alt="" class="w-6 h-6 rounded-full mr-2" />
 											<div class="text-sm font-medium text-gray-900 truncate">{user.name}</div>
 										</div>
 									</td>
-									<td class="w-48 px-3 py-3 whitespace-nowrap text-sm text-gray-500 truncate">
+									<td class="w-64 px-3 py-3 whitespace-nowrap text-sm text-gray-500 truncate">
 										{user.email}
 									</td>
-									<td class="w-24 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+									<td class="w-36 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 										{user.ou}
 									</td>
-									<td class="w-24 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+									<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 										{user.role}
 									</td>
 									{#if currentTab === 'frontline' || currentTab === 'support'}
-										<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+										<td class="w-40 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 											{getSupervisorName(user.supervisorId)}
 										</td>
-										<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+										<td class="w-40 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 											{getManagerName(user.managerId)}
 										</td>
 									{:else if currentTab === 'supervisor'}
-										<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+										<td class="w-40 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
 											{getManagerName(user.managerId)}
 										</td>
 									{/if}
-									<td class="w-24 px-3 py-3 whitespace-nowrap">
+									<td class="w-28 px-3 py-3 whitespace-nowrap">
 										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {
 											user.status === 'Active' ? 'bg-green-100 text-green-800' :
 											user.status === 'Locked' ? 'bg-red-100 text-red-800' :
@@ -1002,8 +1000,8 @@
 											{user.status}
 										</span>
 									</td>
-									<td class="w-44 px-3 py-3 whitespace-nowrap text-sm font-medium" onclick={(e) => e.stopPropagation()}>
-										<div class="flex items-center space-x-1">
+									<td class="w-48 px-3 py-3 whitespace-nowrap text-sm font-medium" onclick={(e) => e.stopPropagation()}>
+										<div class="flex items-center space-x-2">
 											{#if user.role === 'Manager' || user.role === 'Supervisor'}
 												<button
 													onclick={() => showTeamInfo(user)}
@@ -1041,23 +1039,6 @@
 												>
 													<User class="w-3 h-3" />
 													<span>Activate</span>
-												</button>
-											{:else}
-												<button
-													onclick={() => confirmAction(user, 'lock')}
-													class="flex items-center space-x-1 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-													title="Lock user"
-												>
-													<Lock class="w-3 h-3" />
-													<span>Lock</span>
-												</button>
-												<button
-													onclick={() => confirmAction(user, 'deactivate')}
-													class="flex items-center space-x-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-													title="Deactivate user"
-												>
-													<UserX class="w-3 h-3" />
-													<span>Deactivate</span>
 												</button>
 											{/if}
 										</div>
@@ -1326,7 +1307,7 @@
 				<div class="flex items-center space-x-3 mb-4">
 					{#if confirmationAction === 'lock'}
 						<div class="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-							<Lock class="w-5 h-5 text-orange-600" />
+							<Shield class="w-5 h-5 text-orange-600" />
 						</div>
 					{:else if confirmationAction === 'unlock'}
 						<div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
@@ -1338,7 +1319,7 @@
 						</div>
 					{:else if confirmationAction === 'deactivate'}
 						<div class="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-							<UserX class="w-5 h-5 text-red-600" />
+							<X class="w-5 h-5 text-red-600" />
 						</div>
 					{/if}
 					<div>
