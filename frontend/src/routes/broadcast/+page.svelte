@@ -35,6 +35,19 @@
     isActive: boolean;
   }
 
+  interface BroadcastTemplate {
+    id: string;
+    name: string;
+    title: string;
+    content: string;
+    priority: 'low' | 'medium' | 'high';
+    targetRoles: string[];
+    acknowledgmentType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+    choices?: string[];
+    createdBy: string;
+    createdAt: Date;
+  }
+
   // Mock user data
   const currentUser = {
     id: '1',
@@ -51,7 +64,7 @@
       content: 'Join us for our quarterly team meeting to discuss Q3 progress and Q4 planning. We\'ll cover project updates, team achievements, and upcoming initiatives.',
       priority: 'high' as const,
       targetRoles: ['admin', 'manager', 'supervisor'],
-      targetOUs: ['HR'],
+      targetOUs: ['HR', 'Team Lead'],
       createdBy: '1',
       createdAt: new Date(Date.now() - 86400000), // 1 day ago
       requiresAcknowledgment: true,
@@ -120,7 +133,7 @@
       content: 'Emergency evacuation drill scheduled for next Friday. All personnel must participate.',
       priority: 'high' as const,
       targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      targetOUs: ['Site Broadcast'],
+      targetOUs: ['Site Broadcast', 'HR', 'Cluster'],
       createdBy: '1',
       createdAt: new Date(Date.now() - 432000000), // 5 days ago
       requiresAcknowledgment: true,
@@ -135,19 +148,59 @@
     }
   ]);
 
+  // Mock templates data
+  let templates = $state<BroadcastTemplate[]>([
+    {
+      id: '1',
+      name: 'Team Meeting',
+      title: 'Team Meeting - [Insert Date]',
+      content: 'Join us for our team meeting to discuss recent progress and upcoming initiatives. Please confirm your attendance.',
+      priority: 'medium',
+      targetRoles: ['admin', 'manager', 'supervisor'],
+      acknowledgmentType: 'preferred-date',
+      createdBy: '1',
+      createdAt: new Date(Date.now() - 86400000)
+    },
+    {
+      id: '2',
+      name: 'System Maintenance',
+      title: 'Scheduled System Maintenance',
+      content: 'Scheduled system maintenance will occur this weekend. All systems will be temporarily unavailable during this time. Please plan accordingly.',
+      priority: 'high',
+      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
+      acknowledgmentType: 'required',
+      createdBy: '1',
+      createdAt: new Date(Date.now() - 172800000)
+    },
+    {
+      id: '3',
+      name: 'Policy Update',
+      title: 'Important Policy Update',
+      content: 'Please review the updated policy document. All team members must acknowledge receipt and understanding of the new guidelines.',
+      priority: 'medium',
+      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
+      acknowledgmentType: 'required',
+      createdBy: '1',
+      createdAt: new Date(Date.now() - 259200000)
+    }
+  ]);
+
   let showCreateBroadcast = $state(false);
   let selectedBroadcast = $state<Broadcast | null>(null);
   let isAcknowledged = $state(false);
   let preferredDate = $state('');
   let selectedChoice = $state('');
   let textResponse = $state('');
-  let activeTab = $state('HR');
+  let activeTab = $state('My Broadcasts');
+  let selectedTemplate = $state('');
+  let templateName = $state('');
+  let showSaveTemplate = $state(false);
   let newBroadcast = $state({
     title: '',
     content: '',
     priority: 'medium' as 'low' | 'medium' | 'high',
     targetRoles: [] as string[],
-    targetOU: '',
+    targetOUs: [] as string[],
     acknowledgmentType: 'none' as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
     scheduleType: 'now' as 'now' | 'pick',
     eventDate: '',
@@ -163,6 +216,7 @@
   ];
 
   const tabs = [
+    { id: 'My Broadcasts', label: 'My Broadcasts' },
     { id: 'HR', label: 'HR' },
     { id: 'Team Lead', label: 'Team Lead' },
     { id: 'Cluster', label: 'Cluster' },
@@ -183,7 +237,17 @@
   // Computed values
   let sortedBroadcasts = $derived(
     [...broadcasts]
-      .filter(b => b.isActive && b.targetOUs.includes(activeTab))
+      .filter(b => {
+        if (!b.isActive) return false;
+        
+        // Special handling for "My Broadcasts" tab
+        if (activeTab === 'My Broadcasts') {
+          return b.createdBy === currentUser.id;
+        }
+        
+        // Regular filtering by targetOUs for other tabs
+        return b.targetOUs.some(ou => ou === activeTab);
+      })
       .sort((a, b) => {
         // Sort by priority first (high > medium > low)
         const priorityOrder = { high: 3, medium: 2, low: 1 };
@@ -197,13 +261,51 @@
 
   let tabCounts = $derived(
     tabs.reduce((counts, tab) => {
-      counts[tab.id] = broadcasts.filter(b => b.isActive && b.targetOUs.includes(tab.id)).length;
+      if (tab.id === 'My Broadcasts') {
+        counts[tab.id] = broadcasts.filter(b => b.isActive && b.createdBy === currentUser.id).length;
+      } else {
+        counts[tab.id] = broadcasts.filter(b => b.isActive && b.targetOUs.some(ou => ou === tab.id)).length;
+      }
       return counts;
     }, {} as Record<string, number>)
   );
 
   let canSendBroadcasts = $derived(currentUser.role === 'admin' || currentUser.role === 'manager');
   let canAccessAdmin = $derived(currentUser.role === 'admin');
+
+  const loadTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      newBroadcast.title = template.title;
+      newBroadcast.content = template.content;
+      newBroadcast.priority = template.priority;
+      newBroadcast.targetRoles = [...template.targetRoles];
+      newBroadcast.acknowledgmentType = template.acknowledgmentType;
+      newBroadcast.choices = template.choices ? [...template.choices] : [''];
+    }
+  };
+
+  const saveAsTemplate = () => {
+    if (templateName.trim() && newBroadcast.title.trim() && newBroadcast.content.trim()) {
+      const template: BroadcastTemplate = {
+        id: Date.now().toString(),
+        name: templateName.trim(),
+        title: newBroadcast.title.trim(),
+        content: newBroadcast.content.trim(),
+        priority: newBroadcast.priority,
+        targetRoles: [...newBroadcast.targetRoles],
+        acknowledgmentType: newBroadcast.acknowledgmentType,
+        choices: newBroadcast.acknowledgmentType === 'choices' ? newBroadcast.choices.filter(choice => choice.trim()) : undefined,
+        createdBy: currentUser.id,
+        createdAt: new Date()
+      };
+
+      templates = [template, ...templates];
+      templateName = '';
+      showSaveTemplate = false;
+      alert('Template saved successfully!');
+    }
+  };
 
   const createBroadcast = () => {
     if (newBroadcast.title.trim() && newBroadcast.content.trim()) {
@@ -213,7 +315,7 @@
         content: newBroadcast.content.trim(),
         priority: newBroadcast.priority,
         targetRoles: newBroadcast.targetRoles,
-        targetOUs: [activeTab],
+        targetOUs: newBroadcast.targetOUs.length > 0 ? newBroadcast.targetOUs : [activeTab === 'My Broadcasts' ? 'HR' : activeTab],
         createdBy: currentUser.id,
         createdAt: new Date(),
         scheduledFor: newBroadcast.scheduleType === 'pick' && newBroadcast.scheduledFor ? new Date(newBroadcast.scheduledFor) : undefined,
@@ -328,13 +430,17 @@
       content: '',
       priority: 'medium',
       targetRoles: [],
-      targetOU: '',
+      targetOUs: [],
       acknowledgmentType: 'none',
       scheduleType: 'now',
       eventDate: '',
       scheduledFor: '',
       choices: ['']
     };
+    // Reset template state
+    selectedTemplate = '';
+    templateName = '';
+    showSaveTemplate = false;
   };
 </script>
 
@@ -383,6 +489,88 @@
         <div class="p-6">
           <form onsubmit={(e) => { e.preventDefault(); createBroadcast(); }} class="space-y-8">
             
+            <!-- Template Section -->
+            <div class="bg-blue-50 rounded-lg p-5 border border-blue-200">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">📋</span>
+                Templates
+              </h3>
+              
+              <div class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-1">
+                  <label for="templateSelect" class="block text-sm font-medium text-gray-700 mb-2">Load from Template</label>
+                  <div class="flex space-x-3">
+                    <select 
+                      id="templateSelect" 
+                      bind:value={selectedTemplate}
+                      onchange={() => {
+                        if (selectedTemplate) {
+                          loadTemplate(selectedTemplate);
+                        }
+                      }}
+                      class="input-field flex-1"
+                    >
+                      <option value="">Select a template...</option>
+                      {#each templates as template}
+                        <option value={template.id}>{template.name}</option>
+                      {/each}
+                    </select>
+                    {#if selectedTemplate}
+                      <button
+                        type="button"
+                        onclick={() => { selectedTemplate = ''; }}
+                        class="secondary-button whitespace-nowrap"
+                      >
+                        Clear
+                      </button>
+                    {/if}
+                  </div>
+                </div>
+                
+                <div class="sm:border-l sm:border-gray-300 sm:pl-4">
+                  <span class="block text-sm font-medium text-gray-700 mb-2">Save Current as Template</span>
+                  {#if !showSaveTemplate}
+                    <button
+                      type="button"
+                      onclick={() => showSaveTemplate = true}
+                      class="secondary-button whitespace-nowrap"
+                      disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim()}
+                    >
+                      Save Template
+                    </button>
+                  {:else}
+                    <div class="flex space-x-2">
+                      <input
+                        type="text"
+                        bind:value={templateName}
+                        placeholder="Template name..."
+                        class="input-field flex-1 min-w-32"
+                      />
+                      <button
+                        type="button"
+                        onclick={saveAsTemplate}
+                        disabled={!templateName.trim()}
+                        class="primary-button whitespace-nowrap text-sm px-3 py-2 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => { showSaveTemplate = false; templateName = ''; }}
+                        class="secondary-button text-sm px-3 py-2"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+              
+              <p class="text-xs text-gray-500 mt-3">
+                Templates help you quickly create broadcasts with predefined content and settings. Load a template to auto-fill the form, or save your current broadcast as a template for future use.
+              </p>
+            </div>
+
             <!-- Section 1: Basic Information -->
             <div class="bg-gray-50 rounded-lg p-5">
               <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
@@ -435,13 +623,47 @@
               
               <div class="space-y-4">
                 <div>
-                  <label for="targetOU" class="block text-sm font-medium text-gray-700 mb-2">Organizational Unit</label>
-                  <select id="targetOU" bind:value={newBroadcast.targetOU} class="input-field">
-                    <option value="">Select department or unit...</option>
+                  <span class="block text-sm font-medium text-gray-700 mb-3">Organizational Units *</span>
+                  <div class="mb-3 p-3 bg-white rounded border border-gray-200">
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={newBroadcast.targetOUs.length === targetOUs.length}
+                        onchange={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          if (target.checked) {
+                            newBroadcast.targetOUs = [...targetOUs];
+                          } else {
+                            newBroadcast.targetOUs = [];
+                          }
+                        }}
+                        disabled={newBroadcast.targetOUs.length === 3 && newBroadcast.targetOUs.length !== targetOUs.length}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm font-medium text-gray-700">Select All Units</span>
+                    </label>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
                     {#each targetOUs as ou}
-                      <option value={ou}>{ou}</option>
+                      <label class="flex items-center space-x-2 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50 {newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
+                        <input
+                          type="checkbox"
+                          bind:group={newBroadcast.targetOUs}
+                          value={ou}
+                          disabled={newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou)}
+                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] disabled:opacity-50"
+                        />
+                        <span class="text-sm font-medium">{ou}</span>
+                      </label>
                     {/each}
-                  </select>
+                  </div>
+                  {#if newBroadcast.targetOUs.length === 0}
+                    <p class="text-xs text-red-500 mt-2">Please select at least one organizational unit</p>
+                  {:else if newBroadcast.targetOUs.length >= 3}
+                    <p class="text-xs text-orange-500 mt-2">Maximum of 3 organizational units allowed</p>
+                  {:else}
+                    <p class="text-xs text-gray-500 mt-2">You can select up to 3 organizational units ({3 - newBroadcast.targetOUs.length} remaining)</p>
+                  {/if}
                 </div>
 
                 <div>
@@ -630,7 +852,7 @@
               <button 
                 type="submit" 
                 class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim() || newBroadcast.targetRoles.length === 0}
+                disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim() || newBroadcast.targetRoles.length === 0 || newBroadcast.targetOUs.length === 0}
               >
                 {newBroadcast.scheduleType === 'now' ? 'Send Broadcast' : 'Schedule Broadcast'}
               </button>
@@ -704,7 +926,7 @@
               </div>
               <div class="flex items-center space-x-1">
                 <Users class="w-4 h-4 flex-shrink-0" />
-                <span class="truncate">{broadcast.targetRoles.join(', ')}</span>
+                <span class="truncate">{broadcast.targetRoles.join(', ')} | {broadcast.targetOUs.join(', ')}</span>
               </div>
               {#if broadcast.eventDate}
                 <div class="flex items-center space-x-1">
@@ -739,9 +961,13 @@
     {#if sortedBroadcasts.length === 0}
       <div class="collaboration-card p-12 text-center">
         <Megaphone class="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 class="text-xl font-semibold text-gray-600 mb-2">No broadcasts yet</h3>
+        <h3 class="text-xl font-semibold text-gray-600 mb-2">
+          {activeTab === 'My Broadcasts' ? 'No broadcasts created yet' : 'No broadcasts yet'}
+        </h3>
         <p class="text-gray-500 mb-4">
-          {#if canSendBroadcasts}
+          {#if activeTab === 'My Broadcasts'}
+            You haven't created any broadcasts yet. Create your first broadcast to get started.
+          {:else if canSendBroadcasts}
             Create your first broadcast to start communicating with your team.
           {:else}
             Broadcasts from your organization will appear here.
@@ -812,7 +1038,7 @@
               </div>
               <div class="flex items-center space-x-2 text-sm text-gray-600">
                 <Users class="w-4 h-4 flex-shrink-0" />
-                <span class="break-words">Target: {selectedBroadcast.targetRoles.join(', ')}</span>
+                <span class="break-words">Target: {selectedBroadcast.targetRoles.join(', ')} | Units: {selectedBroadcast.targetOUs.join(', ')}</span>
               </div>
               {#if selectedBroadcast.eventDate}
                 <div class="flex items-center space-x-2 text-sm text-gray-600">
