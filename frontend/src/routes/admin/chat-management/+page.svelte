@@ -165,10 +165,7 @@
   <title>Chat Management - Admin Controls</title>
 </svelte:head>
 
-<div class="h-screen flex flex-col bg-gray-50">
-  
-  <div class="flex-1 overflow-auto">
-    <div class="p-6 space-y-6">
+<div class="p-6 bg-gray-50 min-h-screen space-y-6">
       <!-- Header -->
       <div class="flex items-center justify-between fade-in">
         <div>
@@ -440,6 +437,4 @@
           </div>
         {/if}
       </div>
-    </div>
-  </div>
 </div>

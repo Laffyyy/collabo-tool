@@ -355,23 +355,13 @@
   <title>OU Management - Admin Controls</title>
 </svelte:head>
 
-<div class="h-screen flex flex-col bg-gray-50">
-  
-  <div class="flex-1 overflow-auto">
-    <div class="p-6 space-y-6">
+<div class="p-6 bg-gray-50 min-h-screen space-y-6">
   <!-- Header -->
   <div class="flex items-center justify-between fade-in">
     <div>
       <h1 class="text-2xl font-bold text-gray-900 mb-1">Organization Unit Management</h1>
       <p class="text-sm text-gray-600">Manage organizational structure and communication policies</p>
     </div>
-    <button
-      onclick={() => showCreateModal = true}
-      class="primary-button flex items-center space-x-2"
-    >
-      <Plus class="w-5 h-5" />
-      <span>Create OU</span>
-    </button>
   </div>
 
   <!-- Search and Filters -->
@@ -382,13 +372,20 @@
         <input
           bind:value={searchQuery}
           type="text"
-          placeholder="Search organization units by name, description, or location..."
+          placeholder="Search organization units..."
           class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
         />
       </div>
-      <div class="text-sm text-gray-500">
+      <div class="text-sm text-gray-500 whitespace-nowrap">
         {filteredOUs.length} of {organizationUnits.length} units
       </div>
+      <button
+        onclick={() => showCreateModal = true}
+        class="primary-button flex items-center space-x-2 whitespace-nowrap"
+      >
+        <Plus class="w-5 h-5" />
+        <span>Create OU</span>
+      </button>
     </div>
   </div>
 
@@ -481,8 +478,6 @@
         </p>
       </div>
     {/if}
-  </div>
-    </div>
   </div>
 </div>
 

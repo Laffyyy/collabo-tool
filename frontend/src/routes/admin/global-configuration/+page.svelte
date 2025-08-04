@@ -143,40 +143,36 @@
   <title>Global Configuration - Admin Controls</title>
 </svelte:head>
 
-<div class="h-screen flex flex-col bg-gray-50">
-  
-  <div class="flex-1 overflow-auto">
-    <div class="min-h-full flex items-start justify-center py-6 px-4">
-      <div class="w-full max-w-5xl space-y-6">
-        <!-- Header -->
-        <div class="flex items-center justify-between fade-in">
-          <div>
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">Global Configuration</h1>
-            <p class="text-gray-600">Manage system-wide settings and default policies for organization units</p>
-          </div>
-          <div class="flex space-x-3">
-            {#if hasChanges}
-              <button
-                onclick={resetConfiguration}
-                class="secondary-button flex items-center space-x-2"
-              >
-                <RotateCcw class="w-4 h-4" />
-                <span>Reset</span>
-              </button>
-            {/if}
-            <button
-              onclick={saveConfiguration}
-              disabled={!hasChanges}
-              class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Save class="w-4 h-4" />
-              <span>Save Changes</span>
-            </button>
-          </div>
-        </div>
+<div class="p-6 space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between fade-in">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">Global Configuration</h1>
+      <p class="text-gray-600">Manage system-wide settings and default policies for organization units</p>
+    </div>
+    <div class="flex space-x-3">
+      {#if hasChanges}
+        <button
+          onclick={resetConfiguration}
+          class="secondary-button flex items-center space-x-2"
+        >
+          <RotateCcw class="w-4 h-4" />
+          <span>Reset</span>
+        </button>
+      {/if}
+      <button
+        onclick={saveConfiguration}
+        disabled={!hasChanges}
+        class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Save class="w-4 h-4" />
+        <span>Save Changes</span>
+      </button>
+    </div>
+  </div>
 
-        <!-- Main Configuration Panel -->
-        <div class="collaboration-card fade-in">
+  <!-- Main Configuration Panel -->
+  <div class="collaboration-card fade-in">
           <div class="overflow-x-auto">
           <!-- Tab Navigation -->
           <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">
@@ -901,10 +897,7 @@
               <p class="text-sm font-medium text-yellow-800">Unsaved Changes</p>
               <p class="text-sm text-yellow-700">You have unsaved configuration changes. These will become the default settings for new organization units.</p>
             </div>
-          </div>
         </div>
-      {/if}
       </div>
-    </div>
-  </div>
+    {/if}
 </div>

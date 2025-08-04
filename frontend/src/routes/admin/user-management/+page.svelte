@@ -3,7 +3,7 @@
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
-		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft
+		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key
 	} from 'lucide-svelte';
 
 	// TypeScript interfaces
@@ -102,6 +102,15 @@
 		supervisorId: '',
 		managerId: ''
 	});
+	
+	// Password management
+	let showPasswordSection = $state<boolean>(false);
+	let passwordForm = $state({
+		newPassword: '',
+		confirmPassword: '',
+		requirePasswordChange: false
+	});
+	let showPasswordFields = $state<boolean>(false);
 	
 	// Options
 	const ouOptions = [
@@ -570,6 +579,55 @@
 		alert('User updated successfully!');
 	};
 
+	// Password management functions
+	const resetPasswordForm = () => {
+		passwordForm = {
+			newPassword: '',
+			confirmPassword: '',
+			requirePasswordChange: false
+		};
+		showPasswordFields = false;
+	};
+
+	const togglePasswordSection = () => {
+		showPasswordSection = !showPasswordSection;
+		if (!showPasswordSection) {
+			resetPasswordForm();
+		}
+	};
+
+	const validatePassword = () => {
+		if (!passwordForm.newPassword) {
+			alert('Please enter a new password');
+			return false;
+		}
+		if (passwordForm.newPassword.length < 8) {
+			alert('Password must be at least 8 characters long');
+			return false;
+		}
+		if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+			alert('Passwords do not match');
+			return false;
+		}
+		return true;
+	};
+
+	const changePassword = () => {
+		if (!validatePassword()) return;
+		
+		// In a real app, this would make an API call
+		alert(`Password changed successfully for ${selectedUser?.name}${passwordForm.requirePasswordChange ? '. User will be required to change password on next login.' : ''}`);
+		resetPasswordForm();
+		showPasswordSection = false;
+	};
+
+	const sendPasswordReset = () => {
+		if (!selectedUser) return;
+		
+		// In a real app, this would send a password reset email
+		alert(`Password reset email sent to ${selectedUser.email}`);
+	};
+
 	const confirmAction = (user: UserData, action: string) => {
 		selectedUser = user;
 		confirmationAction = action;
@@ -733,15 +791,13 @@
 	<title>User Management - Workspace</title>
 </svelte:head>
 
-<div class="h-screen flex flex-col bg-gray-50">
-	
-	<div class="flex-1 p-6 overflow-auto">
-		<div class="w-full max-w-[98%] mx-auto">
-			<!-- Header -->
-			<div class="mb-4">
-				<h1 class="text-xl font-bold text-gray-900 mb-1">User Management</h1>
-				<p class="text-sm text-gray-600">Manage users, administrators, and access permissions</p>
-			</div>
+<div class="p-6 bg-gray-50 min-h-screen">
+	<div class="w-full max-w-[98%] mx-auto">
+		<!-- Header -->
+		<div class="mb-4">
+			<h1 class="text-xl font-bold text-gray-900 mb-1">User Management</h1>
+			<p class="text-sm text-gray-600">Manage users, administrators, and access permissions</p>
+		</div>
 
 			<!-- Search and Filters -->
 			<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
@@ -1094,7 +1150,6 @@
 			</div>
 		</div>
 	</div>
-</div>
 
 <!-- Edit User Modal -->
 {#if showEditUserModal && selectedUser}
@@ -1258,6 +1313,103 @@
 							</span>
 							<span class="text-xs text-gray-500">Status can be changed using action buttons in the main table</span>
 						</div>
+					</div>
+
+					<!-- Password Management Section -->
+					<div class="border-t border-gray-200 pt-4">
+						<div class="flex items-center justify-between mb-3">
+							<div class="flex items-center space-x-2">
+								<Key class="w-5 h-5 text-gray-600" />
+								<span class="text-sm font-medium text-gray-700">Password Management</span>
+							</div>
+							<button
+								onclick={togglePasswordSection}
+								class="text-sm text-[#01c0a4] hover:text-[#00a085] font-medium"
+							>
+								{showPasswordSection ? 'Cancel' : 'Change Password'}
+							</button>
+						</div>
+
+						{#if !showPasswordSection}
+							<div class="flex space-x-3">
+								<button
+									onclick={sendPasswordReset}
+									class="flex-1 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+								>
+									Send Reset Email
+								</button>
+								<button
+									onclick={togglePasswordSection}
+									class="flex-1 px-4 py-2 bg-[#01c0a4]/10 text-[#01c0a4] rounded-lg hover:bg-[#01c0a4]/20 transition-colors text-sm font-medium"
+								>
+									Set New Password
+								</button>
+							</div>
+						{:else}
+							<div class="space-y-4">
+								<div>
+									<label for="newPassword" class="block text-sm font-medium text-gray-700 mb-2">New Password *</label>
+									<div class="relative">
+										<input
+											id="newPassword"
+											bind:value={passwordForm.newPassword}
+											type={showPasswordFields ? 'text' : 'password'}
+											placeholder="Enter new password (min 8 characters)"
+											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent pr-12"
+										/>
+										<button
+											type="button"
+											onclick={() => showPasswordFields = !showPasswordFields}
+											class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+										>
+											{#if showPasswordFields}
+												<EyeOff class="w-5 h-5" />
+											{:else}
+												<Eye class="w-5 h-5" />
+											{/if}
+										</button>
+									</div>
+								</div>
+
+								<div>
+									<label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
+									<input
+										id="confirmPassword"
+										bind:value={passwordForm.confirmPassword}
+										type={showPasswordFields ? 'text' : 'password'}
+										placeholder="Confirm new password"
+										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									/>
+								</div>
+
+								<div class="flex items-center space-x-2">
+									<input
+										id="requirePasswordChange"
+										type="checkbox"
+										bind:checked={passwordForm.requirePasswordChange}
+										class="w-4 h-4 text-[#01c0a4] border-gray-300 rounded focus:ring-[#01c0a4] focus:ring-2"
+									/>
+									<label for="requirePasswordChange" class="text-sm text-gray-700">
+										Require user to change password on next login
+									</label>
+								</div>
+
+								<div class="flex space-x-3">
+									<button
+										onclick={resetPasswordForm}
+										class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+									>
+										Cancel
+									</button>
+									<button
+										onclick={changePassword}
+										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium"
+									>
+										Update Password
+									</button>
+								</div>
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -1435,10 +1587,18 @@
 							<div class="flex justify-center">
 								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
 									{#each supervisorTeam as member}
-										<div class="bg-green-100 border border-green-200 rounded-lg p-3 text-center min-w-[160px]">
+										<div class="{
+											member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
+											member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+											'bg-green-100 border-green-200'
+										} border rounded-lg p-3 text-center min-w-[160px]">
 											<img src="/placeholder.svg?height=32&width=32" alt="{member.name}" class="w-8 h-8 rounded-full mx-auto mb-2" />
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
-											<div class="text-xs text-gray-600">{member.role}</div>
+											<div class="text-xs {
+												member.role === 'Frontline' ? 'text-blue-700' :
+												member.role === 'Support' ? 'text-purple-700' :
+												'text-gray-600'
+											}">{member.role}</div>
 											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
 											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
 										</div>
@@ -1463,15 +1623,15 @@
 							<h4 class="font-medium text-gray-900 mb-3 text-center">Team Summary</h4>
 							<div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-green-600">{supervisorTeam.filter(m => m.role === 'Frontline').length}</div>
+									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter(m => m.role === 'Frontline').length}</div>
 									<div class="text-xs text-gray-600">Frontline</div>
 								</div>
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter(m => m.role === 'Support').length}</div>
+									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.filter(m => m.role === 'Support').length}</div>
 									<div class="text-xs text-gray-600">Support</div>
 								</div>
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.length}</div>
+									<div class="text-2xl font-bold text-gray-600">{supervisorTeam.length}</div>
 									<div class="text-xs text-gray-600">Total Team</div>
 								</div>
 							</div>
@@ -1511,10 +1671,18 @@
 							<div class="flex justify-center">
 								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
 									{#each supervisorTeam as member}
-										<div class="bg-green-100 border border-green-200 rounded-lg p-3 text-center min-w-[160px]">
+										<div class="{
+											member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
+											member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+											'bg-green-100 border-green-200'
+										} border rounded-lg p-3 text-center min-w-[160px]">
 											<img src="/placeholder.svg?height=32&width=32" alt="{member.name}" class="w-8 h-8 rounded-full mx-auto mb-2" />
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
-											<div class="text-xs text-gray-600">{member.role}</div>
+											<div class="text-xs {
+												member.role === 'Frontline' ? 'text-blue-700' :
+												member.role === 'Support' ? 'text-purple-700' :
+												'text-gray-600'
+											}">{member.role}</div>
 											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
 											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
 										</div>
