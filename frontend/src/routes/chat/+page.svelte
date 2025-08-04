@@ -73,6 +73,11 @@
 	let showSearchInChat = $state(false);
 	let searchInChatQuery = $state('');
 	let searchInput = $state('');
+	let othersTyping = $state(false); // Changed from isTyping to othersTyping
+	let typingTimeout: number | null = null;
+	let showEmojiPicker = $state(false);
+	let editingMessage = $state<Message | null>(null);
+	let editingContent = $state('');
 	
 	// Create group state
 	let groupName = $state('');
@@ -238,6 +243,16 @@
 		currentConversation = groupChats[0];
 	});
 
+	// Available emojis for picker
+	const emojiGroups = {
+		'Smileys': ['😀', '😃', '😄', '😁', '😊', '😂', '🤣', '😭', '😍', '🥰', '😘', '😗', '😚', '😙', '🙂', '🤗', '🤔', '🤐', '🤨', '😐', '😑', '😶', '🙄', '😏', '😬', '🤥'],
+		'Hearts': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '💕', '💖', '💗', '💘', '💝', '💞', '💟'],
+		'Reactions': ['👍', '👎', '👏', '🙌', '🤝', '👋', '🤙', '🤞', '✌️', '🤟', '🤘', '👌', '🤏', '👈', '👉', '👆', '👇', '☝️'],
+		'Objects': ['🎉', '🎊', '🔥', '💯', '⭐', '🌟', '✨', '🎯', '🎪', '🎨', '🎭', '🎪', '🎸', '🎤', '🎧', '📱', '💻', '⌚']
+	};
+
+	const quickEmojis = ['👍', '❤️', '😂', '😊', '😮', '😢'];
+
 	// Functions
 	const selectConversation = (conversation: Conversation) => {
 		currentConversation = conversation;
@@ -283,9 +298,32 @@
 	const handleKeyPress = (event: KeyboardEvent) => {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			sendMessage();
+			if (editingMessage) {
+				saveEditedMessage();
+			} else {
+				sendMessage();
+			}
 		}
 	};
+
+	const handleTyping = () => {
+		// This function is ready for backend integration
+		// When backend is implemented, this would send typing events to other users
+		// For now, it's just a placeholder that doesn't trigger the typing indicator for current user
+	};
+
+	// Simulate others typing occasionally (demo feature)
+	const simulateTyping = () => {
+		if (currentConversation && Math.random() > 0.95) {
+			othersTyping = true;
+			setTimeout(() => {
+				othersTyping = false;
+			}, 2000 + Math.random() * 3000);
+		}
+	};
+
+	// Run simulation periodically
+	setInterval(simulateTyping, 10000);
 
 	const startReply = (message: Message) => {
 		replyingTo = message;
@@ -315,6 +353,45 @@
 		} else {
 			message.reactions.push({ emoji, users: ['1'], count: 1 });
 		}
+	};
+
+	const unsendMessage = (messageId: string) => {
+		if (!currentConversation) return;
+		
+		const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
+		if (messageIndex !== -1) {
+			currentConversation.messages.splice(messageIndex, 1);
+		}
+	};
+
+	const startEditMessage = (message: Message) => {
+		if (message.senderId === '1') {
+			editingMessage = message;
+			editingContent = message.content;
+			messageInput = message.content;
+		}
+	};
+
+	const cancelEdit = () => {
+		editingMessage = null;
+		editingContent = '';
+		messageInput = '';
+	};
+
+	const saveEditedMessage = () => {
+		if (!editingMessage || !messageInput.trim()) return;
+		
+		editingMessage.content = messageInput.trim();
+		editingMessage.timestamp = new Date(); // Update timestamp to show it was edited
+		
+		editingMessage = null;
+		editingContent = '';
+		messageInput = '';
+	};
+
+	const addEmojiToMessage = (emoji: string) => {
+		messageInput += emoji;
+		showEmojiPicker = false;
 	};
 
 	const toggleMembersPanel = () => {
@@ -496,27 +573,29 @@
 	<title>Messages - Workspace</title>
 </svelte:head>
 
-<div class="h-screen flex flex-col bg-gray-50">
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="h-screen flex flex-col bg-gray-50" onclick={() => showEmojiPicker = false}>
 	<Navigation />
 	
 	<div class="flex-1 flex overflow-hidden">
 		<!-- Sidebar -->
 		<aside class="w-80 bg-white border-r border-gray-300 flex flex-col">
 			<!-- Search and Create -->
-			<div class="p-4 border-b border-gray-200 bg-gray-50">
-				<div class="relative mb-4">
+			<div class="p-3 border-b border-gray-200 bg-gray-50">
+				<div class="relative mb-3">
 					<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 					<input
 						bind:value={searchInput}
 						type="text"
 						placeholder="Search conversations..."
-						class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+						class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
 					/>
 				</div>
 				
 				<button
 					onclick={() => showCreateGroup = true}
-					class="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white py-2 px-4 rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+					class="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white py-2 px-3 rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm"
 				>
 					<Plus class="w-4 h-4" />
 					<span>New Group Chat</span>
@@ -529,7 +608,7 @@
 				<div class="border-b border-gray-200">
 					<button
 						onclick={() => showGroups = !showGroups}
-						class="w-full flex items-center justify-between p-3 hover:bg-gray-50 text-left"
+						class="w-full flex items-center justify-between p-2 hover:bg-gray-50 text-left"
 					>
 						<div class="flex items-center space-x-2">
 							{#if showGroups}
@@ -537,7 +616,7 @@
 							{:else}
 								<ChevronRight class="w-4 h-4 text-gray-500" />
 							{/if}
-							<span class="font-medium text-gray-700">Group Chats</span>
+							<span class="font-medium text-gray-700 text-sm">Group Chats</span>
 						</div>
 						<span class="text-xs text-gray-500">{groupChats.length}</span>
 					</button>
@@ -546,30 +625,29 @@
 						{#each filteredGroupChats as conversation (conversation.id)}
 							<button
 								onclick={() => selectConversation(conversation)}
-								class="w-full p-4 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								class="w-full p-2 flex items-center space-x-2 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative">
 									<img
 										src={conversation.avatar || "/placeholder.svg"}
 										alt={conversation.name}
-										class="w-12 h-12 rounded-full"
+										class="w-8 h-8 rounded-full"
 									/>
 								</div>
 								
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center justify-between">
-										<h3 class="font-semibold text-gray-900 truncate flex items-center space-x-1">
+										<h3 class="font-medium text-gray-900 truncate flex items-center space-x-1 text-sm">
 											<span>{conversation.name}</span>
 											<Users class="w-3 h-3 text-gray-500" />
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
 									<p class="text-xs text-gray-500">{conversation.members.length} members</p>
-									<p class="text-sm text-gray-600 truncate">{conversation.lastMessage}</p>
 								</div>
 								
 								{#if conversation.unreadCount > 0}
-									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
 										{conversation.unreadCount}
 									</div>
 								{/if}
@@ -582,7 +660,7 @@
 				<div>
 					<button
 						onclick={() => showConversations = !showConversations}
-						class="w-full flex items-center justify-between p-3 hover:bg-gray-50 text-left"
+						class="w-full flex items-center justify-between p-2 hover:bg-gray-50 text-left"
 					>
 						<div class="flex items-center space-x-2">
 							{#if showConversations}
@@ -590,7 +668,7 @@
 							{:else}
 								<ChevronRight class="w-4 h-4 text-gray-500" />
 							{/if}
-							<span class="font-medium text-gray-700">Conversations</span>
+							<span class="font-medium text-gray-700 text-sm">Conversations</span>
 						</div>
 						<span class="text-xs text-gray-500">{conversations.length}</span>
 					</button>
@@ -599,32 +677,31 @@
 						{#each filteredConversations as conversation (conversation.id)}
 							<button
 								onclick={() => selectConversation(conversation)}
-								class="w-full p-4 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								class="w-full p-2 flex items-center space-x-2 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative">
 									<img
 										src={conversation.avatar || "/placeholder.svg"}
 										alt={conversation.name}
-										class="w-12 h-12 rounded-full"
+										class="w-8 h-8 rounded-full"
 									/>
 									{#if conversation.isOnline}
-										<div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+										<div class="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-white"></div>
 									{/if}
 								</div>
 								
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center justify-between">
-										<h3 class="font-semibold text-gray-900 truncate">
+										<h3 class="font-medium text-gray-900 truncate text-sm">
 											{conversation.name}
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
 									<p class="text-xs text-gray-500">{conversation.department} • {conversation.role}</p>
-									<p class="text-sm text-gray-600 truncate">{conversation.lastMessage}</p>
 								</div>
 								
 								{#if conversation.unreadCount > 0}
-									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
 										{conversation.unreadCount}
 									</div>
 								{/if}
@@ -636,35 +713,34 @@
 				<!-- Start New Conversation Section (only when searching) -->
 				{#if searchInput.trim() && filteredUsers.length > 0}
 					<div class="border-b border-gray-200">
-						<div class="p-3">
+						<div class="p-2">
 							<div class="flex items-center space-x-2">
 								<UserPlus class="w-4 h-4 text-gray-500" />
-								<span class="font-medium text-gray-700">Start New Conversation</span>
+								<span class="font-medium text-gray-700 text-sm">Start New Conversation</span>
 							</div>
 						</div>
 						
 						{#each filteredUsers as user (user.id)}
 							<button
 								onclick={() => startNewConversation(user)}
-								class="w-full p-4 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors"
+								class="w-full p-2 flex items-center space-x-2 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors"
 							>
 								<div class="relative">
 									<img
 										src={user.avatar || "/placeholder.svg"}
 										alt={user.name}
-										class="w-12 h-12 rounded-full"
+										class="w-8 h-8 rounded-full"
 									/>
 								</div>
 								
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center justify-between">
-										<h3 class="font-semibold text-gray-900 truncate">
+										<h3 class="font-medium text-gray-900 truncate text-sm">
 											{user.name}
 										</h3>
-										<MessageCircle class="w-4 h-4 text-gray-400" />
+										<MessageCircle class="w-3 h-3 text-gray-400" />
 									</div>
 									<p class="text-xs text-gray-500">{user.department} • {user.role}</p>
-									<p class="text-sm text-gray-600">Start new conversation</p>
 								</div>
 							</button>
 						{/each}
@@ -782,21 +858,34 @@
 											>
 												<Reply class="w-3 h-3 text-gray-600" />
 											</button>
+											{#if message.senderId === '1'}
+												<button
+													onclick={() => startEditMessage(message)}
+													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+													aria-label="Edit message"
+												>
+													<svg class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+													</svg>
+												</button>
+												<button
+													onclick={() => unsendMessage(message.id)}
+													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-red-50 hover:border-red-200 transition-colors"
+													aria-label="Unsend message"
+												>
+													<X class="w-3 h-3 text-red-600" />
+												</button>
+											{/if}
 											{#if currentConversation.settings?.allowEmojis !== false}
-												<button
-													onclick={() => addReaction(message.id, '👍')}
-													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
-													aria-label="Add thumbs up reaction"
-												>
-													👍
-												</button>
-												<button
-													onclick={() => addReaction(message.id, '😊')}
-													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
-													aria-label="Add smile reaction"
-												>
-													😊
-												</button>
+												{#each quickEmojis as emoji}
+													<button
+														onclick={() => addReaction(message.id, emoji)}
+														class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors text-sm"
+														aria-label={`Add ${emoji} reaction`}
+													>
+														{emoji}
+													</button>
+												{/each}
 											{/if}
 										</div>
 									</div>
@@ -830,6 +919,26 @@
 							</div>
 						</div>
 					{/each}
+
+					<!-- Typing Indicator -->
+					{#if othersTyping && currentConversation}
+						<div class="flex justify-start">
+							<div class="flex items-center space-x-2 max-w-xs">
+								<img
+									src={currentConversation.type === 'group' ? currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg?height=32&width=32' : currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg?height=32&width=32'}
+									alt=""
+									class="w-8 h-8 rounded-full"
+								/>
+								<div class="bg-gray-200 px-4 py-2 rounded-2xl">
+									<div class="flex space-x-1">
+										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					{/if}
 				</div>
 
 				<!-- Reply Preview -->
@@ -846,15 +955,31 @@
 					</div>
 				{/if}
 
+				<!-- Edit Preview -->
+				{#if editingMessage}
+					<div class="px-6 py-2 bg-blue-50 border-t border-blue-200 flex items-center justify-between">
+						<div class="flex items-center space-x-2">
+							<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+							</svg>
+							<span class="text-sm text-blue-600">Editing message</span>
+						</div>
+						<button onclick={cancelEdit} class="text-blue-500 hover:text-blue-700" aria-label="Cancel edit">
+							×
+						</button>
+					</div>
+				{/if}
+
 				<!-- Message Input -->
 				<div class="px-6 py-4 border-t border-gray-300 bg-white">
 					<div class="flex items-end space-x-3">
-						<div class="flex-1">
+						<div class="flex-1 relative">
 							<div class="relative">
 								<textarea
 									bind:value={messageInput}
+									oninput={handleTyping}
 									onkeypress={handleKeyPress}
-									placeholder="Type a message..."
+									placeholder={editingMessage ? "Edit your message..." : "Type a message..."}
 									rows="1"
 									class="w-full px-4 py-3 pr-20 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent resize-none"
 								></textarea>
@@ -867,21 +992,57 @@
 									{/if}
 									
 									{#if currentConversation.settings?.allowEmojis !== false}
-										<button class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors" aria-label="Add emoji">
+										<button 
+											onclick={(e) => { e.stopPropagation(); showEmojiPicker = !showEmojiPicker; }}
+											class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors" 
+											aria-label="Add emoji"
+										>
 											<Smile class="w-4 h-4" />
 										</button>
 									{/if}
 								</div>
+
+								<!-- Emoji Picker -->
+								{#if showEmojiPicker}
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<div class="absolute bottom-full right-2 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-80 max-h-64 overflow-y-auto z-50" onclick={(e) => e.stopPropagation()}>
+										<div class="space-y-3">
+											{#each Object.entries(emojiGroups) as [category, emojis]}
+												<div>
+													<h4 class="text-sm font-medium text-gray-700 mb-2">{category}</h4>
+													<div class="grid grid-cols-8 gap-2">
+														{#each emojis as emoji}
+															<button
+																onclick={() => addEmojiToMessage(emoji)}
+																class="p-2 hover:bg-gray-100 rounded-lg transition-colors text-lg"
+																aria-label={`Add ${emoji} emoji`}
+															>
+																{emoji}
+															</button>
+														{/each}
+													</div>
+												</div>
+											{/each}
+										</div>
+									</div>
+								{/if}
 							</div>
 						</div>
 						
 						<button
-							onclick={sendMessage}
+							onclick={editingMessage ? saveEditedMessage : sendMessage}
 							disabled={!messageInput.trim()}
 							class="p-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-							aria-label="Send message"
+							aria-label={editingMessage ? "Save edited message" : "Send message"}
 						>
-							<Send class="w-5 h-5" />
+							{#if editingMessage}
+								<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+								</svg>
+							{:else}
+								<Send class="w-5 h-5" />
+							{/if}
 						</button>
 					</div>
 				</div>

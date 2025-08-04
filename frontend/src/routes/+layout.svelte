@@ -7,7 +7,9 @@
 	
 	// Pages that should not show navigation
 	const noNavPages = ['/login', '/forgot-password', '/otp', '/security-question', '/change-password', '/first-time', '/chat'];
-	let showNavigation = $derived(!noNavPages.includes($page.url.pathname));
+	// Profile page handles its own navigation to avoid double navigation
+	const isProfilePage = $derived($page.url.pathname === '/profile');
+	let showNavigation = $derived(!noNavPages.includes($page.url.pathname) && !isProfilePage);
 </script>
 
 {#if showNavigation}

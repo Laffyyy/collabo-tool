@@ -8,6 +8,9 @@ interface User {
   organizationUnit: string
   firstName: string
   lastName: string
+  profilePhoto?: string
+  onlineStatus: "online" | "away" | "idle" | "offline"
+  lastSeen?: Date
 }
 
 class AuthStore {
@@ -17,6 +20,25 @@ class AuthStore {
 
   get userRole() {
     return this.user?.role;
+  }
+
+  get userInitials() {
+    if (!this.user) return '';
+    return `${this.user.firstName.charAt(0)}.${this.user.lastName.charAt(0)}`;
+  }
+
+  get userDisplayPhoto() {
+    return this.user?.profilePhoto || this.userInitials;
+  }
+
+  get onlineStatusColor() {
+    switch (this.user?.onlineStatus) {
+      case 'online': return 'bg-green-500';
+      case 'away': return 'bg-yellow-500';
+      case 'idle': return 'bg-orange-500';
+      case 'offline': return 'bg-gray-500';
+      default: return 'bg-gray-500';
+    }
   }
 
   get canAccessAdmin() {
@@ -56,9 +78,26 @@ class AuthStore {
       role: 'admin',
       organizationUnit: 'Engineering',
       firstName: 'Admin',
-      lastName: 'User'
+      lastName: 'User',
+      onlineStatus: 'online',
+      lastSeen: new Date()
     };
     this.isAuthenticated = true;
+  }
+
+  updateOnlineStatus(status: "online" | "away" | "idle" | "offline") {
+    if (this.user) {
+      this.user.onlineStatus = status;
+      if (status !== 'offline') {
+        this.user.lastSeen = new Date();
+      }
+    }
+  }
+
+  updateProfilePhoto(photoUrl: string) {
+    if (this.user) {
+      this.user.profilePhoto = photoUrl;
+    }
   }
 }
 
