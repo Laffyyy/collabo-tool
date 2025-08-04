@@ -222,10 +222,10 @@
 	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
 		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
 			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Verification?</h3>
-			<p class="text-gray-600 mb-6">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="flex flex-col gap-3">
-				<button onclick={otpConfirmCancel} class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes, Cancel</button>
-				<button onclick={() => otpShowCancelModal = false} class="w-full border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">Continue</button>
+			<p class="text-gray-600 mb-6">Your progress will be lost.</p>
+			<div class="flex flex-row gap-3">
+				<button onclick={otpConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
+				<button onclick={() => otpShowCancelModal = false} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
 			</div>
 		</div>
 	</div>
@@ -294,13 +294,12 @@
 		opacity: 0.5;
 	}
 	
-	/* Two timers on the same row - aligned to subtitle */
 	.otp-timers-row {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 2rem;
-		text-align: left; /* Changed from center alignment */
+		text-align: left;
 	}
 	
 	.otp-timer-left {
@@ -354,7 +353,6 @@
 		color: #00a085;
 	}
 	
-	/* Cancel and Verify buttons on the same row - aligned with timers */
 	.otp-actions-row {
 		display: flex;
 		justify-content: space-between;
@@ -367,7 +365,7 @@
 		border: 1px solid #d1d5db;
 		color: #374151;
 		background: white;
-		width: 100%; /* Fixed width */
+		width: 100%;
 		padding: 0.75rem 0;
 		margin-left: 1.25rem;
 		text-align: center;
@@ -393,7 +391,7 @@
 	.otp-verify-btn {
 		background: #01c0a4;
 		color: white;
-		width: 100%; /* Fixed width */
+		width: 100%;
 		padding: 0.75rem 0;
 		margin-right: 1.25rem;
 		text-align: center;
@@ -416,75 +414,5 @@
 	.otp-verify-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-	}
-	
-	.otp-modal-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 50;
-	}
-	
-	.otp-modal {
-		background: white;
-		border-radius: 1rem;
-		padding: 1.5rem;
-		max-width: 24rem;
-		margin: 1rem;
-	}
-	
-	.otp-modal-title {
-		font-size: 1.125rem;
-		font-weight: bold;
-		color: #1f2937;
-		margin-bottom: 0.5rem;
-	}
-	
-	.otp-modal-text {
-		color: #6b7280;
-		margin-bottom: 1.5rem;
-	}
-	
-	.otp-modal-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-	
-	.otp-modal-confirm {
-		background: #dc2626;
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s ease;
-	}
-	
-	.otp-modal-confirm:hover {
-		background: #b91c1c;
-	}
-	
-	.otp-modal-dismiss {
-		border: 1px solid #d1d5db;
-		color: #374151;
-		background: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s ease;
-	}
-	
-	.otp-modal-dismiss:hover {
-		background: #f9fafb;
 	}
 </style>

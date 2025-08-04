@@ -3,6 +3,7 @@
 	import LoginForm from './LoginForm.svelte';
 	import LoginBackground from './LoginBackground.svelte';
 	import LoginHeader from './LoginHeader.svelte';
+	import { onMount } from 'svelte';
 	
 	let loginUsername = $state('');
 	let loginPassword = $state('');
@@ -14,6 +15,7 @@
 	let forgotPasswordIsLoading = $state(false);
 	let forgotPasswordError = $state('');
 	let forgotPasswordSuccess = $state(false);
+	let forgotPasswordEmailInput: HTMLInputElement | undefined;
 	
 	const handleLoginSubmit = (event: Event) => {
 		event.preventDefault();
@@ -30,6 +32,13 @@
 		forgotPasswordEmail = '';
 		forgotPasswordError = '';
 		forgotPasswordSuccess = false;
+		
+		// Focus the email input after modal opens
+		setTimeout(() => {
+			if (forgotPasswordEmailInput) {
+				forgotPasswordEmailInput.focus();
+			}
+		}, 100);
 	};
 	
 	const closeForgotPasswordModal = () => {
@@ -40,12 +49,84 @@
 		forgotPasswordSuccess = false;
 	};
 	
+	const forgotPasswordValidateEmailInput = (value: string): string => {
+		// Only allow alphanumeric characters and specified symbols: @ _ - .
+		const filteredValue = value.replace(/[^a-zA-Z0-9@_.-]/g, '');
+		// Strictly limit to 30 characters max
+		return filteredValue.slice(0, 30);
+	};
+	
+	const forgotPasswordValidateEmailFormat = (email: string): string => {
+		if (!email) return '';
+		
+		// Basic email format validation
+		const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+		
+		if (!emailRegex.test(email)) {
+			// Check specific issues
+			if (!email.includes('@')) {
+				return 'Email must contain @ symbol';
+			}
+			if (email.indexOf('@') !== email.lastIndexOf('@')) {
+				return 'Email can only contain one @ symbol';
+			}
+			if (!email.includes('.') || email.lastIndexOf('.') < email.indexOf('@')) {
+				return 'Email must contain a valid domain';
+			}
+			if (email.startsWith('.') || email.startsWith('@') || email.startsWith('-') || email.startsWith('_')) {
+				return 'Email cannot start with special characters';
+			}
+			if (email.endsWith('.') || email.endsWith('@') || email.endsWith('-') || email.endsWith('_')) {
+				return 'Email cannot end with special characters';
+			}
+			if (email.includes('..') || email.includes('@.') || email.includes('.@')) {
+				return 'Email contains invalid character combinations';
+			}
+			return 'Please enter a valid email address';
+		}
+		
+		return '';
+	};
+	
+	const forgotPasswordHandleEmailInput = (event: Event) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = forgotPasswordValidateEmailInput(target.value);
+		forgotPasswordEmail = filteredValue;
+		
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+		
+		// Validate email format and update error
+		forgotPasswordError = forgotPasswordValidateEmailFormat(filteredValue);
+	};
+	
+	const forgotPasswordHandleEmailPaste = (event: ClipboardEvent) => {
+		event.preventDefault();
+		const pastedText = event.clipboardData?.getData('text') || '';
+		const target = event.target as HTMLInputElement;
+		const filteredText = forgotPasswordValidateEmailInput(pastedText);
+		
+		forgotPasswordEmail = filteredText;
+		target.value = filteredText;
+		
+		// Validate email format and update error
+		forgotPasswordError = forgotPasswordValidateEmailFormat(filteredText);
+	};
+	
 	const forgotPasswordValidateEmail = (email: string) => {
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 		return emailRegex.test(email);
 	};
 	
 	const forgotPasswordHandleSubmit = async () => {
+		const emailFormatError = forgotPasswordValidateEmailFormat(forgotPasswordEmail);
+		if (emailFormatError) {
+			forgotPasswordError = emailFormatError;
+			return;
+		}
+		
 		if (!forgotPasswordValidateEmail(forgotPasswordEmail)) {
 			forgotPasswordError = 'Please enter a valid email address';
 			return;
@@ -148,30 +229,34 @@
 								Email Address
 							</label>
 							<input
+								bind:this={forgotPasswordEmailInput}
 								type="email"
 								bind:value={forgotPasswordEmail}
-								class="w-full px-4 py-3 bg-gray-50/50 border-2 border-gray-200 rounded-xl focus:border-[#01c0a4] focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
+								oninput={forgotPasswordHandleEmailInput}
+								onpaste={forgotPasswordHandleEmailPaste}
+								class="w-full px-4 py-3 bg-gray-50/50 border-2 {forgotPasswordError ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#01c0a4]'} rounded-xl focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
 								id="forgotEmail"
 								placeholder="Enter your email"
+								maxlength="30"
 								disabled={forgotPasswordIsLoading}
 							/>
 						</div>
 						
-						<div class="flex flex-col gap-3 pt-2">
-							<button
-								onclick={forgotPasswordHandleSubmit}
-								disabled={forgotPasswordIsLoading || !forgotPasswordEmail.trim()}
-								class="w-full bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 focus:outline-none focus:ring-4 focus:ring-[#01c0a4]/20 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-							>
-								{forgotPasswordIsLoading ? 'Sending...' : 'Send Reset Code'}
-							</button>
-							
+						<div class="flex flex-row gap-3 pt-2">
 							<button
 								onclick={closeForgotPasswordModal}
-								class="w-full border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200 transition-all duration-200 cursor-pointer disabled:opacity-50"
+								class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200 transition-all duration-200 cursor-pointer disabled:opacity-50"
 								disabled={forgotPasswordIsLoading}
 							>
 								Cancel
+							</button>
+							
+							<button
+								onclick={forgotPasswordHandleSubmit}
+								disabled={forgotPasswordIsLoading || !forgotPasswordEmail.trim()}
+								class="flex-1 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 focus:outline-none focus:ring-4 focus:ring-[#01c0a4]/20 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+							>
+								{forgotPasswordIsLoading ? 'Sending...' : 'Send Reset Code'}
 							</button>
 						</div>
 					{/if}

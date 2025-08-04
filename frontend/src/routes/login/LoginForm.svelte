@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { Eye, EyeOff } from 'lucide-svelte';
+	import { onMount } from 'svelte';
 	
 	interface LoginFormProps {
 		loginUsername: string;
@@ -19,6 +20,109 @@
 		onTogglePassword,
 		onForgotPassword
 	}: LoginFormProps = $props();
+	
+	let loginUsernameInput: HTMLInputElement | undefined;
+	let loginEmailError = $state('');
+	
+	onMount(() => {
+		// Auto-focus the email input
+		if (loginUsernameInput) {
+			loginUsernameInput.focus();
+		}
+	});
+	
+	const loginValidateEmailInput = (value: string): string => {
+		// Only allow alphanumeric characters and specified symbols: @ _ - .
+		const filteredValue = value.replace(/[^a-zA-Z0-9@_.-]/g, '');
+		// Strictly limit to 30 characters max
+		return filteredValue.slice(0, 30);
+	};
+	
+	const loginValidateEmailFormat = (email: string): string => {
+		if (!email) return '';
+		
+		// Basic email format validation
+		const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+		
+		if (!emailRegex.test(email)) {
+			// Check specific issues
+			if (!email.includes('@')) {
+				return 'Email must contain @ symbol';
+			}
+			if (email.indexOf('@') !== email.lastIndexOf('@')) {
+				return 'Email can only contain one @ symbol';
+			}
+			if (!email.includes('.') || email.lastIndexOf('.') < email.indexOf('@')) {
+				return 'Email must contain a valid domain';
+			}
+			if (email.startsWith('.') || email.startsWith('@') || email.startsWith('-') || email.startsWith('_')) {
+				return 'Email cannot start with special characters';
+			}
+			if (email.endsWith('.') || email.endsWith('@') || email.endsWith('-') || email.endsWith('_')) {
+				return 'Email cannot end with special characters';
+			}
+			if (email.includes('..') || email.includes('@.') || email.includes('.@')) {
+				return 'Email contains invalid character combinations';
+			}
+			return 'Please enter a valid email address';
+		}
+		
+		return '';
+	};
+	
+	const loginHandleEmailInput = (event: Event) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = loginValidateEmailInput(target.value);
+		loginUsername = filteredValue;
+		
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+		
+		// Validate email format
+		loginEmailError = loginValidateEmailFormat(filteredValue);
+	};
+	
+	const loginHandleEmailPaste = (event: ClipboardEvent) => {
+		event.preventDefault();
+		const pastedText = event.clipboardData?.getData('text') || '';
+		const target = event.target as HTMLInputElement;
+		const filteredText = loginValidateEmailInput(pastedText);
+		
+		loginUsername = filteredText;
+		target.value = filteredText;
+		
+		// Validate email format
+		loginEmailError = loginValidateEmailFormat(filteredText);
+	};
+	
+	const loginValidatePasswordInput = (value: string): string => {
+		// Only allow alphanumeric characters and specified symbols: ! @ - _ .
+		const filteredValue = value.replace(/[^a-zA-Z0-9!@_.-]/g, '');
+		// Strictly limit to 20 characters max
+		return filteredValue.slice(0, 20);
+	};
+	
+	const loginHandlePasswordInput = (event: Event) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = loginValidatePasswordInput(target.value);
+		loginPassword = filteredValue;
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+	};
+	
+	const loginHandlePasswordPaste = (event: ClipboardEvent) => {
+		event.preventDefault();
+		const pastedText = event.clipboardData?.getData('text') || '';
+		const target = event.target as HTMLInputElement;
+		const filteredText = loginValidatePasswordInput(pastedText);
+		
+		loginPassword = filteredText;
+		target.value = filteredText;
+	};
 </script>
 
 <form onsubmit={onSubmit} class="space-y-6">
@@ -29,14 +133,21 @@
 		</label>
 		<div class="relative">
 			<input
+				bind:this={loginUsernameInput}
 				id="loginUsername"
 				type="email"
 				bind:value={loginUsername}
+				oninput={loginHandleEmailInput}
+				onpaste={loginHandleEmailPaste}
 				placeholder="you@company.com"
+				maxlength="30"
 				required
-				class="w-full px-4 py-3 bg-gray-50/50 border-2 border-gray-200 rounded-xl focus:border-[#01c0a4] focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
+				class="w-full px-4 py-3 bg-gray-50/50 border-2 {loginEmailError ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#01c0a4]'} rounded-xl focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
 			/>
 		</div>
+		{#if loginEmailError}
+			<p class="text-sm text-red-600 mt-1">{loginEmailError}</p>
+		{/if}
 	</div>
 	
 	<!-- Password field -->
@@ -49,7 +160,10 @@
 				id="loginPassword"
 				type={loginShowPassword ? 'text' : 'password'}
 				bind:value={loginPassword}
+				oninput={loginHandlePasswordInput}
+				onpaste={loginHandlePasswordPaste}
 				placeholder="Enter your password"
+				maxlength="20"
 				required
 				class="w-full px-4 py-3 pr-12 bg-gray-50/50 border-2 border-gray-200 rounded-xl focus:border-[#01c0a4] focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
 			/>

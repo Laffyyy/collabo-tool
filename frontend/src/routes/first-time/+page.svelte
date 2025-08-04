@@ -1,11 +1,80 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { writable } from 'svelte/store';
+	import { onMount } from 'svelte';
 	
 	const firstTimeShowTermsModal = writable(true);
 	const firstTimeTermsAccepted = writable(false);
 	const firstTimeShowCancelModal = writable(false);
 	const firstTimeIsLoading = writable(false);
+	
+	// Auto-focus reference
+	let firstTimeFirstAnswerInput: HTMLInputElement | undefined;
+	
+	// Function to handle binding the first input
+	const firstTimeBindFirstInput = (element: HTMLInputElement | null, index: number) => {
+		if (index === 0 && element) {
+			firstTimeFirstAnswerInput = element;
+		}
+	};
+	
+	onMount(() => {
+		// Wait for terms modal to close, then focus first answer input
+		const unsubscribe = firstTimeShowTermsModal.subscribe(showModal => {
+			if (!showModal && firstTimeFirstAnswerInput) {
+				setTimeout(() => {
+					if (firstTimeFirstAnswerInput) {
+						firstTimeFirstAnswerInput.focus();
+					}
+				}, 100);
+			}
+		});
+		
+		return unsubscribe;
+	});
+	
+	// Input validation function
+	const firstTimeValidateAnswerInput = (value: string): string => {
+		// Only allow alphanumeric characters, specified symbols (! @ _ - .), and spaces
+		let filteredValue = value.replace(/[^a-zA-Z0-9!@_.\- ]/g, '');
+		
+		// Replace multiple consecutive spaces with single space
+		filteredValue = filteredValue.replace(/\s+/g, ' ');
+		
+		// Strictly limit to 30 characters max
+		return filteredValue.slice(0, 30);
+	};
+	
+	const firstTimeHandleAnswerInput = (event: Event, index: number) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = firstTimeValidateAnswerInput(target.value);
+		
+		// Update the answers array
+		firstTimeAnswers.update(answers => {
+			answers[index] = filteredValue;
+			return answers;
+		});
+		
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+	};
+	
+	const firstTimeHandleAnswerPaste = (event: ClipboardEvent, index: number) => {
+		event.preventDefault();
+		const pastedText = event.clipboardData?.getData('text') || '';
+		const target = event.target as HTMLInputElement;
+		const filteredText = firstTimeValidateAnswerInput(pastedText);
+		
+		// Update the answers array
+		firstTimeAnswers.update(answers => {
+			answers[index] = filteredText;
+			return answers;
+		});
+		
+		target.value = filteredText;
+	};
 	
 	// Security questions
 	const firstTimeSecurityQuestions = [
@@ -90,8 +159,8 @@
 		<div class="firsttime-form">
 			<!-- Security Questions Section -->
 			<div class="firsttime-section">
-				<h2 class="firsttime-section-title">Security Questions</h2>
-				<p class="firsttime-section-subtitle">Select 3 unique security questions</p>
+				<h2 class="firsttime-section-title">Security Setup</h2>
+				<p class="firsttime-section-subtitle">Choose 3 unique questions and provide answers for account recovery</p>
 				
 				{#each Array(3) as _, index}
 					<div class="firsttime-question-group">
@@ -108,33 +177,48 @@
 							{/each}
 						</select>
 						
-						{#if $firstTimeSelectedQuestions[index]}
-							<label class="firsttime-label" for={`answer-${index + 1}`}>Your answer</label>
-							<input
-								type="text"
-								bind:value={$firstTimeAnswers[index]}
-								class="firsttime-input"
-								id={`answer-${index + 1}`}
-							/>
-						{/if}
+						<label class="firsttime-label" for={`answer-${index + 1}`}>Your answer</label>
+						<input
+							use:firstTimeBindFirstInput={index}
+							type="text"
+							value={$firstTimeAnswers[index]}
+							oninput={(e) => firstTimeHandleAnswerInput(e, index)}
+							onpaste={(e) => firstTimeHandleAnswerPaste(e, index)}
+							onkeydown={(e) => {
+								// Prevent certain key combinations and special characters
+								if (e.ctrlKey && (e.key === 'v' || e.key === 'c' || e.key === 'x')) {
+									if (e.key === 'v') {
+										e.preventDefault(); // Prevent default paste
+									}
+									return;
+								}
+							}}
+							class="firsttime-input"
+							id={`answer-${index + 1}`}
+							placeholder="Enter your answer"
+							disabled={!$firstTimeSelectedQuestions[index]}
+							maxlength="30"
+							autocomplete="off"
+							spellcheck="false"
+						/>
 					</div>
 				{/each}
 			</div>
 			
 			<div class="firsttime-actions">
 				<button
+					onclick={firstTimeHandleCancel}
+					class="firsttime-cancel-btn"
+				>
+					Cancel
+				</button>
+				
+				<button
 					onclick={firstTimeHandleSubmit}
 					disabled={!firstTimeCanSubmit() || $firstTimeIsLoading}
 					class="firsttime-submit-btn"
 				>
 					{$firstTimeIsLoading ? 'Setting up...' : 'Continue'}
-				</button>
-				
-				<button
-					onclick={firstTimeHandleCancel}
-					class="firsttime-cancel-btn"
-				>
-					Cancel
 				</button>
 			</div>
 		</div>
@@ -181,10 +265,10 @@
 	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
 		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
 			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Setup?</h3>
-			<p class="text-gray-600 mb-6">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="flex flex-col gap-3">
-				<button onclick={firstTimeConfirmCancel} class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes, Cancel</button>
-				<button onclick={() => firstTimeShowCancelModal.set(false)} class="w-full border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">Continue Setup</button>
+			<p class="text-gray-600 mb-6">Your progress will be lost.</p>
+			<div class="flex flex-row gap-3">
+				<button onclick={firstTimeConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
+				<button onclick={() => firstTimeShowCancelModal.set(false)} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
 			</div>
 		</div>
 	</div>
@@ -204,16 +288,16 @@
 		background-color: white;
 		border-radius: 1.5rem;
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-		padding: 2rem;
+		padding: 1.5rem;
 		width: 100%;
 		max-width: 42rem;
-		max-height: 90vh;
+		max-height: 95vh;
 		overflow-y: auto;
 	}
 	
 	.firsttime-header {
 		text-align: center;
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 	
 	.firsttime-title {
@@ -229,13 +313,9 @@
 	}
 	
 	.firsttime-section {
-		margin-bottom: 2rem;
-		padding-bottom: 1.5rem;
+		margin-bottom: 1.5rem;
+		padding-bottom: 1rem;
 		border-bottom: 1px solid #e5e7eb;
-	}
-	
-	.firsttime-section:last-child {
-		border-bottom: none;
 	}
 	
 	.firsttime-section-title {
@@ -248,11 +328,7 @@
 	
 	.firsttime-section-subtitle {
 		color: #4b5563;
-		margin-bottom: 1rem;
-	}
-	
-	.firsttime-field {
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 	
 	.firsttime-label {
@@ -261,15 +337,16 @@
 		line-height: 1.25rem;
 		font-weight: 500;
 		color: #374151;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.25rem;
 	}
 	
 	.firsttime-input {
 		width: 100%;
-		padding: 0.75rem 1rem;
+		padding: 0.5rem 0.75rem;
 		border: 2px solid #d1d5db;
 		border-radius: 0.75rem;
 		transition: border-color 0.2s;
+		margin-bottom: 0.25rem;
 	}
 	
 	.firsttime-input:focus {
@@ -277,12 +354,19 @@
 		outline: none;
 	}
 	
+	.firsttime-input:disabled {
+		background-color: #f3f4f6;
+		color: #9ca3af;
+		cursor: not-allowed;
+		border-color: #e5e7eb;
+	}
+	
 	.firsttime-select {
 		width: 100%;
-		padding: 0.75rem 1rem;
+		padding: 0.5rem 0.75rem;
 		border: 2px solid #d1d5db;
 		border-radius: 0.75rem;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.25rem;
 		transition: border-color 0.2s;
 	}
 	
@@ -292,51 +376,17 @@
 	}
 	
 	.firsttime-question-group {
-		margin-bottom: 1.5rem;
-	}
-	
-	.firsttime-errors {
+		margin-top: 1.25rem;
 		margin-bottom: 1rem;
 	}
 	
-	.firsttime-errors > * + * {
-		margin-top: 0.25rem;
-	}
-	
-	.firsttime-error {
-		color: #dc2626;
-		font-size: 0.875rem;
-		line-height: 1.25rem;
-	}
-	
-	.firsttime-password-hint {
-		background-color: #dbeafe;
-		border: 1px solid #bfdbfe;
-		border-radius: 0.5rem;
-		padding: 0.75rem;
-		font-size: 0.75rem;
-		line-height: 1rem;
-	}
-	
-	.firsttime-hint-title {
-		font-weight: 500;
-		color: #1e40af;
-		margin-bottom: 0.25rem;
-	}
-	
-	.firsttime-hint-list {
-		color: #1d4ed8;
-		margin-left: 1rem;
-		list-style-type: disc;
-	}
-	
-	.firsttime-hint-list > * + * {
-		margin-top: 0.25rem;
+	.firsttime-question-group:first-child {
+		margin-top: 0;
 	}
 	
 	.firsttime-actions {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		gap: 0.75rem;
 	}
 	
@@ -349,6 +399,7 @@
 		border: none;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		flex: 1;
 	}
 	
 	.firsttime-submit-btn:hover:not(:disabled) {
@@ -369,121 +420,10 @@
 		font-weight: 500;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		flex: 1;
 	}
 	
 	.firsttime-cancel-btn:hover {
-		background-color: #f9fafb;
-	}
-	
-	.firsttime-modal-overlay {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 50;
-	}
-	
-	.firsttime-modal {
-		background-color: white;
-		border-radius: 1rem;
-		padding: 1.5rem;
-		max-width: 28rem;
-		margin: 1rem;
-	}
-	
-	.firsttime-modal-title {
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-		font-weight: 700;
-		color: #1f2937;
-		margin-bottom: 1rem;
-	}
-	
-	.firsttime-modal-content {
-		color: #4b5563;
-		margin-bottom: 1rem;
-		font-size: 0.875rem;
-		line-height: 1.25rem;
-	}
-	
-	.firsttime-modal-content ul {
-		list-style-type: disc;
-		margin-left: 1rem;
-	}
-	
-	.firsttime-modal-content ul > * + * {
-		margin-top: 0.25rem;
-	}
-	
-	.firsttime-modal-checkbox {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
-	}
-	
-	.firsttime-modal-accept {
-		width: 100%;
-		background-color: #01c0a4;
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-	
-	.firsttime-modal-accept:hover:not(:disabled) {
-		background-color: #00a085;
-	}
-	
-	.firsttime-modal-accept:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	
-	.firsttime-modal-text {
-		color: #4b5563;
-		margin-bottom: 1.5rem;
-	}
-	
-	.firsttime-modal-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-	
-	.firsttime-modal-confirm {
-		background-color: #dc2626;
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.firsttime-modal-confirm:hover {
-		background-color: #b91c1c;
-	}
-	
-	.firsttime-modal-dismiss {
-		border: 1px solid #d1d5db;
-		color: #374151;
-		background-color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.firsttime-modal-dismiss:hover {
 		background-color: #f9fafb;
 	}
 </style>

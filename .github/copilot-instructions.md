@@ -84,3 +84,4 @@ Components live alongside routes (e.g., `routes/login/LoginForm.svelte`). Each m
 - ESLint configured with Svelte-specific rules and TypeScript strict mode
 - All auth flows are UI-only demonstrations
 - All variable names should start with their respective component name (e.g., `loginUsername`, `otpCode`)
+- All class names should start with their respective component name (e.g., `loginForm`, `otpInput`)
