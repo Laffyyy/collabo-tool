@@ -1,16 +1,26 @@
 <script lang="ts">
-  import { User, Camera, Save, Edit, Mail, Shield, Building2, Users, Calendar, Clock, Settings, X } from 'lucide-svelte';
+  import { User, Camera, Save, Edit, Mail, Shield, Building2, Bell, Calendar, Clock, X, Users, Settings } from 'lucide-svelte';
   import Navigation from '$lib/components/Navigation.svelte';
+  import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
   import { authStore } from '$lib/stores/auth.svelte';
 
-  // Get user data from auth store
-  let authUser = $derived($authStore?.user);
-  let userInitials = $derived($authStore?.userInitials || 'U.U');
-  let onlineStatusColor = $derived($authStore?.onlineStatusColor || 'bg-gray-500');
+  // Get current user from auth store
+  const authUser = $derived($authStore.user);
 
-  // Mock additional user data
-  let user = $derived({
-    id: '1',
+  // Computed online status color
+  const onlineStatusColor = $derived(() => {
+    switch (authUser?.onlineStatus) {
+      case 'online': return 'bg-green-500';
+      case 'away': return 'bg-yellow-500';
+      case 'idle': return 'bg-orange-500';
+      case 'offline': return 'bg-gray-500';
+      default: return 'bg-gray-500';
+    }
+  });
+
+  // Profile state based on authenticated user - using derived for reactivity
+  const user = $derived({
+    id: authUser?.id || '1',
     name: `${authUser?.firstName || 'John'} ${authUser?.lastName || 'Doe'}`,
     email: authUser?.email || 'john.doe@company.com',
     role: authUser?.role || 'Manager',
@@ -21,13 +31,15 @@
     joinDate: new Date('2023-01-15'),
     lastLogin: new Date('2024-01-15T14:30:00'),
     profilePhoto: authUser?.profilePhoto || null,
-    coverPhoto: '/placeholder.svg?height=300&width=800'
+    coverPhoto: '/placeholder.svg?height=300&width=800',
+    onlineStatus: authUser?.onlineStatus || 'online'
   });
 
   let isEditing = $state(false);
   let editedName = $state('');
   let showTeamStructure = $state(false);
   let showTeamModal = $state(false);
+  let selectedSupervisor = $state<any>(null);
 
   // Sync editedName when editing starts
   $effect(() => {
@@ -78,7 +90,6 @@
     
     switch (userRole) {
       case 'manager':
-        // Show direct reports (supervisors and their teams)
         const managerTeam = mockTeamData.supervisors.filter(s => s.managerId === user.id);
         const teamMembers = mockTeamData.team.filter(t => t.managerId === user.id);
         return {
@@ -88,7 +99,6 @@
         };
         
       case 'supervisor':
-        // Show manager and team under that manager
         const supervisor = mockTeamData.supervisors.find(s => s.name === user.name);
         const manager = mockTeamData.managers.find(m => m.id === supervisor?.managerId);
         const supervisorTeam = mockTeamData.team.filter(t => t.supervisorId === supervisor?.id);
@@ -100,7 +110,6 @@
         
       case 'frontline':
       case 'support':
-        // Show manager and supervisor
         const teamMember = mockTeamData.team.find(t => t.name === user.name);
         const memberSupervisor = mockTeamData.supervisors.find(s => s.id === teamMember?.supervisorId);
         const memberManager = mockTeamData.managers.find(m => m.id === teamMember?.managerId);
@@ -117,11 +126,6 @@
 
   const teamStructure = $derived(getTeamStructure());
 
-  // Helper function to get initials from name
-  const getInitials = (name: string) => {
-    return name.split(' ').map((n: string) => n[0]).join('.');
-  };
-
   const formatDate = (date: Date) => {
     return date.toLocaleDateString();
   };
@@ -131,17 +135,16 @@
   };
 
   const handleProfilePhotoChange = () => {
-    // In a real app, this would handle file upload
     alert('Profile photo upload functionality would be implemented here');
   };
 
   const handleCoverPhotoChange = () => {
-    // In a real app, this would handle file upload
     alert('Cover photo upload functionality would be implemented here');
   };
 
   const saveProfile = () => {
-    user.name = editedName;
+    // In a real app, this would update the backend
+    // For now, just show success message
     isEditing = false;
     alert('Profile updated successfully!');
   };
@@ -151,26 +154,21 @@
     isEditing = false;
   };
 
-  // Demo role switching function for testing
   const switchRole = (newRole: "admin" | "manager" | "supervisor" | "support" | "frontline") => {
     if ($authStore.user) {
       $authStore.user.role = newRole;
-      // Reset team structure visibility when role changes
       showTeamStructure = false;
     }
   };
 
-  // Team management function
   const showTeam = () => {
     showTeamModal = true;
   };
 
-  // Mock team data for managers and supervisors
   const getTeamMembers = () => {
     const userRole = authUser?.role?.toLowerCase();
     
     if (userRole === 'manager') {
-      // Manager sees supervisors and their team members with proper hierarchy
       return {
         supervisors: [
           { 
@@ -198,7 +196,6 @@
         ]
       };
     } else if (userRole === 'supervisor') {
-      // Supervisor sees only their direct team members
       return {
         supervisors: [],
         teamMembers: [
@@ -245,18 +242,15 @@
             <!-- Profile Photo -->
             <div class="relative -mt-16 sm:-mt-20">
               <div class="relative">
-                {#if user.profilePhoto}
-                  <img 
-                    src={user.profilePhoto} 
-                    alt={user.name}
-                    class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white bg-white shadow-lg object-cover"
+                <div class="border-4 border-white shadow-lg rounded-full">
+                  <ProfileAvatar 
+                    user={{ ...user, profilePhoto: user.profilePhoto || undefined }} 
+                    size="xl" 
+                    showOnlineStatus={true} 
+                    onlineStatus={user.onlineStatus}
+                    altText={user.name}
                   />
-                {:else}
-                  <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-white bg-[#01c0a4] shadow-lg flex items-center justify-center text-white text-2xl sm:text-3xl font-bold">
-                    {userInitials}
-                  </div>
-                {/if}
-                <!-- Online Status Indicator -->
+                </div>
                 <div class="absolute bottom-2 right-2 w-6 h-6 {onlineStatusColor} rounded-full border-4 border-white"></div>
                 <button
                   onclick={handleProfilePhotoChange}
@@ -315,7 +309,12 @@
                     <p class="text-xs text-gray-500 text-center">Status</p>
                     <div class="relative">
                       <select 
-                        onchange={(e) => $authStore.updateOnlineStatus(e.target.value)}
+                        onchange={(e) => {
+                          const target = e.target as HTMLSelectElement;
+                          if (target && ['online', 'away', 'idle', 'offline'].includes(target.value)) {
+                            $authStore.updateOnlineStatus(target.value as 'online' | 'away' | 'idle' | 'offline');
+                          }
+                        }}
                         value={authUser?.onlineStatus || 'online'}
                         class="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent min-w-[120px]"
                       >
@@ -433,7 +432,7 @@
             <!-- Show team button for manager and supervisor roles -->
             {#if authUser?.role === 'manager' || authUser?.role === 'supervisor'}
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Team Management</label>
+                <p class="block text-sm font-medium text-gray-700 mb-1">Team Management</p>
                 <button
                   onclick={showTeam}
                   class="flex items-center space-x-2 px-4 py-2 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
@@ -444,63 +443,6 @@
               </div>
             {/if}
           </div>
-        </div>
-
-
-      </div>
-
-
-
-      <!-- Account Settings -->
-      <div class="collaboration-card p-6 fade-in">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Settings class="w-5 h-5 text-[#01c0a4] mr-2" />
-          Account Settings
-        </h2>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 class="font-medium text-gray-900 mb-2">Notifications</h3>
-            <div class="space-y-2">
-              <label class="flex items-center">
-                <input type="checkbox" checked class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]" />
-                <span class="ml-2 text-sm text-gray-700">Email notifications</span>
-              </label>
-              <label class="flex items-center">
-                <input type="checkbox" checked class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]" />
-                <span class="ml-2 text-sm text-gray-700">Broadcast alerts</span>
-              </label>
-              <label class="flex items-center">
-                <input type="checkbox" class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]" />
-                <span class="ml-2 text-sm text-gray-700">Chat mentions only</span>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <h3 class="font-medium text-gray-900 mb-2">Privacy</h3>
-            <div class="space-y-2">
-              <label class="flex items-center">
-                <input type="checkbox" checked class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]" />
-                <span class="ml-2 text-sm text-gray-700">Show online status</span>
-              </label>
-              <label class="flex items-center">
-                <input type="checkbox" checked class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]" />
-                <span class="ml-2 text-sm text-gray-700">Allow direct messages</span>
-              </label>
-              <label class="flex items-center">
-                <input type="checkbox" class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]" />
-                <span class="ml-2 text-sm text-gray-700">Hide from directory</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-6 pt-6 border-t border-gray-200">
-          <button class="primary-button flex items-center space-x-2">
-            <Save class="w-4 h-4" />
-            <span>Save Settings</span>
-          </button>
         </div>
       </div>
 
@@ -568,11 +510,17 @@
   <div 
     class="fixed inset-0 z-50 flex items-center justify-center p-4"
     onclick={() => showTeamModal = false}
+    onkeydown={(e) => e.key === 'Escape' && (showTeamModal = false)}
+    role="button"
+    tabindex="0"
+    aria-label="Close team modal"
   >
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto"
       role="document"
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
     >
       <!-- Header -->
       <div class="flex items-center justify-between p-6 border-b border-gray-200">
@@ -592,53 +540,85 @@
         {#if authUser?.role === 'manager'}
           {@const teamData = getTeamMembers()}
           
-          <!-- Manager View: Show supervisors and team members -->
+          <!-- Manager View: Show supervisors, click to show their teams -->
           <div class="space-y-8">
             <!-- Current Manager -->
             <div class="text-center">
               <div class="flex justify-center mb-4">
-                <div class="bg-purple-100 border border-purple-200 rounded-lg p-4 text-center min-w-[200px]">
-                  <div class="w-12 h-12 bg-purple-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-lg font-bold">
-                    {userInitials}
-                  </div>
-                  <div class="font-medium text-gray-900">{user.name}</div>
-                  <div class="text-sm text-gray-600">{user.role}</div>
-                  <div class="text-sm text-gray-500">{user.ou}</div>
+                <div class="bg-red-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+                  <div class="mx-auto mb-3"><ProfileAvatar user={{ name: user.name }} size="xl" showOnlineStatus={false} /></div>
+                  <div class="text-lg font-bold">{user.name}</div>
+                  <div class="text-sm opacity-90">{user.role}</div>
+                  <div class="text-xs opacity-75">{user.ou}</div>
                 </div>
               </div>
+
+              <!-- Vertical Connection Line -->
+              {#if teamData.supervisors.length > 0}
+                <div class="flex justify-center">
+                  <div class="w-0.5 h-12 bg-gray-300"></div>
+                </div>
+              {/if}
             </div>
 
             {#if teamData.supervisors.length > 0}
               <!-- Supervisors Section -->
-              <div>
-                <h3 class="text-lg font-medium text-gray-900 text-center mb-4">Supervisors ({teamData.supervisors.length})</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {#each teamData.supervisors as supervisor}
-                    <div class="bg-blue-100 border border-blue-200 rounded-lg p-4 text-center">
-                      <div class="w-10 h-10 bg-blue-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-sm font-bold">
-                        {getInitials(supervisor.name)}
-                      </div>
-                      <div class="font-medium text-gray-900 text-sm">{supervisor.name}</div>
-                      <div class="text-xs text-gray-600">{supervisor.role}</div>
-                      <div class="text-xs text-gray-500">{supervisor.ou}</div>
-                      <div class="text-xs text-gray-500 mt-1">{supervisor.email}</div>
-                      
-                      <!-- Show team members under this supervisor -->
-                      {#if supervisor.teamMembers && supervisor.teamMembers.length > 0}
-                        <div class="mt-3 pt-3 border-t border-blue-300">
-                          <div class="text-xs font-medium text-blue-700 mb-2">Team Members ({supervisor.teamMembers.length})</div>
-                          <div class="space-y-1">
-                            {#each supervisor.teamMembers as member}
-                              <div class="text-xs {member.role === 'frontline' ? 'text-red-600 bg-red-50' : 'text-blue-600 bg-blue-50'} px-2 py-1 rounded">
-                                {member.name} • {member.role}
-                              </div>
-                            {/each}
-                          </div>
-                        </div>
-                      {/if}
-                    </div>
-                  {/each}
+              <div class="space-y-6">
+                <h3 class="text-lg font-medium text-gray-900 text-center">Supervisors ({teamData.supervisors.length})</h3>
+                <p class="text-sm text-gray-600 text-center">Click on a supervisor to view their team members</p>
+                
+                <!-- Horizontal line -->
+                <div class="flex justify-center">
+                  <div class="w-full max-w-4xl h-0.5 bg-gray-300"></div>
                 </div>
+
+                <!-- Supervisor Cards - Clickable -->
+                <div class="flex justify-center">
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl">
+                    {#each teamData.supervisors as supervisor}
+                      <button
+                        onclick={() => selectedSupervisor = selectedSupervisor?.id === supervisor.id ? null : supervisor}
+                        class="bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-lg shadow-lg text-center min-w-[200px] transition-all duration-200 transform hover:scale-105 cursor-pointer"
+                      >
+                        <div class="mx-auto mb-2"><ProfileAvatar user={{ name: supervisor.name }} size="lg" showOnlineStatus={false} /></div>
+                        <div class="font-semibold">{supervisor.name}</div>
+                        <div class="text-sm opacity-90">{supervisor.role}</div>
+                        <div class="text-xs opacity-75">{supervisor.ou}</div>
+                        <div class="text-xs opacity-75 mt-1">{supervisor.email}</div>
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+
+                <!-- Selected Supervisor's Team Members -->
+                {#if selectedSupervisor && selectedSupervisor.teamMembers && selectedSupervisor.teamMembers.length > 0}
+                  <div class="mt-8 p-6 bg-gray-50 rounded-lg">
+                    <h4 class="text-lg font-medium text-gray-900 text-center mb-4">
+                      {selectedSupervisor.name}'s Team ({selectedSupervisor.teamMembers.length})
+                    </h4>
+                    
+                    <!-- Team Member Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {#each selectedSupervisor.teamMembers as member}
+                        <div class="{
+                          member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
+                          member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+                          'bg-green-100 border-green-200'
+                        } border-2 rounded-lg p-4 text-center shadow-sm">
+                          <div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="lg" showOnlineStatus={false} /></div>
+                          <div class="font-medium text-gray-900 text-sm" title="{member.name}">{member.name}</div>
+                          <div class="text-xs {
+                            member.role === 'Frontline' ? 'text-blue-700' :
+                            member.role === 'Support' ? 'text-purple-700' :
+                            'text-gray-600'
+                          } font-semibold">{member.role}</div>
+                          <div class="text-xs text-gray-500 mt-1" title="{member.ou}">{member.ou}</div>
+                          <div class="text-xs text-gray-500 truncate" title="{member.email}">{member.email}</div>
+                        </div>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
@@ -646,47 +626,126 @@
         {:else if authUser?.role === 'supervisor'}
           {@const teamData = getTeamMembers()}
           
-          <!-- Supervisor View: Show only team members with color coding -->
-          <div class="space-y-8">
+          <!-- Supervisor View: Show team members with better spacing -->
+          <div class="space-y-6">
             <!-- Current Supervisor -->
             <div class="text-center">
-              <div class="flex justify-center mb-4">
-                <div class="bg-blue-100 border border-blue-200 rounded-lg p-4 text-center min-w-[200px]">
-                  <div class="w-12 h-12 bg-blue-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-lg font-bold">
-                    {userInitials}
-                  </div>
-                  <div class="font-medium text-gray-900">{user.name}</div>
-                  <div class="text-sm text-gray-600">{user.role}</div>
-                  <div class="text-sm text-gray-500">{user.ou}</div>
+              <div class="flex justify-center mb-6">
+                <div class="bg-orange-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+                  <div class="mx-auto mb-3"><ProfileAvatar user={{ name: user.name }} size="xl" showOnlineStatus={false} /></div>
+                  <div class="text-lg font-bold">{user.name}</div>
+                  <div class="text-sm opacity-90">{user.role}</div>
+                  <div class="text-xs opacity-75">{user.ou}</div>
                 </div>
               </div>
             </div>
 
-            {#if teamData.teamMembers.length > 0}
-              <!-- Team Members Section with Color Coding -->
-              <div>
-                <h3 class="text-lg font-medium text-gray-900 text-center mb-4">My Team Members ({teamData.teamMembers.length})</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {#each teamData.teamMembers as member}
-                    <div class="{member.role === 'frontline' ? 'bg-red-100 border-red-200' : 'bg-blue-100 border-blue-200'} border rounded-lg p-4 text-center">
-                      <div class="w-10 h-10 {member.role === 'frontline' ? 'bg-red-500' : 'bg-blue-500'} rounded-full mx-auto mb-2 flex items-center justify-center text-white text-sm font-bold">
-                        {getInitials(member.name)}
-                      </div>
-                      <div class="font-medium text-gray-900 text-sm">{member.name}</div>
-                      <div class="text-xs text-gray-600 font-medium {member.role === 'frontline' ? 'text-red-700' : 'text-blue-700'}">{member.role}</div>
-                      <div class="text-xs text-gray-500">{member.ou}</div>
-                      <div class="text-xs text-gray-500 mt-1">{member.email}</div>
+            {#if teamData.teamMembers && teamData.teamMembers.length > 0}
+              <!-- Team Members Section -->
+              <div class="space-y-4">
+                <h3 class="text-lg font-medium text-gray-900 text-center">My Team Members ({teamData.teamMembers?.length || 0})</h3>
+                
+                <!-- Vertical Connection Line -->
+                <div class="flex justify-center">
+                  <div class="w-0.5 h-8 bg-gray-300"></div>
+                </div>
+                
+                <!-- Team Member Cards with proper spacing -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                  {#each teamData.teamMembers || [] as member}
+                    <div class="{
+                      member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
+                      member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+                      'bg-green-100 border-green-200'
+                    } border-2 rounded-lg p-4 text-center shadow-md hover:shadow-lg transition-shadow">
+                      <div class="mx-auto mb-3"><ProfileAvatar user={{ name: member.name }} size="lg" showOnlineStatus={false} /></div>
+                      <div class="font-semibold text-gray-900" title="{member.name}">{member.name}</div>
+                      <div class="text-sm {
+                        member.role === 'Frontline' ? 'text-blue-700' :
+                        member.role === 'Support' ? 'text-purple-700' :
+                        'text-gray-600'
+                      } font-medium">{member.role}</div>
+                      <div class="text-xs text-gray-600 mt-1" title="{member.ou}">{member.ou}</div>
+                      <div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
                     </div>
                   {/each}
                 </div>
               </div>
             {:else}
-              <div class="text-center py-8">
-                <Users class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 class="text-lg font-medium text-gray-900 mb-2">No Team Members</h3>
-                <p class="text-gray-500">You don't have any team members assigned yet.</p>
+              <div class="text-center text-gray-500 py-8">
+                <Users class="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p>No team members assigned yet</p>
               </div>
             {/if}
+          </div>
+          
+        {:else if authUser?.role === 'frontline' || authUser?.role === 'support'}
+          <!-- Frontline/Support View: Show manager and supervisor hierarchy -->
+          <div class="space-y-8">
+            <!-- Show hierarchy: Manager -> Supervisor -> Current User -->
+            {#if teamStructure?.manager}
+              <div class="text-center">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">My Manager</h3>
+                <div class="flex justify-center mb-4">
+                  <div class="bg-red-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
+                    <div class="mx-auto mb-2"><ProfileAvatar user={{ name: teamStructure.manager.name }} size="lg" showOnlineStatus={false} /></div>
+                    <div class="font-semibold">{teamStructure.manager.name}</div>
+                    <div class="text-sm opacity-90">{teamStructure.manager.role}</div>
+                    <div class="text-xs opacity-75">{teamStructure.manager.ou}</div>
+                    <div class="text-xs opacity-75 mt-1">{teamStructure.manager.email}</div>
+                  </div>
+                </div>
+                
+                <!-- Connection line -->
+                {#if teamStructure?.supervisor}
+                  <div class="flex justify-center">
+                    <div class="w-0.5 h-8 bg-gray-300"></div>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            {#if teamStructure?.supervisor}
+              <div class="text-center">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">My Supervisor</h3>
+                <div class="flex justify-center mb-4">
+                  <div class="bg-orange-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
+                    <div class="mx-auto mb-2"><ProfileAvatar user={{ name: teamStructure.supervisor.name }} size="lg" showOnlineStatus={false} /></div>
+                    <div class="font-semibold">{teamStructure.supervisor.name}</div>
+                    <div class="text-sm opacity-90">{teamStructure.supervisor.role}</div>
+                    <div class="text-xs opacity-75">{teamStructure.supervisor.ou}</div>
+                    <div class="text-xs opacity-75 mt-1">{teamStructure.supervisor.email}</div>
+                  </div>
+                </div>
+                
+                <!-- Connection line -->
+                <div class="flex justify-center">
+                  <div class="w-0.5 h-8 bg-gray-300"></div>
+                </div>
+              </div>
+            {/if}
+
+            <!-- Current User -->
+            <div class="text-center">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Me</h3>
+              <div class="flex justify-center">
+                <div class="{
+                  user.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
+                  user.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+                  'bg-green-100 border-green-200'
+                } border rounded-lg p-4 text-center min-w-[200px]">
+                  <div class="mx-auto mb-2"><ProfileAvatar user={{ name: user.name }} size="lg" showOnlineStatus={false} /></div>
+                  <div class="font-medium text-gray-900">{user.name}</div>
+                  <div class="text-sm {
+                    user.role === 'Frontline' ? 'text-blue-700' :
+                    user.role === 'Support' ? 'text-purple-700' :
+                    'text-gray-600'
+                  }">{user.role}</div>
+                  <div class="text-sm text-gray-500">{user.ou}</div>
+                  <div class="text-sm text-gray-500 mt-1">{user.email}</div>
+                </div>
+              </div>
+            </div>
           </div>
         {/if}
       </div>
@@ -703,3 +762,4 @@
     </div>
   </div>
 {/if}
+

@@ -1,7 +1,7 @@
 # Copilot Instructions for Collabo-Tool
 
 ## Project Overview
-This is a sophisticated hackathon collaboration tool built with SvelteKit 5, TypeScript, and Tailwind CSS 4. The project is a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive UI components.
+This is a sophisticated hackathon collaboration tool built with SvelteKit 5, TypeScript, and Tailwind CSS 4. The project is a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
 
 ## Architecture & Project Structure
 
@@ -22,11 +22,16 @@ frontend/src/
 │       ├── auth.svelte.ts    # Authentication and role management
 │       └── broadcast.svelte.ts # Broadcast messaging system
 └── routes/        # SvelteKit file-based routing
+    ├── admin/      # Complete admin management suite
+    │   ├── user-management/     # User CRUD, hierarchy, passwords
+    │   ├── ou-management/       # Organization unit & policies
+    │   ├── global-configuration/ # System-wide settings
+    │   ├── admin-logs/          # Activity monitoring
+    │   ├── chat-management/     # Chat moderation
+    │   └── broadcast-management/ # Broadcast oversight
     ├── broadcast/  # Broadcast messaging interface
-    ├── chat/       # Real-time chat application
-    ├── dashboard/  # Main dashboard
-    ├── login/      # Authentication pages
-    └── [other auth routes]/ # OTP, password reset, etc.
+    ├── chat/       # Real-time chat application (main landing page)
+    └── [auth routes]/ # login, forgot-password, otp, etc.
 ```
 
 ## Development Workflows
@@ -37,7 +42,7 @@ cd frontend
 npm run dev -- --open  # Development server with auto-open
 ```
 
-**Network Configuration**: The dev server is configured to expose on `0.0.0.0:5173` with ngrok support for external access. This allows testing on mobile devices and sharing previews during development.
+**Network Configuration**: Dev server exposes on `0.0.0.0:5173` with ngrok support for external testing.
 
 ### Testing Strategy
 - **Svelte Component Tests**: Use `.svelte.test.ts` suffix, run in browser environment
@@ -55,8 +60,8 @@ npm run check    # Svelte type checking
 
 ### Svelte 5 Patterns
 - **State Management**: Use `$state()` runes for local component state
-- **Derived Values**: Use `$derived()` for simple computations, `$derived.by()` for complex logic with multiple dependencies
-- **Props**: Use `$props()` runes syntax for component properties with `$bindable()` for two-way binding
+- **Derived Values**: Use `$derived()` for simple computations, `$derived.by()` for complex logic
+- **Props**: Use `$props()` runes syntax with `$bindable()` for two-way binding
 - **Event Handlers**: Use `onclick` attribute syntax instead of `on:click` for better TypeScript support
 - **Children Rendering**: Use `{@render children()}` pattern in layout components
 - **Store Integration**: Class-based stores with `$state()` inside, exported as writable stores
@@ -82,15 +87,17 @@ npm run check    # Svelte type checking
 - **Color Scheme**: Primary brand color `#01c0a4` (aqua green) with grey (#374151, #f9fafb) for neutral elements
 - **Teams-like UI**: Grey navigation background, white content areas, professional styling
 
-### Component Naming and Organization
-- **Navigation**: `Navigation.svelte` in `$lib/components/` for main app header
-- **Page Components**: Use descriptive subcomponents for complex pages (e.g., `LoginForm.svelte`, `LoginBackground.svelte`, `LoginHeader.svelte`)
-- **Subcomponent Pattern**: Break complex pages into focused components within the same route directory
-- **Reusable Patterns**: Extract common UI patterns into `$lib/components/`
+### Admin Interface Patterns
+- **Unified Navigation**: All admin pages use consistent layout navigation via `+layout.svelte`
+- **Modal Architecture**: Complex forms use split-panel modals (form left, settings/rules right)
+- **Role-based UI**: Dynamic columns and buttons based on user roles and permissions
+- **Hierarchical Data**: User management displays supervisor/manager relationships in expandable team views
+- **Password Management**: Comprehensive password controls with validation, visibility toggles, and reset functionality
+- **Bulk Operations**: CSV templates for bulk user imports with role-specific field requirements
 
 ### TypeScript Integration
 - Strict TypeScript with full type checking enabled
-- Interface definitions for complex objects (User, Conversation, Broadcast, etc.)
+- Interface definitions for complex objects (User, OrganizationUnit, OURules, etc.)
 - Type-safe event handling with proper parameter typing
 - Use `bind:value` for two-way data binding with proper type inference
 
@@ -109,85 +116,32 @@ npm run check    # Svelte type checking
 - Configured through Vite plugin: `tailwindcss()` in `vite.config.ts`
 - **No @apply Usage**: Use regular CSS properties instead of `@apply` directives in component styles
 
-### TypeScript Configuration
-- Extends `.svelte-kit/tsconfig.json`
-- Path aliases handled by SvelteKit (`$lib` for `src/lib/`)
-- Strict mode enabled with module resolution: "bundler"
-
 ### Vitest Multi-Project Setup
 - **Client tests**: Browser environment with Playwright for `.svelte.test.ts` files
 - **Server tests**: Node environment for `.test.ts/.spec.ts` files
 - Setup file: `vitest-setup-client.ts` for browser environment
 
-### Prettier Configuration
-- Uses `prettier-plugin-svelte` and `prettier-plugin-tailwindcss`
-- Configured with `tailwindStylesheet: "./src/app.css"` for class sorting
-- Single quotes, tabs, trailing commas settings optimized for Svelte
-
-## Current State
-
-### Implemented Features
-
-#### Core Application Components
-- **Navigation Component** (`$lib/components/Navigation.svelte`): Professional Teams-like header with aqua green branding
-  - Search, notifications, profile dropdown functionality
-  - Grey background (#6b7280) with hover states and transitions
-  - Responsive design with lucide-svelte icons
-
-#### Authentication System
-- **Complete Auth Flow**: Login, password reset, OTP verification, security questions, first-time setup
-- **Role-based Access Control**: Admin/manager/supervisor/support/frontline hierarchy
-- **Auth Store**: Class-based store with user state and permission getters
-- **Route Security**: Pages validate authentication and redirect appropriately
-
-#### Chat Application (`/chat`)
-- **Real-time UI**: Teams-like chat interface with temporary conversations
-- **Advanced Features**: Group chats, member management, message reactions, file attachments
-- **Search & Discovery**: Global user search with role-based filtering
-- **Group Management**: Create groups, edit settings, manage members with role-based permissions
-- **Message Features**: Reactions, file sharing, message search within conversations
-
-#### Broadcast System (`/broadcast`)
-- **Admin Broadcasting**: Create announcements with priority levels and role targeting
-- **Acknowledgment Tracking**: Optional acknowledgments with attendance tracking for events
-- **Rich Features**: Scheduled broadcasts, event dates, priority styling (high priority gets red border)
-- **Export Functionality**: CSV export for acknowledgment data
-
-#### Store Architecture
-- **AuthStore**: User management, role permissions, login state
-- **BroadcastStore**: Broadcast creation, acknowledgment tracking, admin features
-- **Mock Data**: Comprehensive demo data for users, conversations, broadcasts
-- **Initialization Pattern**: Stores initialize with demo data in constructor, use realistic timestamps and user IDs
-
-### UI Design System
-- **Color Palette**: Primary `#01c0a4` (aqua green), secondary greys, red for priorities
-- **Component Classes**: Consistent styling with `primary-button`, `secondary-button`, `input-field`, `collaboration-card`
-- **Teams-like Aesthetic**: Professional grey backgrounds, white content cards, subtle shadows
-- **Typography**: Font weights and sizes optimized for readability and hierarchy
-- **Animations**: Subtle fade-in effects, hover states, and smooth transitions
-
-### Development Notes
-- **CSS Approach**: Hybrid Tailwind + component CSS (avoid `@apply` directives)
-- **Icons**: Consistent use of `lucide-svelte` throughout the application
-- **Demo Behavior**: All interactions use mock data and alert dialogs
-- **State Management**: Svelte 5 runes with class-based stores for complex state
-- **Type Safety**: Full TypeScript integration with proper interface definitions
-
-## Code Patterns & Best Practices
+## Critical Patterns & Anti-patterns
 
 ### When Adding New Features
 1. **Follow Established Patterns**: Use existing component structures and store patterns
 2. **Role-based Access**: Implement permission checks using auth store getters
 3. **Consistent Styling**: Use established CSS classes and color schemes
-4. **Type Safety**: Define interfaces for new data structures
-5. **Mock Data**: Add appropriate demo data for frontend-only behavior
-6. **Testing**: Add component tests following established patterns
+4. **Mock Data**: Add appropriate demo data for frontend-only behavior
+5. **Hierarchical Relationships**: Maintain user role relationships (manager > supervisor > frontline/support)
 
 ### Common Anti-patterns to Avoid
 - Using `@apply` directives in component `<style>` blocks (use regular CSS)
 - Mixing state management approaches (stick to class-based stores)
 - Inconsistent color usage (use the established palette)
 - Missing role-based permission checks on sensitive features
-- Forgetting to add mock data for demo functionality
+- Breaking the organizational hierarchy when creating users
+
+### Admin Development Notes
+- **User Management**: Supports bulk CSV import with role-specific templates
+- **Team Views**: Complex hierarchical displays with drill-down navigation
+- **Password Management**: Integrated into edit modals with security validation
+- **OU Management**: Organization units control chat/broadcast policies via detailed rule systems
+- **Mock Data Generation**: Dynamic generation of realistic hierarchical user data for testing
 
 When contributing to this codebase, prioritize consistency with existing patterns and maintain the professional, Teams-like aesthetic that has been established throughout the application.

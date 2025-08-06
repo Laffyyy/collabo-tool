@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { Users, Bell, Search, User, Megaphone, Clock, AlertTriangle, ChevronDown, Settings, UserCog, Building2, MessageSquare, Radio, Globe, FileText } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { broadcastStore } from '$lib/stores/broadcast.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { themeStore } from '$lib/stores/theme.svelte';
+	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 
 	let showNotifications = $state(false);
 	let showProfile = $state(false);
@@ -16,6 +19,20 @@
 	let user = $derived($authStore?.user);
 	let userInitials = $derived($authStore?.userInitials || 'U.U');
 	let onlineStatusColor = $derived($authStore?.onlineStatusColor || 'bg-gray-500');
+
+	// Get theme info
+	let isDarkMode = $derived(themeStore.isDarkMode);
+
+	// Get current page for navigation indicators
+	let currentPath = $derived($page.url.pathname);
+	
+	// Helper function to determine if a page is active
+	const isActivePage = (pagePath: string) => {
+		if (pagePath === '/chat') {
+			return currentPath === '/chat' || currentPath === '/';
+		}
+		return currentPath.startsWith(pagePath);
+	};
 
 	const formatTimeAgo = (date: Date) => {
 		const now = new Date();
@@ -50,38 +67,47 @@
 	};
 </script>
 
-<header class="bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between shadow-sm">
+<header class="sticky top-0 z-50 bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between shadow-sm">
 	<!-- Logo -->
 	<div class="flex items-center space-x-4">
 		<div class="inline-flex items-center justify-center w-10 h-10 bg-gradient-to-r from-[#01c0a4] to-[#00a085] rounded-xl shadow-lg shadow-[#01c0a4]/25">
 			<Users class="w-5 h-5 text-white" />
 		</div>
-		<h1 class="text-xl font-bold text-gray-800">Workspace</h1>
+		<h1 class="text-xl font-bold text-gray-800">Collaby</h1>
 	</div>
 
 	<!-- Navigation -->
 	<nav class="hidden md:flex items-center space-x-8">
 		<button 
 			onclick={() => goto('/chat')}
-			class="text-gray-600 hover:text-[#01c0a4] font-medium transition-colors"
+			class="relative text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/chat') ? 'text-[#01c0a4]' : ''}"
 		>
 			Messages
+			{#if isActivePage('/chat')}
+				<div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-[#01c0a4] rounded-full"></div>
+			{/if}
 		</button>
 		<button 
 			onclick={() => goto('/broadcast')}
-			class="text-gray-600 hover:text-[#01c0a4] font-medium transition-colors"
+			class="relative text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/broadcast') ? 'text-[#01c0a4]' : ''}"
 		>
 			Broadcast
+			{#if isActivePage('/broadcast')}
+				<div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-[#01c0a4] rounded-full"></div>
+			{/if}
 		</button>
 		
 		<!-- Admin Controls Dropdown -->
 		<div class="relative">
 			<button 
 				onclick={() => showAdminDropdown = !showAdminDropdown}
-				class="flex items-center space-x-1 text-gray-600 hover:text-[#01c0a4] font-medium transition-colors"
+				class="flex items-center space-x-1 text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/admin') ? 'text-[#01c0a4]' : ''}"
 			>
 				<span>Admin Controls</span>
-				<ChevronDown class="w-4 h-4" />
+				<ChevronDown class="w-4 h-4 transition-transform {showAdminDropdown ? 'rotate-180' : ''}" />
+				{#if isActivePage('/admin')}
+					<div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-[#01c0a4] rounded-full"></div>
+				{/if}
 			</button>
 
 			<!-- Admin Dropdown -->
@@ -93,53 +119,75 @@
 					onclick={() => showAdminDropdown = false}
 				></div>
 				
-				<div class="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-2">
+				<div class="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-2">
+					<div class="px-3 py-2 border-b border-gray-100">
+						<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Administration</p>
+					</div>
+					
 					<button 
 						onclick={() => navigateToAdminPage('user-management')}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('user-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
 					>
 						<UserCog class="w-4 h-4" />
-						<span>User Management</span>
+						<div>
+							<div class="font-medium">User Management</div>
+							<div class="text-xs text-gray-500">Manage user accounts and roles</div>
+						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('ou-management')}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('ou-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
 					>
 						<Building2 class="w-4 h-4" />
-						<span>OU Management</span>
+						<div>
+							<div class="font-medium">OU Management</div>
+							<div class="text-xs text-gray-500">Organizational unit management</div>
+						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('chat-management')}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('chat-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
 					>
 						<MessageSquare class="w-4 h-4" />
-						<span>Chat Management</span>
+						<div>
+							<div class="font-medium">Chat Management</div>
+							<div class="text-xs text-gray-500">Monitor chat communications</div>
+						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('broadcast-management')}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('broadcast-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
 					>
 						<Radio class="w-4 h-4" />
-						<span>Broadcast Management</span>
+						<div>
+							<div class="font-medium">Broadcast Management</div>
+							<div class="text-xs text-gray-500">Monitor broadcasts</div>
+						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('global-configuration')}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('global-configuration') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
 					>
 						<Globe class="w-4 h-4" />
-						<span>Global Configuration</span>
+						<div>
+							<div class="font-medium">Global Configuration</div>
+							<div class="text-xs text-gray-500">System-wide settings</div>
+						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('admin-logs')}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('admin-logs') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
 					>
 						<FileText class="w-4 h-4" />
-						<span>Admin Logs</span>
+						<div>
+							<div class="font-medium">Admin Logs</div>
+							<div class="text-xs text-gray-500">View administrative actions</div>
+						</div>
 					</button>
 				</div>
 			{/if}
@@ -266,42 +314,24 @@
 				onclick={() => showProfile = !showProfile}
 				class="flex items-center space-x-2 p-2 hover:bg-gray-200 rounded-lg transition-colors"
 			>
-				<div class="relative">
-					{#if user?.profilePhoto}
-						<img 
-							src={user.profilePhoto}
-							alt="Profile" 
-							class="w-8 h-8 rounded-full"
-						/>
-					{:else}
-						<div class="w-8 h-8 rounded-full bg-[#01c0a4] flex items-center justify-center text-white text-sm font-medium">
-							{userInitials}
-						</div>
-					{/if}
-					<!-- Online Status Indicator -->
-					<div class="absolute -bottom-1 -right-1 w-3 h-3 {onlineStatusColor} rounded-full border-2 border-white"></div>
-				</div>
+				<ProfileAvatar 
+					user={user} 
+					size="md" 
+					showOnlineStatus={true} 
+					onlineStatus={user?.onlineStatus || 'offline'} 
+				/>
 			</button>
 
 			{#if showProfile}
 				<div class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
 					<div class="px-4 py-3 border-b border-gray-200">
 						<div class="flex items-center space-x-3">
-							<div class="relative">
-								{#if user?.profilePhoto}
-									<img 
-										src={user.profilePhoto}
-										alt="Profile" 
-										class="w-10 h-10 rounded-full"
-									/>
-								{:else}
-									<div class="w-10 h-10 rounded-full bg-[#01c0a4] flex items-center justify-center text-white text-lg font-medium">
-										{userInitials}
-									</div>
-								{/if}
-								<!-- Online Status Indicator -->
-								<div class="absolute -bottom-1 -right-1 w-4 h-4 {onlineStatusColor} rounded-full border-2 border-white"></div>
-							</div>
+							<ProfileAvatar 
+								user={user} 
+								size="lg" 
+								showOnlineStatus={true} 
+								onlineStatus={user?.onlineStatus || 'offline'} 
+							/>
 							<div>
 								<p class="text-sm font-medium text-gray-900">{user?.firstName} {user?.lastName}</p>
 								<p class="text-xs text-gray-500 capitalize">{user?.role}</p>
@@ -354,7 +384,7 @@
 					</button>
 					
 					<button 
-						onclick={() => { showProfile = false; goto('/dashboard'); }}
+						onclick={() => { showProfile = false; goto('/settings'); }}
 						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
 					>
 						<Settings class="w-4 h-4" />
@@ -380,6 +410,7 @@
 	.line-clamp-2 {
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
+		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}

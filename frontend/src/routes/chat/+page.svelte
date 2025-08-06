@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Navigation from '$lib/components/Navigation.svelte';
+	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import LoginBackground from '../login/LoginBackground.svelte';
 	import { 
 		Search, Plus, Archive, MessageCircle, Users, Send, Paperclip, 
@@ -28,6 +30,7 @@
 		content: string;
 		timestamp: Date | string;
 		type: string;
+		isDeleted?: boolean;
 		replyTo?: Message;
 		reactions: Array<{
 			emoji: string;
@@ -83,6 +86,15 @@
 	let groupName = $state('');
 	let selectedUsers = $state<User[]>([]);
 	
+	// Confirmation modal state
+	let showConfirmation = $state(false);
+	let confirmationData = $state<{
+		title: string;
+		message: string;
+		confirmText: string;
+		action: () => void;
+	} | null>(null);
+	
 	// Group settings edit state
 	let editingGroupName = $state('');
 
@@ -91,28 +103,28 @@
 		{ 
 			id: '2', 
 			name: 'John Doe', 
-			avatar: '/placeholder.svg?height=32&width=32',
+			avatar: '/placeholder.svg',
 			department: 'Engineering',
 			role: 'Manager'
 		},
 		{ 
 			id: '3', 
 			name: 'Alice Johnson', 
-			avatar: '/placeholder.svg?height=32&width=32',
+			avatar: '/placeholder.svg',
 			department: 'Marketing',
 			role: 'Supervisor'
 		},
 		{ 
 			id: '4', 
 			name: 'Bob Smith', 
-			avatar: '/placeholder.svg?height=32&width=32',
+			avatar: '/placeholder.svg',
 			department: 'Sales',
 			role: 'Frontline'
 		},
 		{ 
 			id: '5', 
 			name: 'Carol White', 
-			avatar: '/placeholder.svg?height=32&width=32',
+			avatar: '/placeholder.svg',
 			department: 'Support',
 			role: 'Support'
 		}
@@ -130,7 +142,7 @@
 				lastMessage: 'Hey, how are you doing?',
 				lastMessageTime: '2 min ago',
 				unreadCount: 2,
-				avatar: '/placeholder.svg?height=40&width=40',
+				avatar: '/placeholder.svg',
 				isOnline: true,
 				messages: [
 					{
@@ -149,7 +161,7 @@
 					{ 
 						id: '1', 
 						name: 'You', 
-						avatar: '/placeholder.svg?height=32&width=32', 
+						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
 						department: 'IT',
@@ -158,7 +170,7 @@
 					{ 
 						id: '2', 
 						name: 'John Doe', 
-						avatar: '/placeholder.svg?height=32&width=32', 
+						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
 						department: 'Engineering',
@@ -176,7 +188,7 @@
 				lastMessage: 'Alice: The deadline has been moved to next week',
 				lastMessageTime: '1 hour ago',
 				unreadCount: 0,
-				avatar: '/placeholder.svg?height=40&width=40',
+				avatar: '/placeholder.svg',
 				isOnline: false,
 				messages: [
 					{
@@ -198,7 +210,7 @@
 					{ 
 						id: '1', 
 						name: 'You', 
-						avatar: '/placeholder.svg?height=32&width=32', 
+						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
 						department: 'IT',
@@ -207,7 +219,7 @@
 					{ 
 						id: '3', 
 						name: 'Alice Johnson', 
-						avatar: '/placeholder.svg?height=32&width=32', 
+						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
 						department: 'Marketing',
@@ -216,7 +228,7 @@
 					{ 
 						id: '4', 
 						name: 'Bob Smith', 
-						avatar: '/placeholder.svg?height=32&width=32', 
+						avatar: '/placeholder.svg', 
 						isOnline: false, 
 						isMuted: false,
 						department: 'Sales',
@@ -225,7 +237,7 @@
 					{ 
 						id: '5', 
 						name: 'Carol White', 
-						avatar: '/placeholder.svg?height=32&width=32', 
+						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: true,
 						department: 'Support',
@@ -240,7 +252,8 @@
 			}
 		];
 
-		currentConversation = groupChats[0];
+		// Don't auto-select a conversation to prevent layout jumping
+		// currentConversation = groupChats[0];
 	});
 
 	// Available emojis for picker
@@ -322,8 +335,8 @@
 		}
 	};
 
-	// Run simulation periodically
-	setInterval(simulateTyping, 10000);
+	// Run simulation periodically - DISABLED to prevent layout jumping
+	// setInterval(simulateTyping, 10000);
 
 	const startReply = (message: Message) => {
 		replyingTo = message;
@@ -355,13 +368,26 @@
 		}
 	};
 
+	const confirmUnsendMessage = (messageId: string) => {
+		confirmationData = {
+			title: 'Unsend Message',
+			message: 'Are you sure you want to unsend this message? This action cannot be undone and the message will be removed for everyone.',
+			confirmText: 'Unsend',
+			action: () => unsendMessage(messageId)
+		};
+		showConfirmation = true;
+	};
+
 	const unsendMessage = (messageId: string) => {
 		if (!currentConversation) return;
 		
 		const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
 		if (messageIndex !== -1) {
-			currentConversation.messages.splice(messageIndex, 1);
+			// Mark the message as deleted instead of removing it
+			currentConversation.messages[messageIndex].isDeleted = true;
+			currentConversation.messages[messageIndex].content = 'This message was removed';
 		}
+		showConfirmation = false;
 	};
 
 	const startEditMessage = (message: Message) => {
@@ -514,6 +540,12 @@
 		conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase())
 	));
 
+	// Calculate active (online) members for each group chat
+	const getActiveMemberCount = (conversation: Conversation) => {
+		if (conversation.type !== 'group') return 0;
+		return conversation.members.filter(member => member.isOnline).length;
+	};
+
 	// Auto-expand sections when there are search results
 	const shouldShowConversations = $derived(showConversations || (searchInput.trim() && filteredConversations.length > 0));
 	const shouldShowGroups = $derived(showGroups || (searchInput.trim() && filteredGroupChats.length > 0));
@@ -582,8 +614,8 @@
 		<!-- Sidebar -->
 		<aside class="w-80 bg-white border-r border-gray-300 flex flex-col">
 			<!-- Search and Create -->
-			<div class="p-3 border-b border-gray-200 bg-gray-50">
-				<div class="relative mb-3">
+			<div class="p-2 border-b border-gray-200 bg-gray-50">
+				<div class="relative mb-2">
 					<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 					<input
 						bind:value={searchInput}
@@ -608,7 +640,7 @@
 				<div class="border-b border-gray-200">
 					<button
 						onclick={() => showGroups = !showGroups}
-						class="w-full flex items-center justify-between p-2 hover:bg-gray-50 text-left"
+						class="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left"
 					>
 						<div class="flex items-center space-x-2">
 							{#if showGroups}
@@ -625,13 +657,13 @@
 						{#each filteredGroupChats as conversation (conversation.id)}
 							<button
 								onclick={() => selectConversation(conversation)}
-								class="w-full p-2 flex items-center space-x-2 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
-								<div class="relative">
-									<img
-										src={conversation.avatar || "/placeholder.svg"}
-										alt={conversation.name}
-										class="w-8 h-8 rounded-full"
+								<div class="relative flex-shrink-0">
+									<ProfileAvatar 
+										user={{ name: conversation.name, profilePhoto: conversation.avatar }} 
+										size="sm" 
+										showOnlineStatus={false}
 									/>
 								</div>
 								
@@ -643,11 +675,13 @@
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs text-gray-500">{conversation.members.length} members</p>
+									<p class="text-xs text-gray-500">
+										{getActiveMemberCount(conversation)} active • {conversation.members.length} total
+									</p>
 								</div>
 								
 								{#if conversation.unreadCount > 0}
-									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center flex-shrink-0">
 										{conversation.unreadCount}
 									</div>
 								{/if}
@@ -660,7 +694,7 @@
 				<div>
 					<button
 						onclick={() => showConversations = !showConversations}
-						class="w-full flex items-center justify-between p-2 hover:bg-gray-50 text-left"
+						class="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left"
 					>
 						<div class="flex items-center space-x-2">
 							{#if showConversations}
@@ -677,17 +711,15 @@
 						{#each filteredConversations as conversation (conversation.id)}
 							<button
 								onclick={() => selectConversation(conversation)}
-								class="w-full p-2 flex items-center space-x-2 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
-								<div class="relative">
-									<img
-										src={conversation.avatar || "/placeholder.svg"}
-										alt={conversation.name}
-										class="w-8 h-8 rounded-full"
+								<div class="relative flex-shrink-0">
+									<ProfileAvatar 
+										user={{ name: conversation.name, profilePhoto: conversation.avatar }} 
+										size="sm" 
+										showOnlineStatus={conversation.isOnline}
+										onlineStatus={conversation.isOnline ? 'online' : 'offline'}
 									/>
-									{#if conversation.isOnline}
-										<div class="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-white"></div>
-									{/if}
 								</div>
 								
 								<div class="flex-1 min-w-0">
@@ -701,7 +733,7 @@
 								</div>
 								
 								{#if conversation.unreadCount > 0}
-									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center flex-shrink-0">
 										{conversation.unreadCount}
 									</div>
 								{/if}
@@ -713,7 +745,7 @@
 				<!-- Start New Conversation Section (only when searching) -->
 				{#if searchInput.trim() && filteredUsers.length > 0}
 					<div class="border-b border-gray-200">
-						<div class="p-2">
+						<div class="px-3 py-2">
 							<div class="flex items-center space-x-2">
 								<UserPlus class="w-4 h-4 text-gray-500" />
 								<span class="font-medium text-gray-700 text-sm">Start New Conversation</span>
@@ -723,13 +755,13 @@
 						{#each filteredUsers as user (user.id)}
 							<button
 								onclick={() => startNewConversation(user)}
-								class="w-full p-2 flex items-center space-x-2 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors"
+								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors"
 							>
-								<div class="relative">
+								<div class="relative flex-shrink-0">
 									<img
 										src={user.avatar || "/placeholder.svg"}
 										alt={user.name}
-										class="w-8 h-8 rounded-full"
+										class="w-6 h-6 rounded-full"
 									/>
 								</div>
 								
@@ -753,19 +785,19 @@
 		{#if currentConversation}
 			<main class="flex-1 flex flex-col bg-gray-50">
 				<!-- Chat Header -->
-				<div class="px-6 py-4 border-b border-gray-300 flex items-center justify-between bg-white">
+				<div class="px-4 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
 					<div class="flex items-center space-x-3">
 						<img
 							src={currentConversation.avatar || "/placeholder.svg"}
 							alt={currentConversation.name}
-							class="w-10 h-10 rounded-full"
+							class="w-8 h-8 rounded-full"
 						/>
 						<div>
-							<h2 class="font-semibold text-gray-900">{currentConversation.name}</h2>
+							<h2 class="font-semibold text-gray-900 text-sm">{currentConversation.name}</h2>
 							{#if currentConversation.type === 'group'}
-								<p class="text-sm text-gray-500">{currentConversation.members.length} members</p>
+								<p class="text-xs text-gray-500">{currentConversation.members.length} members</p>
 							{:else}
-								<p class="text-sm text-gray-500">
+								<p class="text-xs text-gray-500">
 									{currentConversation.department} • {currentConversation.role}
 									{currentConversation.isOnline ? ' • Online' : ' • Offline'}
 								</p>
@@ -801,30 +833,33 @@
 
 				<!-- Search in Chat -->
 				{#if showSearchInChat}
-					<div class="px-6 py-3 bg-gray-100 border-b border-gray-300">
+					<div class="px-4 py-2 bg-gray-100 border-b border-gray-300">
 						<div class="relative">
 							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 							<input
 								bind:value={searchInChatQuery}
 								type="text"
 								placeholder="Search in this conversation..."
-								class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
 							/>
 						</div>
 					</div>
 				{/if}
 
 				<!-- Messages -->
-				<div class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+				<div class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
 					{#each currentConversation.messages as message (message.id)}
 						<div class="flex {message.senderId === '1' ? 'justify-end' : 'justify-start'} group">
 							<div class="flex items-start space-x-2 max-w-xs lg:max-w-md">
 								{#if message.senderId !== '1'}
-									<img
-										src={currentConversation.members.find(m => m.id === message.senderId)?.avatar || '/placeholder.svg?height=32&width=32'}
-										alt=""
-										class="w-8 h-8 rounded-full mt-1"
-									/>
+									{@const sender = currentConversation.members.find(m => m.id === message.senderId)}
+									<div class="mt-1">
+										<ProfileAvatar 
+											user={{ name: message.senderName, profilePhoto: sender?.avatar }} 
+											size="sm" 
+											showOnlineStatus={false}
+										/>
+									</div>
 								{/if}
 								
 								<div class="flex flex-col {message.senderId === '1' ? 'items-end' : 'items-start'}">
@@ -840,17 +875,18 @@
 									{#if message.replyTo}
 										<div class="mb-2 p-2 bg-gray-100 rounded-lg border-l-2 border-[#01c0a4] text-sm">
 											<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderName}</div>
-											<div class="text-gray-700">{message.replyTo.content}</div>
+											<div class="text-gray-700 {message.replyTo.isDeleted ? 'italic text-gray-500' : ''}">{message.replyTo.content}</div>
 										</div>
 									{/if}
 									
 									<div class="relative">
-										<div class="px-4 py-2 rounded-2xl {message.senderId === '1' ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
-											<p class="whitespace-pre-wrap">{message.content}</p>
+										<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === '1' ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
+											<p class="whitespace-pre-wrap {message.isDeleted ? 'italic' : ''}">{message.content}</p>
 										</div>
 										
-										<!-- Message actions -->
-										<div class="absolute top-0 {message.senderId === '1' ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+										<!-- Message actions - hide for deleted messages -->
+										{#if !message.isDeleted}
+											<div class="absolute top-0 {message.senderId === '1' ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
 											<button
 												onclick={() => startReply(message)}
 												class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
@@ -869,7 +905,7 @@
 													</svg>
 												</button>
 												<button
-													onclick={() => unsendMessage(message.id)}
+													onclick={() => confirmUnsendMessage(message.id)}
 													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-red-50 hover:border-red-200 transition-colors"
 													aria-label="Unsend message"
 												>
@@ -888,6 +924,7 @@
 												{/each}
 											{/if}
 										</div>
+									{/if}
 									</div>
 									
 									<!-- Reactions -->
@@ -911,9 +948,10 @@
 								
 								{#if message.senderId === '1'}
 									<img
-										src="/placeholder.svg?height=32&width=32"
+										src="/placeholder.svg"
 										alt=""
-										class="w-8 h-8 rounded-full mt-1"
+										class="w-6 h-6 rounded-full mt-1"
+										loading="eager"
 									/>
 								{/if}
 							</div>
@@ -925,11 +963,12 @@
 						<div class="flex justify-start">
 							<div class="flex items-center space-x-2 max-w-xs">
 								<img
-									src={currentConversation.type === 'group' ? currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg?height=32&width=32' : currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg?height=32&width=32'}
+									src={currentConversation.type === 'group' ? currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg' : currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg'}
 									alt=""
-									class="w-8 h-8 rounded-full"
+									class="w-6 h-6 rounded-full"
+									loading="eager"
 								/>
-								<div class="bg-gray-200 px-4 py-2 rounded-2xl">
+								<div class="bg-gray-200 px-3 py-2 rounded-2xl">
 									<div class="flex space-x-1">
 										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
 										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
@@ -943,7 +982,7 @@
 
 				<!-- Reply Preview -->
 				{#if replyingTo}
-					<div class="px-6 py-2 bg-gray-100 border-t border-gray-300 flex items-center justify-between">
+					<div class="px-4 py-2 bg-gray-100 border-t border-gray-300 flex items-center justify-between">
 						<div class="flex items-center space-x-2">
 							<Reply class="w-4 h-4 text-gray-500" />
 							<span class="text-sm text-gray-600">Replying to {replyingTo.senderName}</span>
@@ -957,7 +996,7 @@
 
 				<!-- Edit Preview -->
 				{#if editingMessage}
-					<div class="px-6 py-2 bg-blue-50 border-t border-blue-200 flex items-center justify-between">
+					<div class="px-4 py-2 bg-blue-50 border-t border-blue-200 flex items-center justify-between">
 						<div class="flex items-center space-x-2">
 							<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -971,8 +1010,8 @@
 				{/if}
 
 				<!-- Message Input -->
-				<div class="px-6 py-4 border-t border-gray-300 bg-white">
-					<div class="flex items-end space-x-3">
+				<div class="px-4 py-3 border-t border-gray-300 bg-white">
+					<div class="flex items-end space-x-2">
 						<div class="flex-1 relative">
 							<div class="relative">
 								<textarea
@@ -981,7 +1020,7 @@
 									onkeypress={handleKeyPress}
 									placeholder={editingMessage ? "Edit your message..." : "Type a message..."}
 									rows="1"
-									class="w-full px-4 py-3 pr-20 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent resize-none"
+									class="w-full px-3 py-2 pr-16 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent resize-none text-sm"
 								></textarea>
 								
 								<div class="absolute right-2 bottom-2 flex items-center space-x-1">
@@ -1033,15 +1072,15 @@
 						<button
 							onclick={editingMessage ? saveEditedMessage : sendMessage}
 							disabled={!messageInput.trim()}
-							class="p-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+							class="p-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 							aria-label={editingMessage ? "Save edited message" : "Send message"}
 						>
 							{#if editingMessage}
-								<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
 								</svg>
 							{:else}
-								<Send class="w-5 h-5" />
+								<Send class="w-4 h-4" />
 							{/if}
 						</button>
 					</div>
@@ -1156,7 +1195,7 @@
 {#if showGroupSettings}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="fixed inset-0 flex items-center justify-center z-50" onclick={closeGroupSettings}>
+	<div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={closeGroupSettings}>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onclick={(e) => e.stopPropagation()}>
@@ -1291,7 +1330,7 @@
 {#if showCreateGroup}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick={() => showCreateGroup = false}>
+	<div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showCreateGroup = false}>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onclick={(e) => e.stopPropagation()}>
@@ -1390,4 +1429,16 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+<!-- Confirmation Modal -->
+{#if confirmationData}
+	<ConfirmationModal
+		show={showConfirmation}
+		title={confirmationData.title}
+		message={confirmationData.message}
+		confirmText={confirmationData.confirmText}
+		onConfirm={confirmationData.action}
+		onCancel={() => { showConfirmation = false; confirmationData = null; }}
+	/>
 {/if}

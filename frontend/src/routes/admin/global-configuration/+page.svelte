@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, FileText, Database, User, UserCheck, Send } from 'lucide-svelte';
+  import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
 
   // Mock global configuration data
   let config = $state({
@@ -56,14 +56,6 @@
       maxBroadcastTargets: 1000
     },
     
-    // Email Settings
-    smtpServer: 'smtp.company.com',
-    smtpPort: 587,
-    smtpUsername: 'notifications@company.com',
-    smtpPassword: '••••••••',
-    emailFromName: 'CollabHub Notifications',
-    enableEmailNotifications: true,
-    
     // Integration Settings
     ldapEnabled: false,
     ldapServer: '',
@@ -112,10 +104,6 @@
     }
   };
 
-  const testEmailConfiguration = () => {
-    alert('Test email sent! Please check your inbox.');
-  };
-
   const testLDAPConnection = () => {
     alert('LDAP connection test initiated. Check the logs for results.');
   };
@@ -143,39 +131,41 @@
   <title>Global Configuration - Admin Controls</title>
 </svelte:head>
 
-<div class="p-6 space-y-6">
-  <!-- Header -->
-  <div class="flex items-center justify-between fade-in">
-    <div>
-      <h1 class="text-3xl font-bold text-gray-800 mb-2">Global Configuration</h1>
-      <p class="text-gray-600">Manage system-wide settings and default policies for organization units</p>
+<div class="min-h-screen bg-gray-50">
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <!-- Header -->
+    <div class="mb-8 fade-in">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900 mb-1">Global Configuration</h1>
+          <p class="text-sm text-gray-600">Manage system-wide settings and default policies for organization units</p>
+        </div>
+        <div class="flex space-x-3">
+          {#if hasChanges}
+            <button
+              onclick={resetConfiguration}
+              class="secondary-button flex items-center space-x-2"
+            >
+              <RotateCcw class="w-4 h-4" />
+              <span>Reset</span>
+            </button>
+          {/if}
+          <button
+            onclick={saveConfiguration}
+            disabled={!hasChanges}
+            class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save class="w-4 h-4" />
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="flex space-x-3">
-      {#if hasChanges}
-        <button
-          onclick={resetConfiguration}
-          class="secondary-button flex items-center space-x-2"
-        >
-          <RotateCcw class="w-4 h-4" />
-          <span>Reset</span>
-        </button>
-      {/if}
-      <button
-        onclick={saveConfiguration}
-        disabled={!hasChanges}
-        class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <Save class="w-4 h-4" />
-        <span>Save Changes</span>
-      </button>
-    </div>
-  </div>
 
-  <!-- Main Configuration Panel -->
-  <div class="collaboration-card fade-in">
-          <div class="overflow-x-auto">
-          <!-- Tab Navigation -->
-          <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">
+    <!-- Main Configuration Panel -->
+    <div class="collaboration-card fade-in">
+      <!-- Tab Navigation -->
+      <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">
             <button
               onclick={() => activeTab = 'general'}
               class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
@@ -361,89 +351,6 @@
                       />
                       <span class="text-sm font-medium">Enable Two-Factor Authentication</span>
                     </label>
-                  </div>
-                </div>
-
-                <!-- Email Settings -->
-                <div class="space-y-6">
-                  <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-semibold text-gray-900 flex items-center">
-                      <FileText class="w-6 h-6 text-[#01c0a4] mr-3" />
-                      Email Settings
-                    </h3>
-                    <button
-                      onclick={testEmailConfiguration}
-                      class="secondary-button text-sm"
-                    >
-                      Test Configuration
-                    </button>
-                  </div>
-                  
-                  <div class="space-y-4">
-                    <div class="flex items-center space-x-2 mb-4">
-                      <input
-                        type="checkbox"
-                        bind:checked={config.enableEmailNotifications}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                      />
-                      <span class="text-sm font-medium">Enable Email Notifications</span>
-                    </div>
-                    
-                    {#if config.enableEmailNotifications}
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label for="smtpServer" class="block text-sm font-medium text-gray-700 mb-2">SMTP Server</label>
-                          <input
-                            id="smtpServer"
-                            bind:value={config.smtpServer}
-                            class="input-field"
-                            placeholder="smtp.company.com"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label for="smtpPort" class="block text-sm font-medium text-gray-700 mb-2">SMTP Port</label>
-                          <input
-                            id="smtpPort"
-                            type="number"
-                            bind:value={config.smtpPort}
-                            class="input-field"
-                            placeholder="587"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label for="smtpUsername" class="block text-sm font-medium text-gray-700 mb-2">SMTP Username</label>
-                          <input
-                            id="smtpUsername"
-                            bind:value={config.smtpUsername}
-                            class="input-field"
-                            placeholder="notifications@company.com"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label for="smtpPassword" class="block text-sm font-medium text-gray-700 mb-2">SMTP Password</label>
-                          <input
-                            id="smtpPassword"
-                            type="password"
-                            bind:value={config.smtpPassword}
-                            class="input-field"
-                            placeholder="••••••••"
-                          />
-                        </div>
-                        
-                        <div class="md:col-span-2">
-                          <label for="emailFromName" class="block text-sm font-medium text-gray-700 mb-2">From Name</label>
-                          <input
-                            id="emailFromName"
-                            bind:value={config.emailFromName}
-                            class="input-field"
-                            placeholder="CollabHub Notifications"
-                          />
-                        </div>
-                      </div>
-                    {/if}
                   </div>
                 </div>
 
@@ -885,19 +792,19 @@
               </div>
             {/if}
           </div>
-        </div>
-      </div>
+    </div>
 
-      <!-- Change Warning -->
-      {#if hasChanges}
-        <div class="collaboration-card p-4 border-l-4 border-yellow-500 bg-yellow-50 fade-in">
-          <div class="flex items-center">
-            <Clock class="w-5 h-5 text-yellow-600 mr-3" />
-            <div>
-              <p class="text-sm font-medium text-yellow-800">Unsaved Changes</p>
-              <p class="text-sm text-yellow-700">You have unsaved configuration changes. These will become the default settings for new organization units.</p>
-            </div>
+    <!-- Change Warning -->
+    {#if hasChanges}
+      <div class="collaboration-card p-4 border-l-4 border-yellow-500 bg-yellow-50 fade-in">
+        <div class="flex items-center">
+          <Clock class="w-5 h-5 text-yellow-600 mr-3" />
+          <div>
+            <p class="text-sm font-medium text-yellow-800">Unsaved Changes</p>
+            <p class="text-sm text-yellow-700">You have unsaved configuration changes. These will become the default settings for new organization units.</p>
+          </div>
         </div>
       </div>
     {/if}
+  </div>
 </div>

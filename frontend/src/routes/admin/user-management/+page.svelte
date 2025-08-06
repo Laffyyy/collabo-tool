@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
-		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key
+		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key,
+		UserPlus, Activity, Headphones, Crown, LockKeyhole
 	} from 'lucide-svelte';
 
 	// TypeScript interfaces
@@ -47,13 +49,13 @@
 	// State management
 	let users = $state<UserData[]>([]);
 	let filteredUsers = $state<UserData[]>([]);
-	let currentTab = $state<string>('frontline');
+	let currentTab = $state<string>('first-time');
 	let searchQuery = $state<string>('');
 	let selectedOU = $state<string>('all');
 	let selectedRole = $state<string>('all');
 	let selectedStatus = $state<string>('all');
 	let currentPage = $state<number>(1);
-	let itemsPerPage = 15;
+	let itemsPerPage = 10;
 	
 	// Selection states
 	let selectedRows = $state<Set<string>>(new Set());
@@ -135,7 +137,8 @@
 		'Active',
 		'Inactive',
 		'Locked',
-		'Deactivated'
+		'Deactivated',
+		'First-time'
 	];
 
 	// Sample data
@@ -180,7 +183,7 @@
 		const generatedUsers: UserData[] = [];
 		let currentId = 4;
 		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance'];
-		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive']; // Mostly active
+		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time']; // Mostly active
 		const frontlineRoles = ['Frontline', 'Support'];
 		
 		// Names for variety
@@ -262,7 +265,8 @@
 		manager: users.filter(u => u.role === 'Manager' && u.status === 'Active').length,
 		admin: users.filter(u => u.type === 'admin' && u.status === 'Active').length,
 		deactivated: users.filter(u => u.status === 'Deactivated').length,
-		locked: users.filter(u => u.status === 'Locked').length
+		locked: users.filter(u => u.status === 'Locked').length,
+		firstTime: users.filter(u => u.status === 'First-time').length
 	});
 
 	// Helper functions for hierarchy
@@ -335,6 +339,9 @@
 				break;
 			case 'locked':
 				filtered = filtered.filter(u => u.status === 'Locked');
+				break;
+			case 'first-time':
+				filtered = filtered.filter(u => u.status === 'First-time');
 				break;
 		}
 
@@ -489,12 +496,15 @@
 		
 		const managerTemplate = "Employee ID,Name,Email,OU\nEMP200,Alice Johnson,alice.johnson@company.com,Engineering\nEMP201,Sarah Wilson,sarah.wilson@company.com,Sales\n";
 
+		const adminTemplate = "Employee ID,Name,Email,OU\nADM001,System Admin,admin@company.com,IT\nADM002,Security Admin,security.admin@company.com,IT\n";
+
 		// Since we can't create actual Excel files with multiple sheets in the browser,
-		// we'll create three separate CSV files
+		// we'll create four separate CSV files
 		const templates = [
 			{ name: 'frontline_support_template.csv', content: frontlineSupportTemplate },
 			{ name: 'supervisor_template.csv', content: supervisorTemplate },
-			{ name: 'manager_template.csv', content: managerTemplate }
+			{ name: 'manager_template.csv', content: managerTemplate },
+			{ name: 'admin_template.csv', content: adminTemplate }
 		];
 
 		templates.forEach(template => {
@@ -507,7 +517,7 @@
 			window.URL.revokeObjectURL(url);
 		});
 
-		alert('Three template files have been downloaded:\n• frontline_support_template.csv\n• supervisor_template.csv\n• manager_template.csv');
+		alert('Four template files have been downloaded:\n• frontline_support_template.csv\n• supervisor_template.csv\n• manager_template.csv\n• admin_template.csv');
 	};
 
 	const editUser = (user: UserData) => {
@@ -791,16 +801,16 @@
 	<title>User Management - Workspace</title>
 </svelte:head>
 
-<div class="p-6 bg-gray-50 min-h-screen">
-	<div class="w-full max-w-[98%] mx-auto">
+<div class="h-screen bg-gray-50 flex flex-col">
+	<div class="w-full max-w-[98%] mx-auto flex-1 flex flex-col p-6 min-h-0">
 		<!-- Header -->
 		<div class="mb-4">
 			<h1 class="text-xl font-bold text-gray-900 mb-1">User Management</h1>
 			<p class="text-sm text-gray-600">Manage users, administrators, and access permissions</p>
 		</div>
 
-			<!-- Search and Filters -->
-			<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+		<!-- Search and Filters -->
+		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0">
 				<!-- Search Bar Section -->
 				<div class="p-4 border-b border-gray-200">
 					<div class="flex flex-col lg:flex-row gap-3">
@@ -832,8 +842,8 @@
 								</select>
 							{/if}
 
-							<!-- Status Filter - only show for tabs that have mixed statuses (not locked, deactivated, or active role tabs) -->
-							{#if !['locked', 'deactivated', 'frontline', 'support', 'supervisor', 'manager', 'admin'].includes(currentTab)}
+							<!-- Status Filter - only show for tabs that have mixed statuses (not locked, deactivated, first-time, or active role tabs) -->
+							{#if !['locked', 'deactivated', 'first-time', 'frontline', 'support', 'supervisor', 'manager', 'admin'].includes(currentTab)}
 								<select
 									bind:value={selectedStatus}
 									class="flex-1 max-w-[120px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
@@ -861,6 +871,17 @@
 				<div class="border-b border-gray-200">
 					<nav class="flex space-x-6 px-4">
 						<button
+							onclick={() => changeTab('first-time')}
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'first-time' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						>
+							<div class="flex items-center space-x-2">
+								<UserPlus class="w-4 h-4" />
+								<span>First-time</span>
+								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.firstTime}</span>
+							</div>
+						</button>
+
+						<button
 							onclick={() => changeTab('frontline')}
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'frontline' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
@@ -876,7 +897,7 @@
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'support' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
 							<div class="flex items-center space-x-2">
-								<User class="w-4 h-4" />
+								<Headphones class="w-4 h-4" />
 								<span>Support</span>
 								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.support}</span>
 							</div>
@@ -898,7 +919,7 @@
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'manager' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
 							<div class="flex items-center space-x-2">
-								<Shield class="w-4 h-4" />
+								<Crown class="w-4 h-4" />
 								<span>Manager</span>
 								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.manager}</span>
 							</div>
@@ -920,7 +941,7 @@
 							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'locked' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 						>
 							<div class="flex items-center space-x-2">
-								<Shield class="w-4 h-4" />
+								<LockKeyhole class="w-4 h-4" />
 								<span>Locked</span>
 								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.locked}</span>
 							</div>
@@ -975,7 +996,8 @@
 				{/if}
 
 				<!-- Table -->
-				<div class="w-full overflow-x-auto">
+				<div class="w-full overflow-x-auto flex-1 min-h-0">
+					<div class="h-full overflow-y-auto">
 					<table class="w-full table-fixed min-w-[1400px]">
 						<thead class="bg-gray-50">
 							<tr>
@@ -984,7 +1006,7 @@
 										type="checkbox"
 										checked={selectAll}
 										onchange={handleSelectAll}
-										class="w-4 h-4 text-black bg-gray-100 border-gray-300 rounded focus:ring-black focus:ring-2"
+										class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
 									/>
 								</th>
 								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
@@ -1013,7 +1035,7 @@
 											type="checkbox"
 											checked={selectedRows.has(user.id)}
 											onchange={() => handleCheckboxChange(user.id, index)}
-											class="w-4 h-4 text-black bg-gray-100 border-gray-300 rounded focus:ring-black focus:ring-2"
+											class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
 										/>
 									</td>
 									<td class="w-32 px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -1592,7 +1614,7 @@
 											member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
 											'bg-green-100 border-green-200'
 										} border rounded-lg p-3 text-center min-w-[160px]">
-											<img src="/placeholder.svg?height=32&width=32" alt="{member.name}" class="w-8 h-8 rounded-full mx-auto mb-2" />
+											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
 												member.role === 'Frontline' ? 'text-blue-700' :
@@ -1676,7 +1698,7 @@
 											member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
 											'bg-green-100 border-green-200'
 										} border rounded-lg p-3 text-center min-w-[160px]">
-											<img src="/placeholder.svg?height=32&width=32" alt="{member.name}" class="w-8 h-8 rounded-full mx-auto mb-2" />
+											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
 												member.role === 'Frontline' ? 'text-blue-700' :
@@ -2138,3 +2160,5 @@
 		</div>
 	</div>
 {/if}
+
+</div>

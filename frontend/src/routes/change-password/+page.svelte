@@ -129,7 +129,7 @@
 			if (changePasswordFromForgotPassword) {
 				goto('/login');
 			} else {
-				goto('/dashboard');
+				goto('/chat');
 			}
 		}
 	};

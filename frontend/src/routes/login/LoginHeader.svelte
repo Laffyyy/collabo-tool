@@ -7,7 +7,7 @@
 		<Users class="w-6 h-6 text-white" />
 	</div>
 	
-	<h1 class="text-3xl font-bold text-gray-800 mb-2">Welcome back!</h1>
-	<p class="text-gray-600">Sign in to access your workspace</p>
+	<h1 class="text-3xl font-bold text-gray-800 mb-2">Collaby</h1>
+	<p class="text-gray-600">Log in in to access your workspace</p>
 </div>
 

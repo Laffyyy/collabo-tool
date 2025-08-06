@@ -142,10 +142,81 @@
           broadcastRetentionDays: 90
         }
       }
+    },
+    {
+      id: '7',
+      name: 'Legacy QA Team',
+      description: 'Deactivated quality assurance team',
+      parentId: '1',
+      memberCount: 0,
+      location: 'San Francisco, CA',
+      createdAt: new Date(Date.now() - 86400000 * 365),
+      modifiedAt: new Date(Date.now() - 86400000 * 60),
+      status: 'inactive',
+      rules: {
+        chat: {
+          frontlineCanInitiate1v1: false,
+          frontlineCanReply1v1: false,
+          frontlineCanCreateGroups: false,
+          frontlineCanJoinGroups: false,
+          supervisorCanCreateGroups: false,
+          managerCanAccessAllGroups: false,
+          allowFileSharing: false,
+          allowEmojis: false,
+          messageRetentionDays: 30
+        },
+        broadcast: {
+          frontlineCanCreateBroadcast: false,
+          frontlineCanReplyToBroadcast: false,
+          supervisorCanCreateBroadcast: false,
+          managerCanCreateBroadcast: false,
+          requireApprovalForBroadcast: false,
+          allowScheduledBroadcasts: false,
+          allowPriorityBroadcasts: false,
+          broadcastRetentionDays: 30
+        }
+      }
+    },
+    {
+      id: '8',
+      name: 'Old Marketing Unit',
+      description: 'Deactivated marketing organizational unit',
+      parentId: null,
+      memberCount: 0,
+      location: 'Chicago, IL',
+      createdAt: new Date(Date.now() - 86400000 * 400),
+      modifiedAt: new Date(Date.now() - 86400000 * 90),
+      status: 'inactive',
+      rules: {
+        chat: {
+          frontlineCanInitiate1v1: false,
+          frontlineCanReply1v1: false,
+          frontlineCanCreateGroups: false,
+          frontlineCanJoinGroups: false,
+          supervisorCanCreateGroups: false,
+          managerCanAccessAllGroups: false,
+          allowFileSharing: false,
+          allowEmojis: false,
+          messageRetentionDays: 30
+        },
+        broadcast: {
+          frontlineCanCreateBroadcast: false,
+          frontlineCanReplyToBroadcast: false,
+          supervisorCanCreateBroadcast: false,
+          managerCanCreateBroadcast: false,
+          requireApprovalForBroadcast: false,
+          allowScheduledBroadcasts: false,
+          allowPriorityBroadcasts: false,
+          broadcastRetentionDays: 30
+        }
+      }
     }
   ]);
 
   let searchQuery = $state<string>('');
+  let currentTab = $state<string>('active');
+  let selectedRows = $state<Set<string>>(new Set());
+  let selectAll = $state<boolean>(false);
   let showCreateModal = $state<boolean>(false);
   let showEditModal = $state<boolean>(false);
   let showConfirmationModal = $state<boolean>(false);
@@ -191,13 +262,32 @@
   });
 
   // Computed values
-  let filteredOUs = $derived(
-    organizationUnits.filter(ou =>
-      ou.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ou.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ou.location.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+  const tabCounts = $derived({
+    active: organizationUnits.filter(ou => ou.status === 'active').length,
+    inactive: organizationUnits.filter(ou => ou.status === 'inactive').length
+  });
+
+  let filteredOUs = $derived.by(() => {
+    let filtered = organizationUnits;
+
+    // Filter by tab
+    if (currentTab === 'active') {
+      filtered = filtered.filter(ou => ou.status === 'active');
+    } else if (currentTab === 'inactive') {
+      filtered = filtered.filter(ou => ou.status === 'inactive');
+    }
+
+    // Filter by search
+    if (searchQuery) {
+      filtered = filtered.filter(ou =>
+        ou.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ou.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ou.location.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    return filtered;
+  });
 
   // Functions
   const createOU = () => {
@@ -349,6 +439,59 @@
       target.rules.broadcast[rule] = !target.rules.broadcast[rule];
     }
   };
+
+  // Tab change function
+  const changeTab = (tab: string) => {
+    currentTab = tab;
+    selectedRows = new Set();
+    selectAll = false;
+  };
+
+  // Row selection functions
+  const handleSelectAll = () => {
+    selectAll = !selectAll;
+    if (selectAll) {
+      selectedRows = new Set(filteredOUs.map(ou => ou.id));
+    } else {
+      selectedRows = new Set();
+    }
+  };
+
+  const handleRowSelect = (ouId: string) => {
+    const newSelectedRows = new Set(selectedRows);
+    if (newSelectedRows.has(ouId)) {
+      newSelectedRows.delete(ouId);
+    } else {
+      newSelectedRows.add(ouId);
+    }
+    selectedRows = newSelectedRows;
+    selectAll = filteredOUs.length > 0 && filteredOUs.every(ou => selectedRows.has(ou.id));
+  };
+
+  // Deactivate function (instead of delete)
+  const confirmDeactivateOU = (ou: OrganizationUnit) => {
+    actionConfirm = {
+      message: `Are you sure you want to deactivate "${ou.name}"? This will make it inactive but preserve all data.`,
+      confirmText: 'Deactivate',
+      action: () => deactivateOU(ou.id)
+    };
+    showConfirmationModal = true;
+  };
+
+  const deactivateOU = (ouId: string) => {
+    organizationUnits = organizationUnits.map(ou =>
+      ou.id === ouId ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
+    );
+    showConfirmationModal = false;
+    selectedRows = new Set();
+  };
+
+  // Reactivate function
+  const reactivateOU = (ouId: string) => {
+    organizationUnits = organizationUnits.map(ou =>
+      ou.id === ouId ? { ...ou, status: 'active' as const, modifiedAt: new Date() } : ou
+    );
+  };
 </script>
 
 <svelte:head>
@@ -365,37 +508,119 @@
   </div>
 
   <!-- Search and Filters -->
-  <div class="collaboration-card p-6 fade-in">
-    <div class="flex items-center space-x-4">
-      <div class="relative flex-1">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <input
-          bind:value={searchQuery}
-          type="text"
-          placeholder="Search organization units..."
-          class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-        />
+  <div class="collaboration-card fade-in mb-6">
+    <div class="p-6">
+      <div class="flex items-center space-x-4">
+        <div class="relative flex-1">
+          <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            bind:value={searchQuery}
+            type="text"
+            placeholder="Search organization units..."
+            class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+          />
+        </div>
+        <div class="text-sm text-gray-500 whitespace-nowrap">
+          {filteredOUs.length} of {organizationUnits.length} units
+        </div>
+        <button
+          onclick={() => showCreateModal = true}
+          class="primary-button flex items-center space-x-2 whitespace-nowrap"
+        >
+          <Plus class="w-5 h-5" />
+          <span>Create OU</span>
+        </button>
       </div>
-      <div class="text-sm text-gray-500 whitespace-nowrap">
-        {filteredOUs.length} of {organizationUnits.length} units
-      </div>
-      <button
-        onclick={() => showCreateModal = true}
-        class="primary-button flex items-center space-x-2 whitespace-nowrap"
-      >
-        <Plus class="w-5 h-5" />
-        <span>Create OU</span>
-      </button>
     </div>
   </div>
 
-  <!-- OUs Table -->
+  <!-- OUs Table with Tabs -->
   <div class="collaboration-card fade-in">
+    <!-- Tabs -->
+    <div class="border-b border-gray-200">
+      <nav class="flex space-x-6 px-6">
+        <button
+          onclick={() => changeTab('active')}
+          class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'active' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+        >
+          <div class="flex items-center space-x-2">
+            <Building2 class="w-4 h-4" />
+            <span>Active</span>
+            <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.active}</span>
+          </div>
+        </button>
+
+        <button
+          onclick={() => changeTab('inactive')}
+          class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'inactive' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+        >
+          <div class="flex items-center space-x-2">
+            <X class="w-4 h-4" />
+            <span>Deactivated</span>
+            <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.inactive}</span>
+          </div>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Selection Toolbar -->
+    {#if selectedRows.size > 0}
+      <div class="bg-blue-50 border-b border-blue-200 px-6 py-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <span class="text-sm font-medium text-blue-900">
+              {selectedRows.size} {selectedRows.size === 1 ? 'unit' : 'units'} selected
+            </span>
+            <button
+              onclick={() => { selectedRows = new Set(); selectAll = false; }}
+              class="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Clear selection
+            </button>
+          </div>
+          <div class="flex items-center space-x-2">
+            {#if currentTab === 'active'}
+              <button
+                onclick={() => {
+                  selectedRows.forEach(id => deactivateOU(id));
+                  selectedRows = new Set();
+                }}
+                class="px-3 py-1.5 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Deactivate Selected
+              </button>
+            {:else}
+              <button
+                onclick={() => {
+                  selectedRows.forEach(id => reactivateOU(id));
+                  selectedRows = new Set();
+                }}
+                class="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Reactivate Selected
+              </button>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- OUs Table -->
     <div class="overflow-x-auto">
-      <table class="w-full">
+      <table class="w-full" tabindex="0" role="table" aria-label="Organization units table">
         <thead class="bg-gray-50 border-b border-gray-200">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div class="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={selectAll}
+                  onchange={handleSelectAll}
+                  class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                />
+                <span>Unit</span>
+              </div>
+            </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -404,17 +629,34 @@
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           {#each filteredOUs as ou}
-            <tr class="hover:bg-gray-50 transition-colors">
+            <tr 
+              class="hover:bg-gray-50 transition-colors cursor-pointer {selectedRows.has(ou.id) ? 'bg-blue-50' : ''}"
+              onclick={(e) => {
+                // Only select row if clicking outside of buttons and checkboxes
+                const target = e.target as HTMLElement;
+                if (target && !target.closest('button') && !target.closest('input[type="checkbox"]')) {
+                  handleRowSelect(ou.id);
+                }
+              }}
+            >
               <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <div class="flex-shrink-0 h-10 w-10">
-                    <div class="h-10 w-10 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
-                      <Building2 class="w-5 h-5 text-white" />
+                <div class="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.has(ou.id)}
+                    onchange={() => handleRowSelect(ou.id)}
+                    class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                  />
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0 h-10 w-10">
+                      <div class="h-10 w-10 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
+                        <Building2 class="w-5 h-5 text-white" />
+                      </div>
                     </div>
-                  </div>
-                  <div class="ml-4">
-                    <div class="text-sm font-medium text-gray-900">{ou.name}</div>
-                    <div class="text-sm text-gray-500">{ou.description}</div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">{ou.name}</div>
+                      <div class="text-sm text-gray-500">{ou.description}</div>
+                    </div>
                   </div>
                 </div>
               </td>
@@ -431,8 +673,8 @@
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  {ou.status.charAt(0).toUpperCase() + ou.status.slice(1)}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {ou.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                  {ou.status === 'active' ? 'Active' : 'Deactivated'}
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -453,14 +695,25 @@
                     <Edit class="w-3 h-3" />
                     <span>Edit</span>
                   </button>
-                  <button
-                    onclick={() => confirmDeleteOU(ou)}
-                    class="flex items-center space-x-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-                    title="Delete"
-                  >
-                    <Trash2 class="w-3 h-3" />
-                    <span>Delete</span>
-                  </button>
+                  {#if ou.status === 'active'}
+                    <button
+                      onclick={() => confirmDeactivateOU(ou)}
+                      class="flex items-center space-x-1 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
+                      title="Deactivate"
+                    >
+                      <X class="w-3 h-3" />
+                      <span>Deactivate</span>
+                    </button>
+                  {:else}
+                    <button
+                      onclick={() => reactivateOU(ou.id)}
+                      class="flex items-center space-x-1 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
+                      title="Reactivate"
+                    >
+                      <Building2 class="w-3 h-3" />
+                      <span>Reactivate</span>
+                    </button>
+                  {/if}
                 </div>
               </td>
             </tr>
@@ -858,7 +1111,7 @@
             </div>
             <div>
               <span class="text-gray-500">Status:</span>
-              <div class="font-medium text-green-600">{selectedOU.status.charAt(0).toUpperCase() + selectedOU.status.slice(1)}</div>
+              <div class="font-medium text-green-600">{selectedOU.status === 'active' ? 'Active' : 'Deactivated'}</div>
             </div>
             <div>
               <span class="text-gray-500">Created:</span>
@@ -942,7 +1195,7 @@
               <label for="edit-status" class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
               <select id="edit-status" bind:value={editOU.status} class="input-field">
                 <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="inactive">Deactivated</option>
               </select>
             </div>
 
