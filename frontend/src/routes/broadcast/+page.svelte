@@ -195,6 +195,7 @@
   let selectedTemplate = $state('');
   let templateName = $state('');
   let showSaveTemplate = $state(false);
+  let viewedBroadcasts = $state<Set<string>>(new Set());
   let newBroadcast = $state({
     title: '',
     content: '',
@@ -268,6 +269,30 @@
       }
       return counts;
     }, {} as Record<string, number>)
+  );
+
+  let tabsWithNewBroadcasts = $derived(
+    tabs.reduce((result, tab) => {
+      const tabBroadcasts = broadcasts.filter(b => {
+        if (!b.isActive) return false;
+        
+        if (tab.id === 'My Broadcasts') {
+          return b.createdBy === currentUser.id;
+        }
+        
+        return b.targetOUs.some(ou => ou === tab.id);
+      });
+      
+      // Check for broadcasts created in the last 24 hours that haven't been viewed
+      const hasNewBroadcasts = tabBroadcasts.some(broadcast => {
+        const isRecent = (Date.now() - new Date(broadcast.createdAt).getTime()) < 86400000; // 24 hours
+        const isUnviewed = !viewedBroadcasts.has(broadcast.id);
+        return isRecent && isUnviewed;
+      });
+      
+      result[tab.id] = hasNewBroadcasts;
+      return result;
+    }, {} as Record<string, boolean>)
   );
 
   let canSendBroadcasts = $derived(currentUser.role === 'admin' || currentUser.role === 'manager');
@@ -377,6 +402,10 @@
     preferredDate = '';
     selectedChoice = '';
     textResponse = '';
+    
+    // Mark this broadcast as viewed
+    viewedBroadcasts.add(broadcast.id);
+    viewedBroadcasts = new Set(viewedBroadcasts); // Trigger reactivity
   };
 
   const closeBroadcastDetails = () => {
@@ -869,7 +898,7 @@
       {#each tabs as tab}
         <button
           onclick={() => activeTab = tab.id}
-          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === tab.id
+          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors relative {activeTab === tab.id
             ? 'border-[#01c0a4] text-[#01c0a4]'
             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
           }"
@@ -881,6 +910,11 @@
           }">
             {tabCounts[tab.id] || 0}
           </span>
+          
+          <!-- New Broadcast Indicator -->
+          {#if tabsWithNewBroadcasts[tab.id]}
+            <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
+          {/if}
         </button>
       {/each}
     </nav>
@@ -889,13 +923,22 @@
   <!-- Broadcasts List -->
   <div class="space-y-4">
     {#each sortedBroadcasts as broadcast}
+      {@const isNewBroadcast = (Date.now() - new Date(broadcast.createdAt).getTime()) < 86400000 && !viewedBroadcasts.has(broadcast.id)}
       <div 
-        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''}"
+        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isNewBroadcast ? 'ring-2 ring-blue-200 bg-blue-50' : ''}"
         role="button"
         tabindex="0"
         onclick={() => openBroadcastDetails(broadcast)}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
       >
+        {#if isNewBroadcast}
+          <div class="absolute top-2 right-2">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              NEW
+            </span>
+          </div>
+        {/if}
+        
         <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-3 mb-2">
@@ -903,19 +946,19 @@
               <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
                 {broadcast.priority.toUpperCase()}
               </span>
-              {#if broadcast.priority === 'high'}
-                <AlertTriangle class="w-4 h-4 text-red-500 flex-shrink-0" />
-              {/if}
+              <!-- Priority Dot -->
+              <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
             </div>
             
             <!-- Content Preview -->
             <div class="mb-3">
               <p class="text-gray-600 text-sm line-clamp-2 break-words">
-                {broadcast.content}
+                {#if broadcast.content.length > 120}
+                  {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
+                {:else}
+                  {broadcast.content}
+                {/if}
               </p>
-              {#if broadcast.content.length > 120}
-                <span class="text-xs text-gray-400 italic">Click to read more...</span>
-              {/if}
             </div>
             
             <!-- Metadata -->
@@ -998,9 +1041,8 @@
                   <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(selectedBroadcast.priority)}">
                     {selectedBroadcast.priority.toUpperCase()}
                   </span>
-                  {#if selectedBroadcast.priority === 'high'}
-                    <AlertTriangle class="w-5 h-5 text-red-500 flex-shrink-0" />
-                  {/if}
+                  <!-- Priority Dot -->
+                  <div class="w-2 h-2 rounded-full flex-shrink-0 {selectedBroadcast.priority === 'high' ? 'bg-red-500' : selectedBroadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
                 </div>
               </div>
             </div>
