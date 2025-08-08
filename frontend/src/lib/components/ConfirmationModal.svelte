@@ -34,13 +34,13 @@
   const getConfirmButtonClasses = () => {
     switch (confirmStyle) {
       case 'danger':
-        return 'bg-red-600 hover:bg-red-700 text-white';
+        return 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-600';
       case 'warning':
-        return 'bg-orange-600 hover:bg-orange-700 text-white';
+        return 'bg-orange-500 hover:bg-orange-600 text-white focus:ring-orange-500';
       case 'primary':
-        return 'bg-[#01c0a4] hover:bg-[#00a085] text-white';
+        return 'bg-[#01c0a4] hover:bg-[#00a085] text-white focus:ring-[#01c0a4]';
       default:
-        return 'bg-red-600 hover:bg-red-700 text-white';
+        return 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-600';
     }
   };
 
@@ -49,7 +49,7 @@
       case 'danger':
         return 'text-red-600';
       case 'warning':
-        return 'text-orange-600';
+        return 'text-orange-500';
       case 'primary':
         return 'text-[#01c0a4]';
       default:
@@ -61,7 +61,7 @@
 {#if show}
   <!-- Modal Backdrop -->
   <div 
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-20 backdrop-blur-sm"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-20 backdrop-blur-[2px]"
     onclick={onCancel}
     onkeydown={handleKeydown}
     role="dialog"
@@ -88,13 +88,6 @@
             {title}
           </h2>
         </div>
-        <button
-          onclick={onCancel}
-          class="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
-          aria-label="Close modal"
-        >
-          <X class="w-5 h-5" />
-        </button>
       </div>
 
       <!-- Content -->
