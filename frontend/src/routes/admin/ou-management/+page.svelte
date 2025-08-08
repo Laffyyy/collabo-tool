@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
+  import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -404,6 +405,52 @@
     }
   };
 
+  const confirmBulkDeactivateOUs = () => {
+    if (selectedRows.size === 0) return;
+    
+    actionConfirm = {
+      message: `Are you sure you want to deactivate ${selectedRows.size} selected organization units? This will make them inactive but preserve all data.`,
+      confirmText: 'Deactivate All',
+      action: () => bulkDeactivateOUs()
+    };
+    showConfirmationModal = true;
+  };
+
+  const confirmBulkReactivateOUs = () => {
+    if (selectedRows.size === 0) return;
+    
+    actionConfirm = {
+      message: `Are you sure you want to reactivate ${selectedRows.size} selected organization units? This will make them active again.`,
+      confirmText: 'Reactivate All',
+      action: () => bulkReactivateOUs()
+    };
+    showConfirmationModal = true;
+  };
+
+  const bulkDeactivateOUs = () => {
+    const selectedCount = selectedRows.size;
+    organizationUnits = organizationUnits.map(ou =>
+      selectedRows.has(ou.id) ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
+    );
+    showConfirmationModal = false;
+    selectedRows = new Set();
+    selectAll = false;
+    actionConfirm = null;
+    alert(`${selectedCount} organization units have been deactivated successfully!`);
+  };
+
+  const bulkReactivateOUs = () => {
+    const selectedCount = selectedRows.size;
+    organizationUnits = organizationUnits.map(ou =>
+      selectedRows.has(ou.id) ? { ...ou, status: 'active' as const, modifiedAt: new Date() } : ou
+    );
+    showConfirmationModal = false;
+    selectedRows = new Set();
+    selectAll = false;
+    actionConfirm = null;
+    alert(`${selectedCount} organization units have been reactivated successfully!`);
+  };
+
   const deleteOU = (ouId: string) => {
     if (confirm('Are you sure you want to delete this Organization Unit?')) {
       organizationUnits = organizationUnits.filter(ou => ou.id !== ouId);
@@ -443,6 +490,7 @@
   // Tab change function
   const changeTab = (tab: string) => {
     currentTab = tab;
+    // Clear selections when switching tabs
     selectedRows = new Set();
     selectAll = false;
   };
@@ -581,21 +629,15 @@
           <div class="flex items-center space-x-2">
             {#if currentTab === 'active'}
               <button
-                onclick={() => {
-                  selectedRows.forEach(id => deactivateOU(id));
-                  selectedRows = new Set();
-                }}
-                class="px-3 py-1.5 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                onclick={() => confirmBulkDeactivateOUs()}
+                class="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Deactivate Selected
               </button>
             {:else}
               <button
-                onclick={() => {
-                  selectedRows.forEach(id => reactivateOU(id));
-                  selectedRows = new Set();
-                }}
-                class="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                onclick={() => confirmBulkReactivateOUs()}
+                class="px-3 py-1.5 text-sm bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
               >
                 Reactivate Selected
               </button>
@@ -1489,35 +1531,19 @@
 
 <!-- Confirmation Modal -->
 {#if showConfirmationModal && actionConfirm}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 backdrop-blur-sm overflow-y-auto h-full w-full z-50" onclick={() => showConfirmationModal = false}>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" onclick={(e) => e.stopPropagation()}>
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Confirm Action</h3>
-        <button onclick={() => showConfirmationModal = false} class="text-gray-400 hover:text-gray-600">
-          <X class="w-5 h-5" />
-        </button>
-      </div>
-      <div class="mb-6">
-        <p class="text-gray-700">{actionConfirm.message}</p>
-      </div>
-      <div class="flex justify-end space-x-3">
-        <button
-          onclick={() => showConfirmationModal = false}
-          class="secondary-button"
-        >
-          Cancel
-        </button>
-        <button
-          onclick={executeConfirmedAction}
-          class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
-        >
-          {actionConfirm.confirmText}
-        </button>
-      </div>
-    </div>
-  </div>
+  <ConfirmationModal
+    show={showConfirmationModal}
+    title="Confirm Action"
+    message={actionConfirm.message}
+    confirmText={actionConfirm.confirmText}
+    confirmStyle={
+      actionConfirm.confirmText === 'Deactivate' || actionConfirm.confirmText === 'Deactivate All'
+        ? 'danger'
+        : actionConfirm.confirmText === 'Delete'
+        ? 'danger'
+        : 'primary'
+    }
+    onConfirm={executeConfirmedAction}
+    onCancel={() => { showConfirmationModal = false; actionConfirm = null; }}
+  />
 {/if}

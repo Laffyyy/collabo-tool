@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
+	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
@@ -183,7 +184,7 @@
 		const generatedUsers: UserData[] = [];
 		let currentId = 4;
 		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance'];
-		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time']; // Mostly active
+		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time', 'Locked', 'Deactivated']; // Added more variety
 		const frontlineRoles = ['Frontline', 'Support'];
 		
 		// Names for variety
@@ -200,6 +201,71 @@
 
 		// Get managers for supervisor assignment
 		const managers = baseUsers.filter(u => u.role === 'Manager');
+		
+		// Add some specific locked and deactivated users for demo purposes
+		const lockedAndDeactivatedUsers: UserData[] = [
+			{
+				id: 'locked-1',
+				employeeId: 'EMP900',
+				name: 'Michael Thompson',
+				email: 'michael.thompson@company.com',
+				ou: 'Engineering',
+				role: 'Frontline',
+				status: 'Locked',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[0]?.id
+			},
+			{
+				id: 'locked-2',
+				employeeId: 'EMP901',
+				name: 'Sarah Davis',
+				email: 'sarah.davis@company.com',
+				ou: 'Sales',
+				role: 'Support',
+				status: 'Locked',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[1]?.id
+			},
+			{
+				id: 'deactivated-1',
+				employeeId: 'EMP950',
+				name: 'Robert Johnson',
+				email: 'robert.johnson@company.com',
+				ou: 'Marketing',
+				role: 'Supervisor',
+				status: 'Deactivated',
+				type: 'user',
+				managerId: managers[0]?.id
+			},
+			{
+				id: 'deactivated-2',
+				employeeId: 'EMP951',
+				name: 'Lisa Wilson',
+				email: 'lisa.wilson@company.com',
+				ou: 'HR',
+				role: 'Frontline',
+				status: 'Deactivated',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[0]?.id
+			},
+			{
+				id: 'deactivated-3',
+				employeeId: 'EMP952',
+				name: 'David Brown',
+				email: 'david.brown@company.com',
+				ou: 'Finance',
+				role: 'Support',
+				status: 'Deactivated',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[0]?.id
+			}
+		];
+		
+		generatedUsers.push(...lockedAndDeactivatedUsers);
 		
 		// Generate supervisors (5 per manager)
 		const supervisors: UserData[] = [];
@@ -371,6 +437,10 @@
 
 	const changeTab = (tab: string) => {
 		currentTab = tab;
+		// Clear selections when switching tabs
+		selectedRows = new Set();
+		selectAll = false;
+		lastSelectedIndex = -1;
 		filterUsers();
 	};
 
@@ -691,6 +761,18 @@
 			case 'deactivate':
 				deactivateUser(selectedUser);
 				break;
+			case 'bulk-lock':
+				bulkLockUsers();
+				break;
+			case 'bulk-deactivate':
+				bulkDeactivateUsers();
+				break;
+			case 'bulk-unlock':
+				bulkUnlockUsers();
+				break;
+			case 'bulk-reactivate':
+				bulkReactivateUsers();
+				break;
 		}
 		
 		showConfirmationModal = false;
@@ -698,19 +780,102 @@
 		confirmationAction = '';
 	};
 
-	const getConfirmationMessage = () => {
-		if (!selectedUser || !confirmationAction) return '';
+	const confirmBulkLockUsers = () => {
+		if (selectedRows.size === 0) return;
 		
-		const userName = selectedUser.name;
+		confirmationAction = 'bulk-lock';
+		showConfirmationModal = true;
+	};
+
+	const confirmBulkDeactivateUsers = () => {
+		if (selectedRows.size === 0) return;
+		
+		confirmationAction = 'bulk-deactivate';
+		showConfirmationModal = true;
+	};
+
+	const bulkLockUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Locked' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been locked successfully!`);
+	};
+
+	const bulkDeactivateUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Deactivated' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been deactivated successfully!`);
+	};
+
+	const confirmBulkUnlockUsers = () => {
+		if (selectedRows.size === 0) return;
+		
+		confirmationAction = 'bulk-unlock';
+		showConfirmationModal = true;
+	};
+
+	const confirmBulkReactivateUsers = () => {
+		if (selectedRows.size === 0) return;
+		
+		confirmationAction = 'bulk-reactivate';
+		showConfirmationModal = true;
+	};
+
+	const bulkUnlockUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been unlocked successfully!`);
+	};
+
+	const bulkReactivateUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been reactivated successfully!`);
+	};
+
+	const getConfirmationMessage = () => {
+		if (!confirmationAction) return '';
+		
 		switch (confirmationAction) {
 			case 'lock':
-				return `Are you sure you want to lock ${userName}? They will not be able to access the system.`;
+				return `Are you sure you want to lock ${selectedUser?.name}? They will not be able to access the system.`;
 			case 'unlock':
-				return `Are you sure you want to unlock ${userName}? They will regain access to the system.`;
+				return `Are you sure you want to unlock ${selectedUser?.name}? They will regain access to the system.`;
 			case 'activate':
-				return `Are you sure you want to activate ${userName}? They will regain access to the system.`;
+				return `Are you sure you want to activate ${selectedUser?.name}? They will regain access to the system.`;
 			case 'deactivate':
-				return `Are you sure you want to deactivate ${userName}? They will lose access to the system.`;
+				return `Are you sure you want to deactivate ${selectedUser?.name}? They will lose access to the system.`;
+			case 'bulk-lock':
+				return `Are you sure you want to lock ${selectedRows.size} selected users? They will not be able to access the system.`;
+			case 'bulk-deactivate':
+				return `Are you sure you want to deactivate ${selectedRows.size} selected users? They will lose access to the system.`;
+			case 'bulk-unlock':
+				return `Are you sure you want to unlock ${selectedRows.size} selected users? They will regain access to the system.`;
+			case 'bulk-reactivate':
+				return `Are you sure you want to reactivate ${selectedRows.size} selected users? They will regain access to the system.`;
 			default:
 				return '';
 		}
@@ -976,20 +1141,42 @@
 								</button>
 							</div>
 							<div class="flex items-center space-x-2">
-								<button
-									class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
-									title="Lock selected users"
-								>
-									<Shield class="w-3.5 h-3.5" />
-									<span>Lock</span>
-								</button>
-								<button
-									class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
-									title="Deactivate selected users"
-								>
-									<X class="w-3.5 h-3.5" />
-									<span>Deactivate</span>
-								</button>
+								{#if currentTab === 'locked'}
+									<button
+										onclick={() => confirmBulkUnlockUsers()}
+										class="flex items-center space-x-1 bg-green-100 text-green-700 hover:bg-green-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Unlock selected users"
+									>
+										<Unlock class="w-3.5 h-3.5" />
+										<span>Unlock</span>
+									</button>
+								{:else if currentTab === 'deactivated'}
+									<button
+										onclick={() => confirmBulkReactivateUsers()}
+										class="flex items-center space-x-1 bg-green-100 text-green-700 hover:bg-green-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Reactivate selected users"
+									>
+										<User class="w-3.5 h-3.5" />
+										<span>Reactivate</span>
+									</button>
+								{:else}
+									<button
+										onclick={() => confirmBulkLockUsers()}
+										class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Lock selected users"
+									>
+										<Shield class="w-3.5 h-3.5" />
+										<span>Lock</span>
+									</button>
+									<button
+										onclick={() => confirmBulkDeactivateUsers()}
+										class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Deactivate selected users"
+									>
+										<X class="w-3.5 h-3.5" />
+										<span>Deactivate</span>
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>
@@ -1456,74 +1643,24 @@
 {/if}
 
 <!-- Confirmation Modal -->
-{#if showConfirmationModal && selectedUser}
-	<div 
-		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		onclick={() => showConfirmationModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showConfirmationModal = false)}
-	>
-		<div 
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" 
-			role="document"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-lg font-semibold text-gray-900">Confirm Action</h2>
-			</div>
-
-			<!-- Content -->
-			<div class="p-6">
-				<div class="flex items-center space-x-3 mb-4">
-					{#if confirmationAction === 'lock'}
-						<div class="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-							<Shield class="w-5 h-5 text-orange-600" />
-						</div>
-					{:else if confirmationAction === 'unlock'}
-						<div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-							<Unlock class="w-5 h-5 text-green-600" />
-						</div>
-					{:else if confirmationAction === 'activate'}
-						<div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-							<User class="w-5 h-5 text-green-600" />
-						</div>
-					{:else if confirmationAction === 'deactivate'}
-						<div class="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-							<X class="w-5 h-5 text-red-600" />
-						</div>
-					{/if}
-					<div>
-						<h3 class="text-lg font-medium text-gray-900 capitalize">{confirmationAction} User</h3>
-						<p class="text-sm text-gray-600">{getConfirmationMessage()}</p>
-					</div>
-				</div>
-			</div>
-
-			<!-- Footer -->
-			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
-				<button
-					onclick={() => showConfirmationModal = false}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Cancel
-				</button>
-				<button
-					onclick={executeConfirmedAction}
-					class="px-6 py-3 bg-gradient-to-r {
-						confirmationAction === 'deactivate' || confirmationAction === 'lock' 
-							? 'from-red-500 to-red-600 hover:shadow-red-500/25' 
-							: 'from-green-500 to-green-600 hover:shadow-green-500/25'
-					} text-white rounded-lg hover:shadow-lg transition-all duration-200 capitalize"
-				>
-					{confirmationAction}
-				</button>
-			</div>
-		</div>
-	</div>
+{#if showConfirmationModal}
+	<ConfirmationModal
+		show={showConfirmationModal}
+		title="Confirm Action"
+		message={getConfirmationMessage()}
+		confirmText={confirmationAction.startsWith('bulk-') ? 
+			confirmationAction.replace('bulk-', '').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()) :
+			confirmationAction.charAt(0).toUpperCase() + confirmationAction.slice(1)}
+		confirmStyle={
+			confirmationAction === 'deactivate' || confirmationAction === 'bulk-deactivate'
+				? 'danger'
+				: confirmationAction === 'lock' || confirmationAction === 'bulk-lock'
+				? 'warning' 
+				: 'primary'
+		}
+		onConfirm={executeConfirmedAction}
+		onCancel={() => { showConfirmationModal = false; selectedUser = null; confirmationAction = ''; }}
+	/>
 {/if}
 
 <!-- Team Modal -->
