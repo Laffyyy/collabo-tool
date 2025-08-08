@@ -5,36 +5,49 @@
 	
 	let otpValues = $state(['', '', '', '', '', '']);
 	let otpTimeLeft = $state(300); // 5 minutes in seconds
+	let otpResendTimeLeft = $state(150); // 2:30 in seconds for resend availability
 	let otpIsExpired = $state(false);
 	let otpIsLoading = $state(false);
 	let otpShowCancelModal = $state(false);
-	let otpFromForgotPassword = $state(false);
+	let otpFromForgotPassword = false;
 	
 	// Timer functionality
 	let otpTimerInterval: ReturnType<typeof setInterval>;
+	let otpResendTimerInterval: ReturnType<typeof setInterval>;
 	
 	onMount(() => {
 		// Check if coming from forgot password
 		const urlParams = new URLSearchParams(window.location.search);
 		otpFromForgotPassword = urlParams.get('from') === 'forgot-password';
 		
-		otpStartTimer();
+		otpStartTimers();
 		
 		// Focus first input
 		document.getElementById('otp-input-0')?.focus();
 		
 		return () => {
 			if (otpTimerInterval) clearInterval(otpTimerInterval);
+			if (otpResendTimerInterval) clearInterval(otpResendTimerInterval);
 		};
 	});
 	
-	const otpStartTimer = () => {
+	const otpStartTimers = () => {
+		// Main OTP expiration timer
 		if (otpTimerInterval) clearInterval(otpTimerInterval);
 		otpTimerInterval = setInterval(() => {
 			otpTimeLeft--;
 			if (otpTimeLeft <= 0) {
 				otpIsExpired = true;
 				clearInterval(otpTimerInterval);
+			}
+		}, 1000);
+		
+		// Resend availability timer
+		if (otpResendTimerInterval) clearInterval(otpResendTimerInterval);
+		otpResendTimerInterval = setInterval(() => {
+			otpResendTimeLeft--;
+			if (otpResendTimeLeft <= 0) {
+				clearInterval(otpResendTimerInterval);
 			}
 		}, 1000);
 	};
@@ -96,20 +109,28 @@
 		}
 	};
 	
-	const otpHandleResend = async () => {
+	const otpHandleResend = () => {
+		// Only allow resend if resend timer has reached zero
+		if (otpResendTimeLeft > 0 || otpIsLoading) {
+			return;
+		}
+		
 		otpIsLoading = true;
 		otpValues = ['', '', '', '', '', ''];
-		otpTimeLeft = 300;
-		otpIsExpired = false;
 		
 		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1000));
-		
-		otpIsLoading = false;
-		otpStartTimer();
-		
-		// Focus first input
-		document.getElementById('otp-input-0')?.focus();
+		setTimeout(() => {
+			otpTimeLeft = 300; // Reset to 5 minutes
+			otpResendTimeLeft = 150; // Reset resend timer to 2:30
+			otpIsExpired = false;
+			otpIsLoading = false;
+			
+			// Restart timers
+			otpStartTimers();
+			
+			// Focus first input
+			document.getElementById('otp-input-0')?.focus();
+		}, 1000);
 	};
 	
 	const otpHandleCancel = () => {
@@ -148,28 +169,48 @@
 				{/each}
 			</div>
 			
-			<div class="otp-timer">
-				{#if otpIsExpired}
-					<span class="otp-timer-expired">Code expired</span>
-				{:else}
-					<span class="otp-timer-text">Time remaining: {otpFormatTime(otpTimeLeft)}</span>
-				{/if}
+			<!-- Two timers on the same row -->
+			<div class="otp-timers-row">
+				<div class="otp-timer-left">
+					{#if otpIsExpired}
+						<span class="otp-timer-expired">Code expired</span>
+					{:else}
+						<span class="otp-timer-text">Expires: {otpFormatTime(otpTimeLeft)}</span>
+					{/if}
+				</div>
+				
+				<div class="otp-timer-right">
+					{#if otpResendTimeLeft > 0}
+						<span class="otp-resend-timer">Resend in: {otpFormatTime(otpResendTimeLeft)}</span>
+					{:else if otpIsLoading}
+						<span class="otp-resend-loading">Sending...</span>
+					{:else}
+						<button 
+							onclick={otpHandleResend}
+							class="otp-resend-link"
+						>
+							Resend OTP
+						</button>
+					{/if}
+				</div>
 			</div>
 			
-			<div class="otp-actions">
-				<button
-					onclick={otpHandleResend}
-					disabled={!otpIsExpired && otpTimeLeft > 240}
-					class="otp-resend-btn"
-				>
-					{otpIsLoading ? 'Sending...' : 'Resend Code'}
-				</button>
-				
+			<!-- Cancel and Verify buttons on the same row -->
+			<div class="otp-actions-row">
 				<button
 					onclick={otpHandleCancel}
 					class="otp-cancel-btn"
+					disabled={otpIsLoading}
 				>
 					Cancel
+				</button>
+				
+				<button
+					onclick={otpHandleSubmit}
+					disabled={otpIsLoading || !otpValues.every(val => val !== '')}
+					class="otp-verify-btn"
+				>
+					{otpIsLoading ? 'Verifying...' : 'Verify'}
 				</button>
 			</div>
 		</div>
@@ -178,13 +219,13 @@
 
 <!-- Cancel Confirmation Modal -->
 {#if otpShowCancelModal}
-	<div class="otp-modal-overlay">
-		<div class="otp-modal">
-			<h3 class="otp-modal-title">Cancel Verification?</h3>
-			<p class="otp-modal-text">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="otp-modal-actions">
-				<button onclick={otpConfirmCancel} class="otp-modal-confirm">Yes, Cancel</button>
-				<button onclick={() => otpShowCancelModal = false} class="otp-modal-dismiss">Continue</button>
+	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Verification?</h3>
+			<p class="text-gray-600 mb-6">Your progress will be lost.</p>
+			<div class="flex flex-row gap-3">
+				<button onclick={otpConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
+				<button onclick={() => otpShowCancelModal = false} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
 			</div>
 		</div>
 	</div>
@@ -193,15 +234,16 @@
 <style>
 	.otp-container {
 		min-height: 100vh;
-		background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);
+		background: linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #f0fdfa 100%);
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		padding: 1rem;
 	}
 	
 	.otp-card {
-		background-color: white;
+		background: white;
 		border-radius: 1.5rem;
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 		padding: 2rem;
@@ -216,14 +258,13 @@
 	
 	.otp-title {
 		font-size: 1.5rem;
-		line-height: 2rem;
-		font-weight: 700;
+		font-weight: bold;
 		color: #1f2937;
 		margin-bottom: 0.5rem;
 	}
 	
 	.otp-subtitle {
-		color: #4b5563;
+		color: #6b7280;
 	}
 	
 	.otp-inputs {
@@ -235,145 +276,143 @@
 	
 	.otp-input {
 		width: 3rem;
-		height: 3rem;
+		height: 4rem;
 		text-align: center;
 		font-size: 1.25rem;
-		line-height: 1.75rem;
-		font-weight: 700;
+		font-weight: bold;
 		border: 2px solid #d1d5db;
 		border-radius: 0.5rem;
-		transition: border-color 0.2s;
+		outline: none;
+		transition: border-color 0.2s ease;
 	}
 	
 	.otp-input:focus {
 		border-color: #01c0a4;
-		outline: none;
 	}
 	
 	.otp-input:disabled {
 		opacity: 0.5;
 	}
 	
-	.otp-timer {
-		text-align: center;
-		margin-bottom: 1.5rem;
+	.otp-timers-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 2rem;
+		text-align: left;
+	}
+	
+	.otp-timer-left {
+		text-align: left;
+		padding-left: 1.25rem;
+	}
+	
+	.otp-timer-right {
+		text-align: right;
+		padding-right: 1.25rem;
 	}
 	
 	.otp-timer-text {
-		color: #4b5563;
+		color: #6b7280;
+		font-size: 0.875rem;
+		font-weight: 500;
 	}
 	
 	.otp-timer-expired {
 		color: #dc2626;
 		font-weight: 500;
+		font-size: 0.875rem;
 	}
 	
-	.otp-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	
-	.otp-resend-btn {
-		background-color: #01c0a4;
-		color: white;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.75rem;
+	.otp-resend-timer {
+		color: #6b7280;
+		font-size: 0.875rem;
 		font-weight: 500;
+		cursor: default;
+	}
+	
+	.otp-resend-loading {
+		color: #6b7280;
+		font-size: 0.875rem;
+		font-style: italic;
+	}
+	
+	.otp-resend-link {
+		background: transparent;
+		color: #01c0a4;
 		border: none;
+		font-size: 0.875rem;
+		font-weight: 500;
 		cursor: pointer;
-		transition: background-color 0.2s;
+		text-decoration: underline;
+		padding: 0;
+		transition: color 0.2s ease;
 	}
 	
-	.otp-resend-btn:hover:not(:disabled) {
-		background-color: #00a085;
+	.otp-resend-link:hover {
+		color: #00a085;
 	}
 	
-	.otp-resend-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
+	.otp-actions-row {
+		display: flex;
+		justify-content: space-between;
+		padding: 0 0;
+		margin: 0;
+		gap: 1rem;
 	}
 	
 	.otp-cancel-btn {
 		border: 1px solid #d1d5db;
 		color: #374151;
-		background-color: white;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.75rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-	
-	.otp-cancel-btn:hover {
-		background-color: #f9fafb;
-	}
-	
-	.otp-modal-overlay {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
+		background: white;
+		width: 100%;
+		padding: 0.75rem 0;
+		margin-left: 1.25rem;
+		text-align: center;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 50;
+		border-radius: 0.75rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background-color 0.2s ease;
+		min-width: 6rem;
+	}
+
+	.otp-cancel-btn:hover:not(:disabled) {
+		background: #f9fafb;
 	}
 	
-	.otp-modal {
-		background-color: white;
-		border-radius: 1rem;
-		padding: 1.5rem;
-		max-width: 24rem;
-		margin: 1rem;
+	.otp-cancel-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 	
-	.otp-modal-title {
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-		font-weight: 700;
-		color: #1f2937;
-		margin-bottom: 0.5rem;
-	}
-	
-	.otp-modal-text {
-		color: #4b5563;
-		margin-bottom: 1.5rem;
-	}
-	
-	.otp-modal-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-	
-	.otp-modal-confirm {
-		background-color: #dc2626;
+	.otp-verify-btn {
+		background: #01c0a4;
 		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
+		width: 100%;
+		padding: 0.75rem 0;
+		margin-right: 1.25rem;
+		text-align: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.75rem;
 		font-weight: 500;
 		border: none;
 		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
+		transition: background-color 0.2s ease;
+		min-width: 6rem;
+		text-align: center;
 	}
 	
-	.otp-modal-confirm:hover {
-		background-color: #b91c1c;
+	.otp-verify-btn:hover:not(:disabled) {
+		background: #00a085;
 	}
 	
-	.otp-modal-dismiss {
-		border: 1px solid #d1d5db;
-		color: #374151;
-		background-color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.otp-modal-dismiss:hover {
-		background-color: #f9fafb;
+	.otp-verify-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

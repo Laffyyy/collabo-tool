@@ -1,0 +1,1045 @@
+<script lang="ts">
+  import { Radio, Search, Eye, Trash2, Clock, Users, BarChart3, Calendar, Send, CheckCircle, Archive, TrendingUp, AlertTriangle, Ban, Flag, Undo2, X } from 'lucide-svelte';
+  import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+
+  interface Broadcast {
+    id: string;
+    title: string;
+    content: string;
+    priority: 'low' | 'medium' | 'high';
+    targetRoles: string[];
+    targetOUs: string[];
+    createdBy: string;
+    createdAt: Date;
+    scheduledFor?: Date;
+    sentAt?: Date;
+    status: 'draft' | 'scheduled' | 'sent' | 'archived' | 'deleted';
+    acknowledgmentRequired: boolean;
+    acknowledgmentCount: number;
+    totalRecipients: number;
+    eventDate?: Date;
+    isReported?: boolean;
+    reportReason?: string;
+    reportedBy?: string;
+    reportedAt?: Date;
+    broadcastStatus?: 'active' | 'done';
+  }
+
+  let activeTab = $state<'sent' | 'scheduled' | 'archived' | 'reported'>('sent');
+  let searchQuery = $state('');
+  let selectedPriority = $state<'all' | 'low' | 'medium' | 'high'>('all');
+  let selectedStatus = $state<'all' | 'draft' | 'scheduled' | 'sent' | 'archived' | 'deleted'>('all');
+  let selectedBroadcast = $state<Broadcast | null>(null);
+  let showBroadcastDetails = $state(false);
+  let showConfirmModal = $state(false);
+  let confirmAction = $state<{
+    title: string;
+    message: string;
+    confirmText: string;
+    style: 'danger' | 'warning' | 'primary';
+    action: () => void;
+  } | null>(null);
+
+  // Mock broadcast data
+  const mockBroadcasts: Broadcast[] = [
+    // Sent broadcasts
+    {
+      id: '1',
+      title: 'Emergency Maintenance Notice',
+      content: 'System maintenance will be performed tonight from 11 PM to 3 AM. Please save your work and log out before 11 PM to avoid data loss.',
+      priority: 'high',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'admin@company.com',
+      createdAt: new Date('2024-01-15T14:30:00'),
+      sentAt: new Date('2024-01-15T14:35:00'),
+      status: 'sent',
+      acknowledgmentRequired: true,
+      acknowledgmentCount: 145,
+      totalRecipients: 200,
+      broadcastStatus: 'done',
+    },
+    {
+      id: '7',
+      title: 'Security Policy Update',
+      content: 'New security protocols are now in effect. All employees must use two-factor authentication for system access.',
+      priority: 'high',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'security@company.com',
+      createdAt: new Date('2024-01-14T09:00:00'),
+      sentAt: new Date('2024-01-14T09:15:00'),
+      status: 'sent',
+      acknowledgmentRequired: true,
+      acknowledgmentCount: 180,
+      totalRecipients: 200,
+      broadcastStatus: 'active',
+    },
+    {
+      id: '8',
+      title: 'Team Lunch Announcement',
+      content: 'Join us for the monthly team lunch this Friday at 12:30 PM in the cafeteria. RSVP by Thursday.',
+      priority: 'low',
+      targetRoles: ['all'],
+      targetOUs: ['Engineering', 'Sales'],
+      createdBy: 'hr@company.com',
+      createdAt: new Date('2024-01-13T11:00:00'),
+      sentAt: new Date('2024-01-13T11:05:00'),
+      status: 'sent',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 75,
+      totalRecipients: 120,
+      broadcastStatus: 'done',
+    },
+    // Scheduled broadcasts
+    {
+      id: '2',
+      title: 'Q1 Team Meeting',
+      content: 'All hands meeting scheduled for next Friday at 2 PM in the main conference room. We will discuss quarterly goals and project updates.',
+      priority: 'medium',
+      targetRoles: ['manager', 'supervisor'],
+      targetOUs: ['Engineering', 'Sales'],
+      createdBy: 'manager@company.com',
+      createdAt: new Date('2024-01-15T10:00:00'),
+      scheduledFor: new Date('2024-01-20T14:00:00'),
+      status: 'scheduled',
+      acknowledgmentRequired: true,
+      acknowledgmentCount: 0,
+      totalRecipients: 45,
+      eventDate: new Date('2024-01-26T14:00:00'),
+      broadcastStatus: 'active',
+    },
+    {
+      id: '9',
+      title: 'Performance Review Reminder',
+      content: 'Annual performance reviews are scheduled to begin next month. Please prepare your self-assessments and goal documentation.',
+      priority: 'medium',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'hr@company.com',
+      createdAt: new Date('2024-01-15T15:00:00'),
+      scheduledFor: new Date('2024-01-22T09:00:00'),
+      status: 'scheduled',
+      acknowledgmentRequired: true,
+      acknowledgmentCount: 0,
+      totalRecipients: 200,
+      broadcastStatus: 'active',
+    },
+    {
+      id: '10',
+      title: 'Holiday Schedule Update',
+      content: 'Updated holiday schedule for 2024 has been published. Please review the calendar and plan your time off accordingly.',
+      priority: 'low',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'hr@company.com',
+      createdAt: new Date('2024-01-16T10:00:00'),
+      scheduledFor: new Date('2024-01-25T08:00:00'),
+      status: 'scheduled',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 0,
+      totalRecipients: 200,
+      broadcastStatus: 'active',
+    },
+    // Archived broadcasts
+    {
+      id: '5',
+      title: 'Old Company Announcement',
+      content: 'This is an old announcement that has been archived. Previous quarter results and achievements were discussed.',
+      priority: 'low',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'admin@company.com',
+      createdAt: new Date('2023-12-01T12:00:00'),
+      sentAt: new Date('2023-12-01T12:05:00'),
+      status: 'archived',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 180,
+      totalRecipients: 200,
+      broadcastStatus: 'done',
+    },
+    {
+      id: '11',
+      title: 'Completed Project Milestone',
+      content: 'Phase 1 of the digital transformation project has been successfully completed. Thank you to all team members for their hard work.',
+      priority: 'medium',
+      targetRoles: ['all'],
+      targetOUs: ['Engineering', 'Product'],
+      createdBy: 'project@company.com',
+      createdAt: new Date('2023-11-15T14:00:00'),
+      sentAt: new Date('2023-11-15T14:05:00'),
+      status: 'archived',
+      acknowledgmentRequired: true,
+      acknowledgmentCount: 95,
+      totalRecipients: 100,
+      broadcastStatus: 'done',
+    },
+    {
+      id: '12',
+      title: 'Office Relocation Notice',
+      content: 'The Marketing department has successfully relocated to the new building. All meetings will now be held in the new conference rooms.',
+      priority: 'medium',
+      targetRoles: ['all'],
+      targetOUs: ['Marketing', 'Sales'],
+      createdBy: 'facilities@company.com',
+      createdAt: new Date('2023-10-20T09:00:00'),
+      sentAt: new Date('2023-10-20T09:15:00'),
+      status: 'archived',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 67,
+      totalRecipients: 80,
+      broadcastStatus: 'done',
+    },
+    // Reported broadcasts
+    {
+      id: '4',
+      title: 'Inappropriate Content Broadcast',
+      content: 'This broadcast contains inappropriate content that violates company policy and professional communication standards.',
+      priority: 'medium',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'user@company.com',
+      createdAt: new Date('2024-01-10T16:00:00'),
+      sentAt: new Date('2024-01-10T16:05:00'),
+      status: 'sent',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 15,
+      totalRecipients: 200,
+      isReported: true,
+      reportReason: 'Contains inappropriate language and violates company communication policy. The message includes unprofessional content that is not suitable for workplace communication.',
+      reportedBy: 'supervisor@company.com',
+      reportedAt: new Date('2024-01-10T17:00:00'),
+      broadcastStatus: 'active',
+    },
+    {
+      id: '13',
+      title: 'Misleading Information Alert',
+      content: 'False information about company layoffs was shared in this broadcast, causing unnecessary panic among employees.',
+      priority: 'high',
+      targetRoles: ['all'],
+      targetOUs: ['all'],
+      createdBy: 'unknown@company.com',
+      createdAt: new Date('2024-01-12T13:00:00'),
+      sentAt: new Date('2024-01-12T13:05:00'),
+      status: 'sent',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 50,
+      totalRecipients: 200,
+      isReported: true,
+      reportReason: 'Spreading false information about company layoffs, causing employee distress and misinformation. Content is factually incorrect and damaging to company morale.',
+      reportedBy: 'hr@company.com',
+      reportedAt: new Date('2024-01-12T14:30:00'),
+      broadcastStatus: 'active',
+    },
+    {
+      id: '14',
+      title: 'Spam Content Broadcast',
+      content: 'This message contains repeated promotional content that is not relevant to company operations and clutters employee communications.',
+      priority: 'low',
+      targetRoles: ['frontline', 'support'],
+      targetOUs: ['Support', 'Operations'],
+      createdBy: 'external@company.com',
+      createdAt: new Date('2024-01-11T10:30:00'),
+      sentAt: new Date('2024-01-11T10:35:00'),
+      status: 'sent',
+      acknowledgmentRequired: false,
+      acknowledgmentCount: 5,
+      totalRecipients: 75,
+      isReported: true,
+      reportReason: 'Spam content that is irrelevant to company operations. The message appears to be promotional material that does not belong in our internal communication system.',
+      reportedBy: 'admin@company.com',
+      reportedAt: new Date('2024-01-11T12:00:00'),
+      broadcastStatus: 'active',
+    }
+  ];
+
+  // Computed values
+  const filteredBroadcasts = $derived(() => {
+    return mockBroadcasts.filter(broadcast => {
+      const matchesTab = broadcast.status === activeTab || 
+        (activeTab === 'sent' && broadcast.status === 'sent' && !broadcast.isReported) ||
+        (activeTab === 'scheduled' && broadcast.status === 'scheduled') ||
+        (activeTab === 'archived' && broadcast.status === 'archived') ||
+        (activeTab === 'reported' && broadcast.isReported === true);
+      
+      const matchesSearch = searchQuery === '' || 
+        broadcast.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        broadcast.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        broadcast.createdBy.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesPriority = selectedPriority === 'all' || broadcast.priority === selectedPriority;
+      const matchesStatus = selectedStatus === 'all' || broadcast.status === selectedStatus;
+      
+      return matchesTab && matchesSearch && matchesPriority && matchesStatus;
+    });
+  });
+
+  const tabCounts = $derived(() => {
+    const allFilteredBroadcasts = mockBroadcasts.filter(broadcast => {
+      const matchesSearch = searchQuery === '' || 
+        broadcast.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        broadcast.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        broadcast.createdBy.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesPriority = selectedPriority === 'all' || broadcast.priority === selectedPriority;
+      const matchesStatus = selectedStatus === 'all' || broadcast.status === selectedStatus;
+      
+      return matchesSearch && matchesPriority && matchesStatus;
+    });
+
+    return {
+      sent: allFilteredBroadcasts.filter(b => b.status === 'sent' && !b.isReported).length,
+      scheduled: allFilteredBroadcasts.filter(b => b.status === 'scheduled').length,
+      archived: allFilteredBroadcasts.filter(b => b.status === 'archived').length,
+      reported: allFilteredBroadcasts.filter(b => b.isReported === true).length
+    };
+  });
+
+  const formatTimestamp = (date: Date) => {
+    return date.toLocaleString();
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString();
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'sent': return 'bg-green-100 text-green-800';
+      case 'scheduled': return 'bg-blue-100 text-blue-800';
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'archived': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getBroadcastStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'done': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getAnsweredCount = (broadcast: Broadcast) => {
+    if (!broadcast.acknowledgmentRequired) return 'N/A';
+    return `${broadcast.acknowledgmentCount}/${broadcast.totalRecipients}`;
+  };
+
+  const getAcknowledgmentRate = (broadcast: Broadcast) => {
+    if (!broadcast.acknowledgmentRequired || broadcast.totalRecipients === 0) return 'N/A';
+    return `${Math.round((broadcast.acknowledgmentCount / broadcast.totalRecipients) * 100)}%`;
+  };
+
+  const viewBroadcast = (broadcast: Broadcast) => {
+    selectedBroadcast = broadcast;
+    showBroadcastDetails = true;
+  };
+
+  const closeBroadcastDetails = () => {
+    selectedBroadcast = null;
+    showBroadcastDetails = false;
+  };
+
+  const confirmArchiveBroadcast = (broadcast: Broadcast) => {
+    confirmAction = {
+      title: 'Archive Broadcast',
+      message: `Are you sure you want to archive "${broadcast.title}"? This will move it to the archived broadcasts list.`,
+      confirmText: 'Archive',
+      style: 'warning',
+      action: () => archiveBroadcast(broadcast)
+    };
+    showConfirmModal = true;
+  };
+
+  const archiveBroadcast = (broadcast: Broadcast) => {
+    // In a real app, this would make an API call
+    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    if (index !== -1) {
+      mockBroadcasts[index].status = 'archived';
+    }
+    showConfirmModal = false;
+    alert('Broadcast archived successfully');
+  };
+
+  const confirmDeleteBroadcast = (broadcast: Broadcast) => {
+    confirmAction = {
+      title: 'Delete Broadcast',
+      message: `Are you sure you want to delete "${broadcast.title}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      style: 'danger',
+      action: () => deleteBroadcast(broadcast)
+    };
+    showConfirmModal = true;
+  };
+
+  const deleteBroadcast = (broadcast: Broadcast) => {
+    // In a real app, this would make an API call
+    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    if (index !== -1) {
+      mockBroadcasts.splice(index, 1);
+    }
+    showConfirmModal = false;
+    alert('Broadcast deleted successfully');
+  };
+
+  const confirmRestoreBroadcast = (broadcast: Broadcast) => {
+    confirmAction = {
+      title: 'Restore Broadcast',
+      message: `Are you sure you want to restore "${broadcast.title}"? This will move it back to active broadcasts.`,
+      confirmText: 'Restore',
+      style: 'primary',
+      action: () => restoreBroadcast(broadcast)
+    };
+    showConfirmModal = true;
+  };
+
+  const restoreBroadcast = (broadcast: Broadcast) => {
+    // In a real app, this would make an API call
+    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    if (index !== -1) {
+      if (broadcast.isReported) {
+        mockBroadcasts[index].isReported = false;
+        mockBroadcasts[index].reportReason = undefined;
+        mockBroadcasts[index].reportedBy = undefined;
+        mockBroadcasts[index].reportedAt = undefined;
+      } else {
+        mockBroadcasts[index].status = 'sent';
+      }
+    }
+    showConfirmModal = false;
+    alert('Broadcast restored successfully');
+  };
+
+  const confirmPermanentlyDeleteBroadcast = (broadcast: Broadcast) => {
+    confirmAction = {
+      title: 'Permanently Delete Broadcast',
+      message: `Are you sure you want to permanently delete "${broadcast.title}"? This action cannot be undone and the broadcast will be completely removed.`,
+      confirmText: 'Permanently Delete',
+      style: 'danger',
+      action: () => permanentlyDeleteBroadcast(broadcast)
+    };
+    showConfirmModal = true;
+  };
+
+  const permanentlyDeleteBroadcast = (broadcast: Broadcast) => {
+    // In a real app, this would make an API call
+    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    if (index !== -1) {
+      mockBroadcasts.splice(index, 1);
+    }
+    showConfirmModal = false;
+    alert('Broadcast permanently deleted');
+  };
+
+  const dismissReport = (broadcast: Broadcast) => {
+    // This is handled by confirmRestoreBroadcast
+    confirmRestoreBroadcast(broadcast);
+  };
+
+  const takeActionOnReport = (broadcast: Broadcast) => {
+    // This is handled by confirmDeleteBroadcast
+    confirmDeleteBroadcast(broadcast);
+  };
+
+  const exportAnalytics = () => {
+    alert('Exporting analytics data...');
+  };
+</script>
+
+<svelte:head>
+  <title>Broadcast Management - Admin Controls</title>
+</svelte:head>
+
+<div class="p-6 bg-gray-50 min-h-screen space-y-6">
+      <!-- Header -->
+      <div class="flex items-center justify-between fade-in">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-800 mb-2">Broadcast Management</h1>
+          <p class="text-gray-600">Monitor and manage broadcast messages and announcements</p>
+        </div>
+      </div>
+
+      <!-- Main Panel -->
+      <div class="collaboration-card fade-in">
+        <!-- Search and Filters -->
+        <div class="p-6 border-b border-gray-200">
+          <div class="flex flex-col lg:flex-row gap-4">
+            <!-- Search -->
+            <div class="flex-1">
+              <div class="relative">
+                <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  bind:value={searchQuery}
+                  type="text"
+                  placeholder="Search broadcasts by title, content, or creator..."
+                  class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+
+            <!-- Priority Filter -->
+            <div class="w-full lg:w-48">
+              <select
+                bind:value={selectedPriority}
+                class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+              >
+                <option value="all">All Priorities</option>
+                <option value="high">High Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="low">Low Priority</option>
+              </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="w-full lg:w-48">
+              <select
+                bind:value={selectedStatus}
+                class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+              >
+                <option value="all">All Statuses</option>
+                <option value="sent">Sent</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="border-b border-gray-200">
+          <nav class="flex space-x-6 px-6">
+            <button
+              onclick={() => activeTab = 'sent'}
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'sent' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+            >
+              <div class="flex items-center space-x-2">
+                <Send class="w-4 h-4" />
+                <span>Sent</span>
+                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().sent}</span>
+              </div>
+            </button>
+
+            <button
+              onclick={() => activeTab = 'scheduled'}
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'scheduled' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+            >
+              <div class="flex items-center space-x-2">
+                <Clock class="w-4 h-4" />
+                <span>Scheduled</span>
+                <span class="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().scheduled}</span>
+              </div>
+            </button>
+
+            <button
+              onclick={() => activeTab = 'archived'}
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'archived' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+            >
+              <div class="flex items-center space-x-2">
+                <Archive class="w-4 h-4" />
+                <span>Archived</span>
+                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().archived}</span>
+              </div>
+            </button>
+
+            <button
+              onclick={() => activeTab = 'reported'}
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+            >
+              <div class="flex items-center space-x-2">
+                <Flag class="w-4 h-4" />
+                <span>Reported</span>
+                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().reported}</span>
+              </div>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Content -->
+        {#if activeTab === 'sent'}
+          <!-- Sent Tab -->
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
+                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {broadcast.createdBy}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
+                        {broadcast.priority}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'active')}">
+                        {broadcast.broadcastStatus || 'Active'}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {broadcast.totalRecipients}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getAnsweredCount(broadcast)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div class="flex items-center space-x-2">
+                        <button
+                          onclick={() => viewBroadcast(broadcast)}
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                        >
+                          <Eye class="w-4 h-4" />
+                          <span>View</span>
+                        </button>
+                        <button
+                          onclick={() => confirmArchiveBroadcast(broadcast)}
+                          class="text-orange-600 hover:text-orange-500 flex items-center space-x-1"
+                        >
+                          <Archive class="w-4 h-4" />
+                          <span>Archive</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else if activeTab === 'scheduled'}
+          <!-- Scheduled Tab -->
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
+                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {broadcast.createdBy}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
+                        {broadcast.priority}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'active')}">
+                        {broadcast.broadcastStatus || 'Active'}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {broadcast.totalRecipients}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getAnsweredCount(broadcast)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {broadcast.scheduledFor ? formatTimestamp(broadcast.scheduledFor) : formatTimestamp(broadcast.createdAt)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div class="flex items-center space-x-2">
+                        <button
+                          onclick={() => viewBroadcast(broadcast)}
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                        >
+                          <Eye class="w-4 h-4" />
+                          <span>View</span>
+                        </button>
+                        <button
+                          onclick={() => confirmArchiveBroadcast(broadcast)}
+                          class="text-orange-600 hover:text-orange-500 flex items-center space-x-1"
+                        >
+                          <Archive class="w-4 h-4" />
+                          <span>Archive</span>
+                        </button>
+                        <button
+                          onclick={() => confirmDeleteBroadcast(broadcast)}
+                          class="text-red-600 hover:text-red-500 flex items-center space-x-1"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else if activeTab === 'archived'}
+          <!-- Archived Tab -->
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                  <tr class="hover:bg-gray-50 bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div class="text-sm font-medium text-gray-700">{broadcast.title}</div>
+                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      {broadcast.createdBy}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
+                        {broadcast.priority}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'done')}">
+                        {broadcast.broadcastStatus || 'Done'}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      {broadcast.totalRecipients}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      {getAnsweredCount(broadcast)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div class="flex items-center space-x-2">
+                        <button
+                          onclick={() => viewBroadcast(broadcast)}
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                        >
+                          <Eye class="w-4 h-4" />
+                          <span>View</span>
+                        </button>
+                        <button
+                          onclick={() => confirmRestoreBroadcast(broadcast)}
+                          class="text-blue-600 hover:text-blue-500 flex items-center space-x-1"
+                        >
+                          <Undo2 class="w-4 h-4" />
+                          <span>Restore</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else if activeTab === 'reported'}
+          <!-- Reported Tab -->
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report Reason</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                  <tr class="hover:bg-gray-50 bg-red-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
+                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {broadcast.createdBy}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
+                        {broadcast.priority}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'active')}">
+                        {broadcast.broadcastStatus || 'Active'}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {broadcast.totalRecipients}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getAnsweredCount(broadcast)}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                      <div class="flex items-center">
+                        <Flag class="w-4 h-4 text-red-500 mr-2" />
+                        {broadcast.reportReason || 'No reason provided'}
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div class="flex items-center space-x-2">
+                        <button
+                          onclick={() => viewBroadcast(broadcast)}
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                        >
+                          <Eye class="w-4 h-4" />
+                          <span>View</span>
+                        </button>
+                        <button
+                          onclick={() => confirmRestoreBroadcast(broadcast)}
+                          class="text-blue-600 hover:text-blue-500 flex items-center space-x-1"
+                        >
+                          <Undo2 class="w-4 h-4" />
+                          <span>Restore</span>
+                        </button>
+                        <button
+                          onclick={() => confirmDeleteBroadcast(broadcast)}
+                          class="text-red-600 hover:text-red-500 flex items-center space-x-1"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+
+        <!-- Empty State -->
+        {#if filteredBroadcasts().length === 0}
+          <div class="text-center py-12">
+            <Radio class="mx-auto h-12 w-12 text-gray-400" />
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No broadcasts found</h3>
+            <p class="mt-1 text-sm text-gray-500">Try adjusting your search criteria or filters.</p>
+          </div>
+        {/if}
+      </div>
+</div>
+
+<!-- Broadcast Details Modal -->
+{#if showBroadcastDetails && selectedBroadcast}
+  <div 
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+    onclick={closeBroadcastDetails}
+  >
+    <div 
+      class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between p-6 border-b border-gray-200">
+        <div class="flex items-center space-x-3">
+          <Radio class="w-5 h-5 text-[#01c0a4]" />
+          <h2 class="text-lg font-semibold text-gray-900">Broadcast Details</h2>
+        </div>
+        <button
+          onclick={closeBroadcastDetails}
+          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <!-- Modal Content -->
+      <div class="p-6 space-y-6">
+        <!-- Title and Basic Info -->
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <div class="text-lg font-semibold text-gray-900">{selectedBroadcast.title}</div>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Content</label>
+            <div class="bg-gray-50 rounded-lg p-4 text-gray-900 leading-relaxed">
+              {selectedBroadcast.content}
+            </div>
+          </div>
+        </div>
+
+        <!-- Broadcast Info Grid -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Created By</label>
+            <div class="text-gray-900">{selectedBroadcast.createdBy}</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(selectedBroadcast.priority)}">
+              {selectedBroadcast.priority}
+            </span>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(selectedBroadcast.broadcastStatus || 'active')}">
+              {selectedBroadcast.broadcastStatus || 'Active'}
+            </span>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Recipients</label>
+            <div class="text-gray-900">{selectedBroadcast.totalRecipients}</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Acknowledgment Required</label>
+            <div class="text-gray-900">{selectedBroadcast.acknowledgmentRequired ? 'Yes' : 'No'}</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Responses</label>
+            <div class="text-gray-900">{getAnsweredCount(selectedBroadcast)}</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Created Date</label>
+            <div class="text-gray-900">{formatTimestamp(selectedBroadcast.createdAt)}</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              {selectedBroadcast.status === 'sent' ? 'Sent Date' : 
+               selectedBroadcast.status === 'scheduled' ? 'Scheduled Date' : 'Status Date'}
+            </label>
+            <div class="text-gray-900">
+              {selectedBroadcast.sentAt ? formatTimestamp(selectedBroadcast.sentAt) :
+               selectedBroadcast.scheduledFor ? formatTimestamp(selectedBroadcast.scheduledFor) :
+               formatTimestamp(selectedBroadcast.createdAt)}
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Information -->
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Target Roles</label>
+            <div class="flex flex-wrap gap-2">
+              {#each selectedBroadcast.targetRoles as role}
+                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                  {role}
+                </span>
+              {/each}
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Target Organization Units</label>
+            <div class="flex flex-wrap gap-2">
+              {#each selectedBroadcast.targetOUs as ou}
+                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                  {ou}
+                </span>
+              {/each}
+            </div>
+          </div>
+        </div>
+
+        <!-- Report Information (for reported broadcasts) -->
+        {#if selectedBroadcast.isReported && activeTab === 'reported'}
+          <div class="space-y-4 border-t pt-6">
+            <h3 class="text-lg font-semibold text-red-600 flex items-center">
+              <Flag class="w-5 h-5 mr-2" />
+              Report Information
+            </h3>
+            
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div class="grid grid-cols-1 gap-3">
+                <div>
+                  <label class="block text-sm font-medium text-red-700 mb-1">Reported By</label>
+                  <div class="text-red-900">{selectedBroadcast.reportedBy}</div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-red-700 mb-1">Report Date</label>
+                  <div class="text-red-900">{selectedBroadcast.reportedAt ? formatTimestamp(selectedBroadcast.reportedAt) : 'N/A'}</div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-red-700 mb-1">Report Reason</label>
+                  <div class="text-red-900 bg-red-100 rounded-lg p-3 leading-relaxed">
+                    {selectedBroadcast.reportReason || 'No reason provided'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Confirmation Modal -->
+{#if confirmAction}
+  <ConfirmationModal
+    show={showConfirmModal}
+    title={confirmAction.title}
+    message={confirmAction.message}
+    confirmText={confirmAction.confirmText}
+    confirmStyle={confirmAction.style}
+    onConfirm={() => {
+      confirmAction?.action();
+      showConfirmModal = false;
+    }}
+    onCancel={() => {
+      showConfirmModal = false;
+      confirmAction = null;
+    }}
+  />
+{/if}

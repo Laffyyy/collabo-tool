@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	
 	let securityQuestionText = $state("What was the name of your first pet?"); // This would come from API
 	let securityQuestionAnswer = $state('');
@@ -8,6 +9,46 @@
 	let securityQuestionShowCancelModal = $state(false);
 	let securityQuestionAttempts = $state(0);
 	let securityQuestionMaxAttempts = $state(3);
+	let securityQuestionInput: HTMLInputElement | undefined;
+	
+	onMount(() => {
+		// Auto-focus the answer input
+		if (securityQuestionInput) {
+			securityQuestionInput.focus();
+		}
+	});
+	
+	const securityQuestionValidateInput = (value: string): string => {
+		// Only allow alphanumeric characters, specified symbols (! @ _ - .), and spaces
+		let filteredValue = value.replace(/[^a-zA-Z0-9!@_.\- ]/g, '');
+		
+		// Replace multiple consecutive spaces with single space
+		filteredValue = filteredValue.replace(/\s+/g, ' ');
+		
+		// Strictly limit to 30 characters max
+		return filteredValue.slice(0, 30);
+	};
+	
+	const securityQuestionHandleInput = (event: Event) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = securityQuestionValidateInput(target.value);
+		securityQuestionAnswer = filteredValue;
+		
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+	};
+	
+	const securityQuestionHandlePaste = (event: ClipboardEvent) => {
+		event.preventDefault();
+		const pastedText = event.clipboardData?.getData('text') || '';
+		const target = event.target as HTMLInputElement;
+		const filteredText = securityQuestionValidateInput(pastedText);
+		
+		securityQuestionAnswer = filteredText;
+		target.value = filteredText;
+	};
 	
 	const securityQuestionHandleSubmit = async () => {
 		if (!securityQuestionAnswer.trim()) {
@@ -25,7 +66,7 @@
 		const isCorrect = Math.random() > 0.3; // 70% success rate for demo
 		
 		if (isCorrect) {
-			goto('/change-password');
+			goto('/change-password?from=forgot-password');
 		} else {
 			securityQuestionAttempts++;
 			if (securityQuestionAttempts >= securityQuestionMaxAttempts) {
@@ -66,7 +107,7 @@
 	<div class="securityquestion-card">
 		<div class="securityquestion-header">
 			<h1 class="securityquestion-title">Security Question</h1>
-			<p class="securityquestion-subtitle">Answer your security question to continue</p>
+			<p class="securityquestion-subtitle">Verify your identity to proceed with password recovery</p>
 		</div>
 		
 		<div class="securityquestion-form">
@@ -86,11 +127,15 @@
 			<div class="securityquestion-field">
 				<label class="securityquestion-label" for="securityQuestionInput">Your Answer</label>
 				<input
+					bind:this={securityQuestionInput}
 					type="text"
 					bind:value={securityQuestionAnswer}
+					oninput={securityQuestionHandleInput}
+					onpaste={securityQuestionHandlePaste}
 					class="securityquestion-input"
 					id="securityQuestionInput"
 					placeholder="Enter your answer"
+					maxlength="30"
 					disabled={securityQuestionIsLoading || securityQuestionAttempts >= securityQuestionMaxAttempts}
 				/>
 			</div>
@@ -101,19 +146,19 @@
 			
 			<div class="securityquestion-actions">
 				<button
-					onclick={securityQuestionHandleSubmit}
-					disabled={securityQuestionIsLoading || !securityQuestionAnswer.trim() || securityQuestionAttempts >= securityQuestionMaxAttempts}
-					class="securityquestion-submit-btn"
-				>
-					{securityQuestionIsLoading ? 'Verifying...' : 'Submit Answer'}
-				</button>
-				
-				<button
 					onclick={securityQuestionHandleCancel}
 					class="securityquestion-cancel-btn"
 					disabled={securityQuestionIsLoading}
 				>
 					Cancel
+				</button>
+				
+				<button
+					onclick={securityQuestionHandleSubmit}
+					disabled={securityQuestionIsLoading || !securityQuestionAnswer.trim() || securityQuestionAttempts >= securityQuestionMaxAttempts}
+					class="securityquestion-submit-btn"
+				>
+					{securityQuestionIsLoading ? 'Verifying...' : 'Submit Answer'}
 				</button>
 			</div>
 		</div>
@@ -122,13 +167,13 @@
 
 <!-- Cancel Confirmation Modal -->
 {#if securityQuestionShowCancelModal}
-	<div class="securityquestion-modal-overlay">
-		<div class="securityquestion-modal">
-			<h3 class="securityquestion-modal-title">Cancel Process?</h3>
-			<p class="securityquestion-modal-text">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="securityquestion-modal-actions">
-				<button onclick={securityQuestionConfirmCancel} class="securityquestion-modal-confirm">Yes, Cancel</button>
-				<button onclick={() => securityQuestionShowCancelModal = false} class="securityquestion-modal-dismiss">Continue</button>
+	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Process?</h3>
+			<p class="text-gray-600 mb-6">Your progress will be lost.</p>
+			<div class="flex flex-row gap-3">
+				<button onclick={securityQuestionConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
+				<button onclick={() => securityQuestionShowCancelModal = false} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
 			</div>
 		</div>
 	</div>
@@ -233,7 +278,7 @@
 	
 	.securityquestion-actions {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		gap: 0.75rem;
 	}
 	
@@ -246,6 +291,7 @@
 		border: none;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		flex: 1;
 	}
 	
 	.securityquestion-submit-btn:hover:not(:disabled) {
@@ -266,6 +312,7 @@
 		font-weight: 500;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		flex: 1;
 	}
 	
 	.securityquestion-cancel-btn:hover:not(:disabled) {
@@ -274,73 +321,5 @@
 	
 	.securityquestion-cancel-btn:disabled {
 		opacity: 0.5;
-	}
-	
-	.securityquestion-modal-overlay {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 50;
-	}
-	
-	.securityquestion-modal {
-		background-color: white;
-		border-radius: 1rem;
-		padding: 1.5rem;
-		max-width: 24rem;
-		margin: 1rem;
-	}
-	
-	.securityquestion-modal-title {
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-		font-weight: 700;
-		color: #1f2937;
-		margin-bottom: 0.5rem;
-	}
-	
-	.securityquestion-modal-text {
-		color: #4b5563;
-		margin-bottom: 1.5rem;
-	}
-	
-	.securityquestion-modal-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-	
-	.securityquestion-modal-confirm {
-		background-color: #dc2626;
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.securityquestion-modal-confirm:hover {
-		background-color: #b91c1c;
-	}
-	
-	.securityquestion-modal-dismiss {
-		border: 1px solid #d1d5db;
-		color: #374151;
-		background-color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.securityquestion-modal-dismiss:hover {
-		background-color: #f9fafb;
 	}
 </style>

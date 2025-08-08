@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { Eye, EyeOff } from 'lucide-svelte';
 	
 	let changePasswordNew = $state('');
 	let changePasswordConfirm = $state('');
@@ -8,6 +10,63 @@
 	let changePasswordsMatch = $state(false);
 	let changePasswordIsLoading = $state(false);
 	let changePasswordShowCancelModal = $state(false);
+	let changePasswordFromForgotPassword = $state(false);
+	let changePasswordShowNew = $state(false);
+	let changePasswordShowConfirm = $state(false);
+	let changePasswordNewInput: HTMLInputElement;
+	
+	onMount(() => {
+		// Check if coming from forgot password flow
+		const urlParams = new URLSearchParams(window.location.search);
+		changePasswordFromForgotPassword = urlParams.get('from') === 'forgot-password';
+		
+		// Auto-focus the first input
+		if (changePasswordNewInput) {
+			changePasswordNewInput.focus();
+		}
+	});
+	
+	const changePasswordValidateInput = (value: string): string => {
+		// Only allow alphanumeric characters and specified symbols: ! @ - _ .
+		const filteredValue = value.replace(/[^a-zA-Z0-9!@_.-]/g, '');
+		// Strictly limit to 20 characters max
+		return filteredValue.slice(0, 20);
+	};
+	
+	const changePasswordHandleNewInput = (event: Event) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = changePasswordValidateInput(target.value);
+		changePasswordNew = filteredValue;
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+	};
+	
+	const changePasswordHandleConfirmInput = (event: Event) => {
+		const target = event.target as HTMLInputElement;
+		const filteredValue = changePasswordValidateInput(target.value);
+		changePasswordConfirm = filteredValue;
+		// Update the input value if it was filtered
+		if (target.value !== filteredValue) {
+			target.value = filteredValue;
+		}
+	};
+	
+	const changePasswordHandlePaste = (event: ClipboardEvent) => {
+		event.preventDefault();
+		const pastedText = event.clipboardData?.getData('text') || '';
+		const target = event.target as HTMLInputElement;
+		const filteredText = changePasswordValidateInput(pastedText);
+		
+		if (target.id === 'new-password') {
+			changePasswordNew = filteredText;
+			target.value = filteredText;
+		} else if (target.id === 'confirm-password') {
+			changePasswordConfirm = filteredText;
+			target.value = filteredText;
+		}
+	};
 	
 	const changePasswordValidatePassword = () => {
 		const errors: string[] = [];
@@ -21,9 +80,25 @@
 				errors.push("Password must not exceed 20 characters");
 			}
 			
-			const allowedPattern = /^[a-zA-Z0-9!@\-_&]*$/;
+			if (!/[A-Z]/.test(changePasswordNew)) {
+				errors.push("Password must contain at least 1 uppercase letter");
+			}
+			
+			if (!/[a-z]/.test(changePasswordNew)) {
+				errors.push("Password must contain at least 1 lowercase letter");
+			}
+			
+			if (!/[0-9]/.test(changePasswordNew)) {
+				errors.push("Password must contain at least 1 number");
+			}
+			
+			if (!/[!@_.-]/.test(changePasswordNew)) {
+				errors.push("Password must contain at least 1 symbol (!, @, -, _, .)");
+			}
+			
+			const allowedPattern = /^[a-zA-Z0-9!@_.-]*$/;
 			if (!allowedPattern.test(changePasswordNew)) {
-				errors.push("Password can only contain letters, numbers, and these symbols: ! @ - _ &");
+				errors.push("Password can only contain letters, numbers, and these symbols: ! @ - _ .");
 			}
 		}
 		
@@ -50,8 +125,12 @@
 			// Simulate API call
 			await new Promise(resolve => setTimeout(resolve, 2000));
 			
-			// Redirect to dashboard after successful password change
-			goto('/dashboard');
+			// Navigate based on source
+			if (changePasswordFromForgotPassword) {
+				goto('/login');
+			} else {
+				goto('/chat');
+			}
 		}
 	};
 	
@@ -83,73 +162,126 @@
 	<div class="changepassword-card">
 		<div class="changepassword-header">
 			<h1 class="changepassword-title">Change Password</h1>
-			<p class="changepassword-subtitle">Create a new secure password</p>
+			<p class="changepassword-subtitle">Update your account password for enhanced security</p>
 		</div>
 		
 		<div class="changepassword-form">
 			<div class="changepassword-field">
 				<label class="changepassword-label" for="new-password">New Password</label>
-				<input
-					type="password"
-					bind:value={changePasswordNew}
-					class="changepassword-input"
-					id="new-password"
-					placeholder="Enter new password"
-					disabled={changePasswordIsLoading}
-				/>
+				<div class="changepassword-input-container">
+					<input
+						bind:this={changePasswordNewInput}
+						type={changePasswordShowNew ? 'text' : 'password'}
+						bind:value={changePasswordNew}
+						oninput={changePasswordHandleNewInput}
+						onpaste={changePasswordHandlePaste}
+						class="changepassword-input"
+						id="new-password"
+						placeholder="Create a strong password"
+						maxlength="20"
+						disabled={changePasswordIsLoading}
+					/>
+					<button
+						type="button"
+						onclick={() => changePasswordShowNew = !changePasswordShowNew}
+						class="changepassword-toggle-btn"
+						disabled={changePasswordIsLoading}
+					>
+						{#if changePasswordShowNew}
+							<EyeOff size={20} />
+						{:else}
+							<Eye size={20} />
+						{/if}
+					</button>
+				</div>
 			</div>
 			
 			<div class="changepassword-field">
 				<label class="changepassword-label" for="confirm-password">Confirm Password</label>
-				<input
-					type="password"
-					bind:value={changePasswordConfirm}
-					class="changepassword-input"
-					id="confirm-password"
-					placeholder="Confirm new password"
-					disabled={changePasswordIsLoading}
-				/>
-			</div>
-			
-			{#if changePasswordErrors.length > 0}
-				<div class="changepassword-errors">
-					{#each changePasswordErrors as error}
-						<div class="changepassword-error">{error}</div>
-					{/each}
+				<div class="changepassword-input-container">
+					<input
+						type={changePasswordShowConfirm ? 'text' : 'password'}
+						bind:value={changePasswordConfirm}
+						oninput={changePasswordHandleConfirmInput}
+						onpaste={changePasswordHandlePaste}
+						class="changepassword-input"
+						id="confirm-password"
+						placeholder="Re-type your password"
+						maxlength="20"
+						disabled={changePasswordIsLoading}
+					/>
+					<button
+						type="button"
+						onclick={() => changePasswordShowConfirm = !changePasswordShowConfirm}
+						class="changepassword-toggle-btn"
+						disabled={changePasswordIsLoading}
+					>
+						{#if changePasswordShowConfirm}
+							<EyeOff size={20} />
+						{:else}
+							<Eye size={20} />
+						{/if}
+					</button>
 				</div>
-			{/if}
-			
-			{#if changePasswordConfirm && !changePasswordsMatch}
-				<div class="changepassword-error">Passwords do not match</div>
-			{/if}
+			</div>
 			
 			<div class="changepassword-password-hint">
 				<p class="changepassword-hint-title">Password requirements:</p>
 				<ul class="changepassword-hint-list">
-					<li class={changePasswordNew.length >= 15 && changePasswordNew.length <= 20 ? 'changepassword-requirement-met' : ''}>
+					<li class={changePasswordNew.length >= 15 && changePasswordNew.length <= 20 ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+						<span class="changepassword-requirement-icon">
+							{#if changePasswordNew.length >= 15 && changePasswordNew.length <= 20}✓{:else}✗{/if}
+						</span>
 						15-20 characters long
 					</li>
-					<li class={/^[a-zA-Z0-9!@\-_&]*$/.test(changePasswordNew) && changePasswordNew.length > 0 ? 'changepassword-requirement-met' : ''}>
-						Only alphanumeric characters and: ! @ - _ &
+					<li class={/[A-Z]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+						<span class="changepassword-requirement-icon">
+							{#if /[A-Z]/.test(changePasswordNew)}✓{:else}✗{/if}
+						</span>
+						At least 1 uppercase letter
+					</li>
+					<li class={/[a-z]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+						<span class="changepassword-requirement-icon">
+							{#if /[a-z]/.test(changePasswordNew)}✓{:else}✗{/if}
+						</span>
+						At least 1 lowercase letter
+					</li>
+					<li class={/[0-9]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+						<span class="changepassword-requirement-icon">
+							{#if /[0-9]/.test(changePasswordNew)}✓{:else}✗{/if}
+						</span>
+						At least 1 number
+					</li>
+					<li class={/[!@_.-]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+						<span class="changepassword-requirement-icon">
+							{#if /[!@_.-]/.test(changePasswordNew)}✓{:else}✗{/if}
+						</span>
+						At least 1 symbol (!, @, -, _, .)
+					</li>
+					<li class={changePasswordsMatch ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+						<span class="changepassword-requirement-icon">
+							{#if changePasswordsMatch}✓{:else}✗{/if}
+						</span>
+						Passwords must match
 					</li>
 				</ul>
 			</div>
 			
 			<div class="changepassword-actions">
 				<button
-					onclick={changePasswordHandleSubmit}
-					disabled={!changePasswordCanSubmit() || changePasswordIsLoading}
-					class="changepassword-submit-btn"
-				>
-					{changePasswordIsLoading ? 'Changing Password...' : 'Change Password'}
-				</button>
-				
-				<button
 					onclick={changePasswordHandleCancel}
 					class="changepassword-cancel-btn"
 					disabled={changePasswordIsLoading}
 				>
 					Cancel
+				</button>
+				
+				<button
+					onclick={changePasswordHandleSubmit}
+					disabled={!changePasswordCanSubmit() || changePasswordIsLoading}
+					class="changepassword-submit-btn"
+				>
+					{changePasswordIsLoading ? 'Submitting...' : 'Change Password'}
 				</button>
 			</div>
 		</div>
@@ -158,13 +290,13 @@
 
 <!-- Cancel Confirmation Modal -->
 {#if changePasswordShowCancelModal}
-	<div class="changepassword-modal-overlay">
-		<div class="changepassword-modal">
-			<h3 class="changepassword-modal-title">Cancel Password Change?</h3>
-			<p class="changepassword-modal-text">Your progress will be lost. Are you sure you want to cancel?</p>
-			<div class="changepassword-modal-actions">
-				<button onclick={changePasswordConfirmCancel} class="changepassword-modal-confirm">Yes, Cancel</button>
-				<button onclick={() => changePasswordShowCancelModal = false} class="changepassword-modal-dismiss">Continue</button>
+	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Password Change?</h3>
+			<p class="text-gray-600 mb-6">Your progress will be lost.</p>
+			<div class="flex flex-row gap-3">
+				<button onclick={changePasswordConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
+				<button onclick={() => changePasswordShowCancelModal = false} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
 			</div>
 		</div>
 	</div>
@@ -210,6 +342,12 @@
 		margin-bottom: 1rem;
 	}
 	
+	.changepassword-input-container {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+	
 	.changepassword-label {
 		display: block;
 		font-size: 0.875rem;
@@ -221,10 +359,11 @@
 	
 	.changepassword-input {
 		width: 100%;
-		padding: 0.75rem 1rem;
+		padding: 0.75rem 3rem 0.75rem 1rem;
 		border: 2px solid #d1d5db;
 		border-radius: 0.75rem;
 		transition: border-color 0.2s;
+		padding-right: 3rem;
 	}
 	
 	.changepassword-input:focus {
@@ -236,18 +375,27 @@
 		opacity: 0.5;
 	}
 	
-	.changepassword-errors {
-		margin-bottom: 1rem;
+	.changepassword-toggle-btn {
+		position: absolute;
+		right: 0.75rem;
+		background: none;
+		border: none;
+		color: #6b7280;
+		cursor: pointer;
+		padding: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: color 0.2s;
 	}
 	
-	.changepassword-errors > * + * {
-		margin-top: 0.25rem;
+	.changepassword-toggle-btn:hover:not(:disabled) {
+		color: #374151;
 	}
 	
-	.changepassword-error {
-		color: #dc2626;
-		font-size: 0.875rem;
-		line-height: 1.25rem;
+	.changepassword-toggle-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 	
 	.changepassword-password-hint {
@@ -267,9 +415,10 @@
 	}
 	
 	.changepassword-hint-list {
-		color: #1d4ed8;
-		margin-left: 1rem;
-		list-style-type: disc;
+		color: #6b7280;
+		margin-left: 0;
+		list-style-type: none;
+		padding-left: 0;
 	}
 	
 	.changepassword-hint-list > * + * {
@@ -279,11 +428,27 @@
 	.changepassword-requirement-met {
 		color: #059669;
 		font-weight: 500;
+		transition: color 0.15s ease-in-out, font-weight 0.15s ease-in-out;
+	}
+	
+	.changepassword-requirement-unmet {
+		color: #dc2626;
+		font-weight: 400;
+		transition: color 0.15s ease-in-out, font-weight 0.15s ease-in-out;
+	}
+	
+	.changepassword-requirement-icon {
+		display: inline-block;
+		width: 1rem;
+		text-align: center;
+		margin-right: 0.5rem;
+		font-weight: bold;
+		transition: all 0.15s ease-in-out;
 	}
 	
 	.changepassword-actions {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		gap: 0.75rem;
 	}
 	
@@ -296,6 +461,7 @@
 		border: none;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		flex: 1;
 	}
 	
 	.changepassword-submit-btn:hover:not(:disabled) {
@@ -316,6 +482,7 @@
 		font-weight: 500;
 		cursor: pointer;
 		transition: background-color 0.2s;
+		flex: 1;
 	}
 	
 	.changepassword-cancel-btn:hover:not(:disabled) {
@@ -324,73 +491,5 @@
 	
 	.changepassword-cancel-btn:disabled {
 		opacity: 0.5;
-	}
-	
-	.changepassword-modal-overlay {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 50;
-	}
-	
-	.changepassword-modal {
-		background-color: white;
-		border-radius: 1rem;
-		padding: 1.5rem;
-		max-width: 24rem;
-		margin: 1rem;
-	}
-	
-	.changepassword-modal-title {
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-		font-weight: 700;
-		color: #1f2937;
-		margin-bottom: 0.5rem;
-	}
-	
-	.changepassword-modal-text {
-		color: #4b5563;
-		margin-bottom: 1.5rem;
-	}
-	
-	.changepassword-modal-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-	
-	.changepassword-modal-confirm {
-		background-color: #dc2626;
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.changepassword-modal-confirm:hover {
-		background-color: #b91c1c;
-	}
-	
-	.changepassword-modal-dismiss {
-		border: 1px solid #d1d5db;
-		color: #374151;
-		background-color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-weight: 500;
-		cursor: pointer;
-		flex: 1;
-		transition: background-color 0.2s;
-	}
-	
-	.changepassword-modal-dismiss:hover {
-		background-color: #f9fafb;
 	}
 </style>
