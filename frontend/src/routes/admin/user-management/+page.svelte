@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
+	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
 		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key,
-		UserPlus, Activity, Headphones, Crown, LockKeyhole
+		UserPlus, Activity, Headphones, Crown, LockKeyhole, ArrowUpDown, ArrowUp, ArrowDown
 	} from 'lucide-svelte';
 
 	// TypeScript interfaces
@@ -56,6 +57,10 @@
 	let selectedStatus = $state<string>('all');
 	let currentPage = $state<number>(1);
 	let itemsPerPage = 10;
+	
+	// Sorting states
+	let sortColumn = $state<string>('');
+	let sortDirection = $state<'asc' | 'desc'>('asc');
 	
 	// Selection states
 	let selectedRows = $state<Set<string>>(new Set());
@@ -183,7 +188,7 @@
 		const generatedUsers: UserData[] = [];
 		let currentId = 4;
 		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance'];
-		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time']; // Mostly active
+		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time', 'Locked', 'Deactivated']; // Added more variety
 		const frontlineRoles = ['Frontline', 'Support'];
 		
 		// Names for variety
@@ -200,6 +205,71 @@
 
 		// Get managers for supervisor assignment
 		const managers = baseUsers.filter(u => u.role === 'Manager');
+		
+		// Add some specific locked and deactivated users for demo purposes
+		const lockedAndDeactivatedUsers: UserData[] = [
+			{
+				id: 'locked-1',
+				employeeId: 'EMP900',
+				name: 'Michael Thompson',
+				email: 'michael.thompson@company.com',
+				ou: 'Engineering',
+				role: 'Frontline',
+				status: 'Locked',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[0]?.id
+			},
+			{
+				id: 'locked-2',
+				employeeId: 'EMP901',
+				name: 'Sarah Davis',
+				email: 'sarah.davis@company.com',
+				ou: 'Sales',
+				role: 'Support',
+				status: 'Locked',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[1]?.id
+			},
+			{
+				id: 'deactivated-1',
+				employeeId: 'EMP950',
+				name: 'Robert Johnson',
+				email: 'robert.johnson@company.com',
+				ou: 'Marketing',
+				role: 'Supervisor',
+				status: 'Deactivated',
+				type: 'user',
+				managerId: managers[0]?.id
+			},
+			{
+				id: 'deactivated-2',
+				employeeId: 'EMP951',
+				name: 'Lisa Wilson',
+				email: 'lisa.wilson@company.com',
+				ou: 'HR',
+				role: 'Frontline',
+				status: 'Deactivated',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[0]?.id
+			},
+			{
+				id: 'deactivated-3',
+				employeeId: 'EMP952',
+				name: 'David Brown',
+				email: 'david.brown@company.com',
+				ou: 'Finance',
+				role: 'Support',
+				status: 'Deactivated',
+				type: 'user',
+				supervisorId: undefined,
+				managerId: managers[0]?.id
+			}
+		];
+		
+		generatedUsers.push(...lockedAndDeactivatedUsers);
 		
 		// Generate supervisors (5 per manager)
 		const supervisors: UserData[] = [];
@@ -257,16 +327,128 @@
 		filterUsers();
 	});
 
-	// Computed values
+	// Computed values - Dynamic tab counts based on current filters
 	const tabCounts = $derived({
-		frontline: users.filter(u => u.role === 'Frontline' && u.status === 'Active').length,
-		support: users.filter(u => u.role === 'Support' && u.status === 'Active').length,
-		supervisor: users.filter(u => u.role === 'Supervisor' && u.status === 'Active').length,
-		manager: users.filter(u => u.role === 'Manager' && u.status === 'Active').length,
-		admin: users.filter(u => u.type === 'admin' && u.status === 'Active').length,
-		deactivated: users.filter(u => u.status === 'Deactivated').length,
-		locked: users.filter(u => u.status === 'Locked').length,
-		firstTime: users.filter(u => u.status === 'First-time').length
+		frontline: (() => {
+			if (currentTab === 'frontline') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Frontline' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		support: (() => {
+			if (currentTab === 'support') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Support' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		supervisor: (() => {
+			if (currentTab === 'supervisor') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Supervisor' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		manager: (() => {
+			if (currentTab === 'manager') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Manager' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		admin: (() => {
+			if (currentTab === 'admin') return filteredUsers.length;
+			let filtered = users.filter(u => u.type === 'admin' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		deactivated: (() => {
+			if (currentTab === 'deactivated') return filteredUsers.length;
+			let filtered = users.filter(u => u.status === 'Deactivated');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		locked: (() => {
+			if (currentTab === 'locked') return filteredUsers.length;
+			let filtered = users.filter(u => u.status === 'Locked');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		firstTime: (() => {
+			if (currentTab === 'first-time') return filteredUsers.length;
+			let filtered = users.filter(u => u.status === 'First-time');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})()
 	});
 
 	// Helper functions for hierarchy
@@ -369,8 +551,87 @@
 		currentPage = 1; // Reset to first page when filtering
 	};
 
+	const handleSort = (column: string) => {
+		if (sortColumn === column) {
+			// Three-state toggle: asc → desc → reset
+			if (sortDirection === 'asc') {
+				sortDirection = 'desc';
+			} else if (sortDirection === 'desc') {
+				// Reset sorting
+				sortColumn = '';
+				sortDirection = 'asc';
+				filterUsers(); // Re-filter to get original order
+				return;
+			}
+		} else {
+			// New column, default to ascending
+			sortColumn = column;
+			sortDirection = 'asc';
+		}
+		
+		// Sort filteredUsers
+		filteredUsers.sort((a, b) => {
+			let aValue: string | number;
+			let bValue: string | number;
+			
+			switch (column) {
+				case 'employeeId':
+					aValue = a.employeeId;
+					bValue = b.employeeId;
+					break;
+				case 'name':
+					aValue = a.name;
+					bValue = b.name;
+					break;
+				case 'email':
+					aValue = a.email;
+					bValue = b.email;
+					break;
+				case 'ou':
+					aValue = a.ou;
+					bValue = b.ou;
+					break;
+				case 'role':
+					// Custom role hierarchy for sorting
+					const roleOrder = { 'Admin': 5, 'Manager': 4, 'Supervisor': 3, 'Support': 2, 'Frontline': 1 };
+					aValue = roleOrder[a.role as keyof typeof roleOrder] || 0;
+					bValue = roleOrder[b.role as keyof typeof roleOrder] || 0;
+					break;
+				case 'status':
+					aValue = a.status;
+					bValue = b.status;
+					break;
+				default:
+					return 0;
+			}
+			
+			if (typeof aValue === 'string' && typeof bValue === 'string') {
+				const comparison = aValue.localeCompare(bValue);
+				return sortDirection === 'asc' ? comparison : -comparison;
+			} else if (typeof aValue === 'number' && typeof bValue === 'number') {
+				const comparison = aValue - bValue;
+				return sortDirection === 'asc' ? comparison : -comparison;
+			}
+			
+			return 0;
+		});
+	};
+
+	// Helper function to get sort icon
+	const getSortIcon = (column: string) => {
+		if (sortColumn !== column) return ArrowUpDown;
+		return sortDirection === 'asc' ? ArrowUp : ArrowDown;
+	};
+
 	const changeTab = (tab: string) => {
 		currentTab = tab;
+		// Clear selections when switching tabs
+		selectedRows = new Set();
+		selectAll = false;
+		lastSelectedIndex = -1;
+		// Reset sorting when switching tabs
+		sortColumn = '';
+		sortDirection = 'asc';
 		filterUsers();
 	};
 
@@ -691,6 +952,18 @@
 			case 'deactivate':
 				deactivateUser(selectedUser);
 				break;
+			case 'bulk-lock':
+				bulkLockUsers();
+				break;
+			case 'bulk-deactivate':
+				bulkDeactivateUsers();
+				break;
+			case 'bulk-unlock':
+				bulkUnlockUsers();
+				break;
+			case 'bulk-reactivate':
+				bulkReactivateUsers();
+				break;
 		}
 		
 		showConfirmationModal = false;
@@ -698,19 +971,102 @@
 		confirmationAction = '';
 	};
 
-	const getConfirmationMessage = () => {
-		if (!selectedUser || !confirmationAction) return '';
+	const confirmBulkLockUsers = () => {
+		if (selectedRows.size === 0) return;
 		
-		const userName = selectedUser.name;
+		confirmationAction = 'bulk-lock';
+		showConfirmationModal = true;
+	};
+
+	const confirmBulkDeactivateUsers = () => {
+		if (selectedRows.size === 0) return;
+		
+		confirmationAction = 'bulk-deactivate';
+		showConfirmationModal = true;
+	};
+
+	const bulkLockUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Locked' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been locked successfully!`);
+	};
+
+	const bulkDeactivateUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Deactivated' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been deactivated successfully!`);
+	};
+
+	const confirmBulkUnlockUsers = () => {
+		if (selectedRows.size === 0) return;
+		
+		confirmationAction = 'bulk-unlock';
+		showConfirmationModal = true;
+	};
+
+	const confirmBulkReactivateUsers = () => {
+		if (selectedRows.size === 0) return;
+		
+		confirmationAction = 'bulk-reactivate';
+		showConfirmationModal = true;
+	};
+
+	const bulkUnlockUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been unlocked successfully!`);
+	};
+
+	const bulkReactivateUsers = () => {
+		const selectedCount = selectedRows.size;
+		const updatedUsers = users.map(u => 
+			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
+		);
+		users = updatedUsers;
+		filterUsers();
+		selectedRows = new Set();
+		selectAll = false;
+		alert(`${selectedCount} users have been reactivated successfully!`);
+	};
+
+	const getConfirmationMessage = () => {
+		if (!confirmationAction) return '';
+		
 		switch (confirmationAction) {
 			case 'lock':
-				return `Are you sure you want to lock ${userName}? They will not be able to access the system.`;
+				return `Are you sure you want to lock ${selectedUser?.name}? They will not be able to access the system.`;
 			case 'unlock':
-				return `Are you sure you want to unlock ${userName}? They will regain access to the system.`;
+				return `Are you sure you want to unlock ${selectedUser?.name}? They will regain access to the system.`;
 			case 'activate':
-				return `Are you sure you want to activate ${userName}? They will regain access to the system.`;
+				return `Are you sure you want to activate ${selectedUser?.name}? They will regain access to the system.`;
 			case 'deactivate':
-				return `Are you sure you want to deactivate ${userName}? They will lose access to the system.`;
+				return `Are you sure you want to deactivate ${selectedUser?.name}? They will lose access to the system.`;
+			case 'bulk-lock':
+				return `Are you sure you want to lock ${selectedRows.size} selected users? They will not be able to access the system.`;
+			case 'bulk-deactivate':
+				return `Are you sure you want to deactivate ${selectedRows.size} selected users? They will lose access to the system.`;
+			case 'bulk-unlock':
+				return `Are you sure you want to unlock ${selectedRows.size} selected users? They will regain access to the system.`;
+			case 'bulk-reactivate':
+				return `Are you sure you want to reactivate ${selectedRows.size} selected users? They will regain access to the system.`;
 			default:
 				return '';
 		}
@@ -795,6 +1151,13 @@
 		const currentPageUserIds = new Set(paginatedUsers().map(user => user.id));
 		selectAll = currentPageUserIds.size > 0 && [...currentPageUserIds].every(id => selectedRows.has(id));
 	});
+
+	// Reactive effect to filter users when dropdown selections change
+	$effect(() => {
+		// This effect runs whenever selectedOU, selectedRole, selectedStatus, or searchQuery changes
+		selectedOU; selectedRole; selectedStatus; searchQuery;
+		filterUsers();
+	});
 </script>
 
 <svelte:head>
@@ -804,13 +1167,13 @@
 <div class="h-screen bg-gray-50 flex flex-col">
 	<div class="w-full max-w-[98%] mx-auto flex-1 flex flex-col p-6 min-h-0">
 		<!-- Header -->
-		<div class="mb-4">
+		<div class="mb-4 fade-in">
 			<h1 class="text-xl font-bold text-gray-900 mb-1">User Management</h1>
 			<p class="text-sm text-gray-600">Manage users, administrators, and access permissions</p>
 		</div>
 
 		<!-- Search and Filters -->
-		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0">
+		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0 fade-in">
 				<!-- Search Bar Section -->
 				<div class="p-4 border-b border-gray-200">
 					<div class="flex flex-col lg:flex-row gap-3">
@@ -838,6 +1201,19 @@
 									<option value="all">All OUs</option>
 									{#each ouOptions as ou}
 										<option value={ou}>{ou}</option>
+									{/each}
+								</select>
+							{/if}
+
+							<!-- Role Filter - only show for locked, deactivated, and first-time tabs -->
+							{#if ['locked', 'deactivated', 'first-time'].includes(currentTab)}
+								<select
+									bind:value={selectedRole}
+									class="flex-1 max-w-[150px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								>
+									<option value="all">All Roles</option>
+									{#each roleOptions as role}
+										<option value={role}>{role}</option>
 									{/each}
 								</select>
 							{/if}
@@ -976,20 +1352,42 @@
 								</button>
 							</div>
 							<div class="flex items-center space-x-2">
-								<button
-									class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
-									title="Lock selected users"
-								>
-									<Shield class="w-3.5 h-3.5" />
-									<span>Lock</span>
-								</button>
-								<button
-									class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
-									title="Deactivate selected users"
-								>
-									<X class="w-3.5 h-3.5" />
-									<span>Deactivate</span>
-								</button>
+								{#if currentTab === 'locked'}
+									<button
+										onclick={() => confirmBulkUnlockUsers()}
+										class="flex items-center space-x-1 bg-green-100 text-green-700 hover:bg-green-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Unlock selected users"
+									>
+										<Unlock class="w-3.5 h-3.5" />
+										<span>Unlock</span>
+									</button>
+								{:else if currentTab === 'deactivated'}
+									<button
+										onclick={() => confirmBulkReactivateUsers()}
+										class="flex items-center space-x-1 bg-green-100 text-green-700 hover:bg-green-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Reactivate selected users"
+									>
+										<User class="w-3.5 h-3.5" />
+										<span>Reactivate</span>
+									</button>
+								{:else}
+									<button
+										onclick={() => confirmBulkLockUsers()}
+										class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Lock selected users"
+									>
+										<Shield class="w-3.5 h-3.5" />
+										<span>Lock</span>
+									</button>
+									<button
+										onclick={() => confirmBulkDeactivateUsers()}
+										class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										title="Deactivate selected users"
+									>
+										<X class="w-3.5 h-3.5" />
+										<span>Deactivate</span>
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>
@@ -1009,18 +1407,66 @@
 										class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
 									/>
 								</th>
-								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-								<th class="w-56 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-								<th class="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-								<th class="w-36 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OU</th>
-								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+								<th class="w-32 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('employeeId')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Employee ID</span>
+										<svelte:component this={getSortIcon('employeeId')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-56 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('name')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Name</span>
+										<svelte:component this={getSortIcon('name')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-64 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('email')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Email</span>
+										<svelte:component this={getSortIcon('email')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-36 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('ou')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>OU</span>
+										<svelte:component this={getSortIcon('ou')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-32 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('role')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Role</span>
+										<svelte:component this={getSortIcon('role')} class="w-3 h-3" />
+									</button>
+								</th>
 								{#if currentTab === 'frontline' || currentTab === 'support'}
 									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
 									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
 								{:else if currentTab === 'supervisor'}
 									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
 								{/if}
-								<th class="w-28 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+								<th class="w-28 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('status')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Status</span>
+										<svelte:component this={getSortIcon('status')} class="w-3 h-3" />
+									</button>
+								</th>
 								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
@@ -1099,30 +1545,111 @@
 												<Edit class="w-3 h-3" />
 												<span>Edit</span>
 											</button>
-
-											{#if currentTab === 'locked'}
-												<button
-													onclick={() => confirmAction(user, 'unlock')}
-													class="flex items-center space-x-1 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-													title="Unlock user"
-												>
-													<Unlock class="w-3 h-3" />
-													<span>Unlock</span>
-												</button>
-											{:else if currentTab === 'deactivated'}
-												<button
-													onclick={() => confirmAction(user, 'activate')}
-													class="flex items-center space-x-1 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-													title="Activate user"
-												>
-													<User class="w-3 h-3" />
-													<span>Activate</span>
-												</button>
-											{/if}
 										</div>
 									</td>
 								</tr>
 							{/each}
+							
+							<!-- Empty State Messages -->
+							{#if paginatedUsers().length === 0}
+								<tr>
+									<td colspan="9" class="px-6 py-12 text-center">
+										<div class="flex flex-col items-center justify-center space-y-3">
+											{#if currentTab === 'frontline'}
+												<Users class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Frontline Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No frontline users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active frontline users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'support'}
+												<Headphones class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Support Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No support users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active support users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'supervisor'}
+												<Activity class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Supervisors Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No supervisors match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active supervisors in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'manager'}
+												<Crown class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Managers Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No managers match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active managers in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'admin'}
+												<Shield class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Admin Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No admin users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active admin users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'locked'}
+												<LockKeyhole class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Locked Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No locked users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no locked users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'deactivated'}
+												<X class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Deactivated Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No deactivated users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no deactivated users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'first-time'}
+												<UserPlus class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No First-time Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No first-time users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no first-time users requiring setup in the system.
+													{/if}
+												</div>
+											{:else}
+												<User class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no users in the system.
+													{/if}
+												</div>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/if}
 						</tbody>
 					</table>
 				</div>
@@ -1183,6 +1710,8 @@
 		onclick={() => showEditUserModal = false}
 		onkeydown={(e) => e.key === 'Escape' && (showEditUserModal = false)}
 	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div 
 			class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" 
 			role="document"
@@ -1456,74 +1985,24 @@
 {/if}
 
 <!-- Confirmation Modal -->
-{#if showConfirmationModal && selectedUser}
-	<div 
-		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		onclick={() => showConfirmationModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showConfirmationModal = false)}
-	>
-		<div 
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" 
-			role="document"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-lg font-semibold text-gray-900">Confirm Action</h2>
-			</div>
-
-			<!-- Content -->
-			<div class="p-6">
-				<div class="flex items-center space-x-3 mb-4">
-					{#if confirmationAction === 'lock'}
-						<div class="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-							<Shield class="w-5 h-5 text-orange-600" />
-						</div>
-					{:else if confirmationAction === 'unlock'}
-						<div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-							<Unlock class="w-5 h-5 text-green-600" />
-						</div>
-					{:else if confirmationAction === 'activate'}
-						<div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-							<User class="w-5 h-5 text-green-600" />
-						</div>
-					{:else if confirmationAction === 'deactivate'}
-						<div class="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-							<X class="w-5 h-5 text-red-600" />
-						</div>
-					{/if}
-					<div>
-						<h3 class="text-lg font-medium text-gray-900 capitalize">{confirmationAction} User</h3>
-						<p class="text-sm text-gray-600">{getConfirmationMessage()}</p>
-					</div>
-				</div>
-			</div>
-
-			<!-- Footer -->
-			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
-				<button
-					onclick={() => showConfirmationModal = false}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Cancel
-				</button>
-				<button
-					onclick={executeConfirmedAction}
-					class="px-6 py-3 bg-gradient-to-r {
-						confirmationAction === 'deactivate' || confirmationAction === 'lock' 
-							? 'from-red-500 to-red-600 hover:shadow-red-500/25' 
-							: 'from-green-500 to-green-600 hover:shadow-green-500/25'
-					} text-white rounded-lg hover:shadow-lg transition-all duration-200 capitalize"
-				>
-					{confirmationAction}
-				</button>
-			</div>
-		</div>
-	</div>
+{#if showConfirmationModal}
+	<ConfirmationModal
+		show={showConfirmationModal}
+		title="Confirm Action"
+		message={getConfirmationMessage()}
+		confirmText={confirmationAction.startsWith('bulk-') ? 
+			confirmationAction.replace('bulk-', '').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()) :
+			confirmationAction.charAt(0).toUpperCase() + confirmationAction.slice(1)}
+		confirmStyle={
+			confirmationAction === 'deactivate' || confirmationAction === 'bulk-deactivate'
+				? 'danger'
+				: confirmationAction === 'lock' || confirmationAction === 'bulk-lock'
+				? 'warning' 
+				: 'primary'
+		}
+		onConfirm={executeConfirmedAction}
+		onCancel={() => { showConfirmationModal = false; selectedUser = null; confirmationAction = ''; }}
+	/>
 {/if}
 
 <!-- Team Modal -->

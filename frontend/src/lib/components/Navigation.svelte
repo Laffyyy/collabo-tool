@@ -70,9 +70,11 @@
 <header class="sticky top-0 z-50 bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between shadow-sm">
 	<!-- Logo -->
 	<div class="flex items-center space-x-4">
-		<div class="inline-flex items-center justify-center w-10 h-10 bg-gradient-to-r from-[#01c0a4] to-[#00a085] rounded-xl shadow-lg shadow-[#01c0a4]/25">
-			<Users class="w-5 h-5 text-white" />
-		</div>
+		<img 
+			src="/logo.png" 
+			alt="Collaby Logo" 
+			class="w-10 h-10 object-contain"
+		/>
 		<h1 class="text-xl font-bold text-gray-800">Collaby</h1>
 	</div>
 
