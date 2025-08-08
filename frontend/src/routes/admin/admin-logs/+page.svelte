@@ -13,11 +13,11 @@
     userAgent: string;
     severity: 'low' | 'medium' | 'high' | 'critical';
     success: boolean;
+    priority?: 'low' | 'medium' | 'high'; // For broadcast logs
   }
 
   let activeTab = $state<'all' | 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config'>('all');
   let searchQuery = $state('');
-  let selectedSeverity = $state<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
 
   // Mock admin logs data
   const mockLogs: AdminLog[] = [
@@ -60,7 +60,8 @@
       ipAddress: '192.168.1.100',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       severity: 'high',
-      success: true
+      success: true,
+      priority: 'high'
     },
     {
       id: '4',
@@ -73,7 +74,8 @@
       ipAddress: '192.168.1.105',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       severity: 'low',
-      success: true
+      success: true,
+      priority: 'medium'
     },
     // User Management logs
     {
@@ -173,11 +175,6 @@
     // Tab filter
     if (activeTab !== 'all') {
       filtered = filtered.filter(log => log.category === activeTab);
-    }
-
-    // Severity filter
-    if (selectedSeverity !== 'all') {
-      filtered = filtered.filter(log => log.severity === selectedSeverity);
     }
 
     // Create a copy before sorting to avoid mutating the original array
@@ -286,16 +283,6 @@
     });
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'text-red-600 bg-red-50';
-      case 'high': return 'text-orange-600 bg-orange-50';
-      case 'medium': return 'text-yellow-600 bg-yellow-50';
-      case 'low': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'user': return User;
@@ -314,6 +301,16 @@
       case 'system': return 'text-green-600 bg-green-50';
       case 'data': return 'text-purple-600 bg-purple-50';
       case 'configuration': return 'text-indigo-600 bg-indigo-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const getPriorityColor = (priority: string | undefined) => {
+    if (!priority) return 'text-gray-600 bg-gray-50';
+    switch (priority) {
+      case 'high': return 'text-red-600 bg-red-50';
+      case 'medium': return 'text-yellow-600 bg-yellow-50';
+      case 'low': return 'text-green-600 bg-green-50';
       default: return 'text-gray-600 bg-gray-50';
     }
   };
@@ -381,20 +378,6 @@
 
 					<!-- Controls -->
 					<div class="flex flex-col sm:flex-row gap-2 flex-1">
-						<!-- Severity Filter -->
-						<div class="w-full sm:w-48">
-							<select
-								bind:value={selectedSeverity}
-								class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
-							>
-								<option value="all">All Severities</option>
-								<option value="low">Low</option>
-								<option value="medium">Medium</option>
-								<option value="high">High</option>
-								<option value="critical">Critical</option>
-							</select>
-						</div>
-
 						<!-- Export Button -->
 						<button
 							onclick={exportLogs}
@@ -488,7 +471,9 @@
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
+								{#if activeTab === 'broadcast'}
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+								{/if}
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
@@ -527,11 +512,17 @@
 									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
 										{log.target || '-'}
 									</td>
-									<td class="px-6 py-4 whitespace-nowrap">
-										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getSeverityColor(log.severity)}">
-											{log.severity}
-										</span>
-									</td>
+									{#if activeTab === 'broadcast'}
+										<td class="px-6 py-4 whitespace-nowrap">
+											{#if log.priority}
+												<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getPriorityColor(log.priority)}">
+													{log.priority}
+												</span>
+											{:else}
+												<span class="text-sm text-gray-400">-</span>
+											{/if}
+										</td>
+									{/if}
 									<td class="px-6 py-4 whitespace-nowrap">
 										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {log.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
 											{log.success ? 'Success' : 'Failed'}
@@ -607,12 +598,6 @@
             <div>
               <div class="block text-sm font-medium text-gray-700">Category</div>
               <p class="text-sm text-gray-900 capitalize">{selectedLog.category}</p>
-            </div>
-            <div>
-              <div class="block text-sm font-medium text-gray-700">Severity</div>
-              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getSeverityColor(selectedLog.severity)}">
-                {selectedLog.severity}
-              </span>
             </div>
             <div>
               <div class="block text-sm font-medium text-gray-700">Status</div>
