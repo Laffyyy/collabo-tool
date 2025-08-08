@@ -34,6 +34,7 @@
     responseType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
     choices?: string[];
     eventDate?: Date;
+    endDate?: Date;
     acknowledgments: Acknowledgment[];
     isActive: boolean;
   }
@@ -213,6 +214,7 @@
     scheduleType: 'now' as 'now' | 'pick',
     eventDate: '',
     scheduledFor: '',
+    endDate: '',
     choices: [''] as string[]
   });
 
@@ -246,8 +248,6 @@
   let sortedBroadcasts = $derived(
     [...broadcasts]
       .filter(b => {
-        if (!b.isActive) return false;
-        
         // Search filter (applies globally across all tabs)
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase();
@@ -274,12 +274,17 @@
         return b.targetOUs.some(ou => ou === activeTab);
       })
       .sort((a, b) => {
-        // Sort by priority first (high > medium > low)
+        // First, sort by active status (active broadcasts first)
+        if (a.isActive !== b.isActive) {
+          return a.isActive ? -1 : 1; // Active broadcasts come first
+        }
+        
+        // Then sort by priority (high > medium > low)
         const priorityOrder = { high: 3, medium: 2, low: 1 };
         const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
         if (priorityDiff !== 0) return priorityDiff;
         
-        // Then by creation date (newest first)
+        // Finally by creation date (newest first)
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       })
   );
@@ -372,6 +377,7 @@
         responseType: newBroadcast.acknowledgmentType,
         choices: newBroadcast.acknowledgmentType === 'choices' ? newBroadcast.choices.filter(choice => choice.trim()) : undefined,
         eventDate: newBroadcast.scheduleType === 'pick' && newBroadcast.eventDate ? new Date(newBroadcast.eventDate) : undefined,
+        endDate: newBroadcast.endDate ? new Date(newBroadcast.endDate) : undefined,
         acknowledgments: [],
         isActive: true
       };
@@ -422,6 +428,14 @@
 
   const viewReport = (broadcast: Broadcast) => {
     alert('View detailed report functionality would be implemented here.');
+  };
+
+  const markAsDone = (broadcastId: string) => {
+    broadcasts = broadcasts.map(b => 
+      b.id === broadcastId ? { ...b, isActive: false } : b
+    );
+    closeBroadcastDetails();
+    alert('Broadcast marked as done!');
   };
 
   const openBroadcastDetails = (broadcast: Broadcast) => {
@@ -492,6 +506,7 @@
       scheduleType: 'now',
       eventDate: '',
       scheduledFor: '',
+      endDate: '',
       choices: ['']
     };
     // Reset template state
@@ -899,6 +914,27 @@
                     </div>
                   </div>
                 {/if}
+                
+                <!-- End Date -->
+                <div class="bg-white rounded border border-gray-200 p-4">
+                  <label for="endDate" class="block text-sm font-medium text-gray-700 mb-2">End Date (Optional)</label>
+                  <p class="text-xs text-gray-500 mb-3">Set when this broadcast should expire and be marked as "Done"</p>
+                  <div 
+                    class="relative cursor-pointer"
+                    role="button"
+                    tabindex="0"
+                    onclick={() => document.getElementById('endDate')?.focus()}
+                    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('endDate')?.focus(); } }}
+                  >
+                    <input
+                      id="endDate"
+                      type="datetime-local"
+                      bind:value={newBroadcast.endDate}
+                      class="input-field cursor-pointer"
+                      placeholder="Select end date..."
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1015,16 +1051,36 @@
 
   <!-- Broadcasts List -->
   <div class="space-y-4">
-    {#each sortedBroadcasts as broadcast}
+    {#each sortedBroadcasts as broadcast, index}
       {@const isNewBroadcast = (Date.now() - new Date(broadcast.createdAt).getTime()) < 86400000 && !viewedBroadcasts.has(broadcast.id)}
+      {@const prevBroadcast = index > 0 ? sortedBroadcasts[index - 1] : null}
+      {@const needsSeparator = prevBroadcast && prevBroadcast.isActive && !broadcast.isActive}
+      
+      <!-- Separator between active and done broadcasts -->
+      {#if needsSeparator}
+        <div class="flex items-center my-8">
+          <div class="flex-1 border-t border-gray-300"></div>
+          <div class="mx-4 px-3 py-1 bg-gray-100 rounded-full">
+            <span class="text-sm font-medium text-gray-600">Completed Broadcasts</span>
+          </div>
+          <div class="flex-1 border-t border-gray-300"></div>
+        </div>
+      {/if}
+      
       <div 
-        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isNewBroadcast ? 'ring-2 ring-blue-200 bg-blue-50' : ''}"
+        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isNewBroadcast ? 'ring-2 ring-blue-200 bg-blue-50' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''}"
         role="button"
         tabindex="0"
         onclick={() => openBroadcastDetails(broadcast)}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
       >
-        {#if isNewBroadcast}
+        {#if !broadcast.isActive}
+          <div class="absolute top-2 right-2">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              DONE
+            </span>
+          </div>
+        {:else if isNewBroadcast}
           <div class="absolute top-2 right-2">
             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               NEW
@@ -1148,24 +1204,12 @@
                 </div>
               </div>
             </div>
-            {#if selectedBroadcast.requiresAcknowledgment}
-              {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
-              {#if !userAck}
-                <button
-                  onclick={closeBroadcastDetails}
-                  class="text-gray-400 hover:text-gray-600 text-2xl font-bold flex-shrink-0 ml-2"
-                >
-                  ×
-                </button>
-              {/if}
-            {:else}
-              <button
-                onclick={closeBroadcastDetails}
-                class="text-gray-400 hover:text-gray-600 text-2xl font-bold flex-shrink-0 ml-2"
-              >
-                ×
-              </button>
-            {/if}
+            <button
+              onclick={closeBroadcastDetails}
+              class="text-gray-400 hover:text-gray-600 text-2xl font-bold flex-shrink-0 ml-2"
+            >
+              ×
+            </button>
           </div>
 
           <!-- Content -->
@@ -1190,6 +1234,12 @@
                   <span class="break-words">Event: {formatDate(selectedBroadcast.eventDate)}</span>
                 </div>
               {/if}
+              {#if selectedBroadcast.endDate}
+                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                  <Clock class="w-4 h-4 flex-shrink-0" />
+                  <span class="break-words">End Date: {formatDate(selectedBroadcast.endDate)}</span>
+                </div>
+              {/if}
               {#if selectedBroadcast.requiresAcknowledgment}
                 <div class="flex items-center space-x-2 text-sm text-gray-600">
                   <CheckCircle class="w-4 h-4 flex-shrink-0" />
@@ -1199,125 +1249,147 @@
             </div>
           </div>
 
-          <!-- Acknowledgment Actions -->
-          {#if selectedBroadcast.requiresAcknowledgment}
-            {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
-            <div class="mb-6">
-              {#if !userAck}
-                <div class="p-4 bg-gray-50 rounded-lg">
-                  {#if selectedBroadcast.responseType === 'required'}
-                    <!-- Simple Acknowledgment -->
-                    <label class="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        bind:checked={isAcknowledged}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] w-5 h-5"
-                      />
-                      <span class="text-gray-700 font-medium">I acknowledge receipt of this broadcast</span>
-                    </label>
-                  {:else if selectedBroadcast.responseType === 'preferred-date'}
-                    <!-- Preferred Date Selection -->
-                    <div>
-                      <label for="preferredDate" class="block text-sm font-medium text-gray-700 mb-2">Select your preferred date/time</label>
-                      <div 
-                        class="relative cursor-pointer"
-                        role="button"
-                        tabindex="0"
-                        onclick={() => document.getElementById('preferredDate')?.focus()}
-                        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('preferredDate')?.focus(); } }}
-                      >
-                        <input
-                          id="preferredDate"
-                          type="datetime-local"
-                          bind:value={preferredDate}
-                          class="input-field cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                  {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
-                    <!-- Multiple Choice Options -->
-                    <div>
-                      <span class="block text-sm font-medium text-gray-700 mb-3">Please select your response:</span>
-                      <div class="space-y-2">
-                        {#each selectedBroadcast.choices as choice}
-                          <label class="flex items-start space-x-3 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
-                            <input
-                              type="radio"
-                              bind:group={selectedChoice}
-                              value={choice}
-                              class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] mt-1 flex-shrink-0"
-                            />
-                            <span class="text-sm break-words">{choice}</span>
-                          </label>
-                        {/each}
-                      </div>
-                    </div>
-                  {:else if selectedBroadcast.responseType === 'textbox'}
-                    <!-- Text Response -->
-                    <div>
-                      <label for="textResponse" class="block text-sm font-medium text-gray-700 mb-2">Your response:</label>
-                      <textarea
-                        id="textResponse"
-                        bind:value={textResponse}
-                        placeholder="Enter your feedback or response here..."
-                        rows="4"
-                        class="input-field resize-none"
-                      ></textarea>
-                    </div>
-                  {/if}
+          <!-- Check if this is the creator's own broadcast (My Broadcasts tab) -->
+          {#if selectedBroadcast.createdBy === currentUser.id}
+            <!-- Creator View - Show end date and mark as done option -->
+            <div class="mb-6 p-4 bg-blue-50 rounded-lg">
+              <h3 class="text-lg font-semibold text-gray-800 mb-3">Broadcast Management</h3>
+              {#if selectedBroadcast.endDate}
+                <div class="mb-4">
+                  <div class="flex items-center space-x-2 text-sm text-gray-700">
+                    <Clock class="w-4 h-4 flex-shrink-0" />
+                    <span class="font-medium">End Date: {formatDate(selectedBroadcast.endDate)}</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">This broadcast will automatically expire on the end date</p>
                 </div>
               {:else}
-                <div class="flex items-center space-x-2 text-green-600 p-4 bg-green-50 rounded-lg">
-                  <CheckCircle class="w-5 h-5" />
-                  <span class="font-medium">
-                    Acknowledged {formatDate(userAck.acknowledgedAt)}
-                    {#if userAck.attending !== undefined}
-                      • {userAck.attending ? 'Attending' : 'Not Attending'}
-                    {/if}
-                  </span>
+                <div class="mb-4 text-sm text-gray-600">
+                  <p>No end date set for this broadcast</p>
                 </div>
+              {/if}
+              
+              <div class="flex items-center space-x-2 text-sm text-gray-700 mb-4">
+                <CheckCircle class="w-4 h-4 flex-shrink-0" />
+                <span>{selectedBroadcast.acknowledgments.length} people have acknowledged this broadcast</span>
+              </div>
+            </div>
+
+            <!-- Actions for Creator -->
+            <div class="flex justify-end pt-4 border-t border-gray-200">
+              <button
+                onclick={() => markAsDone(selectedBroadcast.id)}
+                class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                Mark as Done
+              </button>
+            </div>
+          {:else}
+            <!-- Regular User View - Show acknowledgment actions -->
+            {#if selectedBroadcast.requiresAcknowledgment}
+              {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
+              <div class="mb-6">
+                {#if !userAck}
+                  <div class="p-4 bg-gray-50 rounded-lg">
+                    {#if selectedBroadcast.responseType === 'required'}
+                      <!-- Simple Acknowledgment -->
+                      <label class="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          bind:checked={isAcknowledged}
+                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] w-5 h-5"
+                        />
+                        <span class="text-gray-700 font-medium">I acknowledge receipt of this broadcast</span>
+                      </label>
+                    {:else if selectedBroadcast.responseType === 'preferred-date'}
+                      <!-- Preferred Date Selection -->
+                      <div>
+                        <label for="preferredDate" class="block text-sm font-medium text-gray-700 mb-2">Select your preferred date/time</label>
+                        <div 
+                          class="relative cursor-pointer"
+                          role="button"
+                          tabindex="0"
+                          onclick={() => document.getElementById('preferredDate')?.focus()}
+                          onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('preferredDate')?.focus(); } }}
+                        >
+                          <input
+                            id="preferredDate"
+                            type="datetime-local"
+                            bind:value={preferredDate}
+                            class="input-field cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
+                      <!-- Multiple Choice Options -->
+                      <div>
+                        <span class="block text-sm font-medium text-gray-700 mb-3">Please select your response:</span>
+                        <div class="space-y-2">
+                          {#each selectedBroadcast.choices as choice}
+                            <label class="flex items-start space-x-3 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                              <input
+                                type="radio"
+                                bind:group={selectedChoice}
+                                value={choice}
+                                class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] mt-1 flex-shrink-0"
+                              />
+                              <span class="text-sm break-words">{choice}</span>
+                            </label>
+                          {/each}
+                        </div>
+                      </div>
+                    {:else if selectedBroadcast.responseType === 'textbox'}
+                      <!-- Text Response -->
+                      <div>
+                        <label for="textResponse" class="block text-sm font-medium text-gray-700 mb-2">Your response:</label>
+                        <textarea
+                          id="textResponse"
+                          bind:value={textResponse}
+                          placeholder="Enter your feedback or response here..."
+                          rows="4"
+                          class="input-field resize-none"
+                        ></textarea>
+                      </div>
+                    {/if}
+                  </div>
+                {:else}
+                  <div class="flex items-center space-x-2 text-green-600 p-4 bg-green-50 rounded-lg">
+                    <CheckCircle class="w-5 h-5" />
+                    <span class="font-medium">
+                      Acknowledged {formatDate(userAck.acknowledgedAt)}
+                      {#if userAck.attending !== undefined}
+                        • {userAck.attending ? 'Attending' : 'Not Attending'}
+                      {/if}
+                    </span>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            <!-- Confirm Button for Regular Users -->
+            <div class="flex justify-end pt-4 border-t border-gray-200">
+              {#if selectedBroadcast.requiresAcknowledgment}
+                {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
+                {#if !userAck}
+                  {@const canConfirm = (() => {
+                    switch (selectedBroadcast.responseType) {
+                      case 'required': return isAcknowledged;
+                      case 'preferred-date': return preferredDate.trim() !== '';
+                      case 'choices': return selectedChoice.trim() !== '';
+                      case 'textbox': return textResponse.trim() !== '';
+                      default: return false;
+                    }
+                  })()}
+                  <button
+                    onclick={confirmModal}
+                    disabled={!canConfirm}
+                    class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Confirm
+                  </button>
+                {/if}
               {/if}
             </div>
           {/if}
-
-          <!-- Confirm Button -->
-          <div class="flex justify-end pt-4 border-t border-gray-200">
-            {#if selectedBroadcast.requiresAcknowledgment}
-              {@const userAck = selectedBroadcast.acknowledgments.find((a: Acknowledgment) => a.userId === currentUser.id)}
-              {#if userAck}
-                <button
-                  onclick={closeBroadcastDetails}
-                  class="primary-button"
-                >
-                  Close
-                </button>
-              {:else}
-                {@const canConfirm = (() => {
-                  switch (selectedBroadcast.responseType) {
-                    case 'required': return isAcknowledged;
-                    case 'preferred-date': return preferredDate.trim() !== '';
-                    case 'choices': return selectedChoice.trim() !== '';
-                    case 'textbox': return textResponse.trim() !== '';
-                    default: return false;
-                  }
-                })()}
-                <button
-                  onclick={confirmModal}
-                  disabled={!canConfirm}
-                  class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Confirm
-                </button>
-              {/if}
-            {:else}
-              <button
-                onclick={closeBroadcastDetails}
-                class="primary-button"
-              >
-                Close
-              </button>
-            {/if}
-          </div>
         </div>
       </div>
     </div>
