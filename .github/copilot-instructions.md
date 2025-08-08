@@ -34,7 +34,7 @@ frontend/src/
     │   ├── admin-logs/          # Activity monitoring
     │   ├── chat-management/     # Chat moderation
     │   └── broadcast-management/ # Broadcast oversight
-    ├── broadcast/  # Broadcast messaging interface
+    ├── broadcast/  # Broadcast messaging interface (1400+ lines)
     ├── chat/       # Real-time chat application (main landing page)
     └── [auth routes]/ # login, forgot-password, otp, etc.
 ```
@@ -65,29 +65,14 @@ npm run check    # Svelte type checking
 
 ## Key Conventions
 
-### Svelte Component Patterns
-- Use `$state()` runes for component state
-- Prefer `onclick` over `on:click` for TypeScript support
-- Use regular CSS in `<style>` blocks (no `@apply`)
-- Example from `ProfileAvatar.svelte`:
-```svelte
-<script lang="ts">
-  const user = $state<User | null>(null);
-  const size = $props<'sm' | 'md' | 'lg'>('md');
-</script>
-
-<div class="avatar {size}" onclick={handleClick}>
-  {user?.initials ?? '??'}
-</div>
-
-<style>
-  .avatar {
-    border-radius: 9999px;
-    background: #01c0a4;
-    color: white;
-  }
-</style>
-```
+### Svelte 5 Patterns
+- **State Management**: Use `$state()` runes for local component state
+- **Derived Values**: Use `$derived()` for simple computations, `$derived.by()` for complex logic
+- **Props**: Use `$props()` runes syntax with `$bindable()` for two-way binding
+- **Event Handlers**: Use `onclick` attribute syntax instead of `on:click` for better TypeScript support
+- **Children Rendering**: Use `{@render children()}` pattern in layout components
+- **Store Integration**: Class-based stores with `$state()` inside, exported as writable stores
+- **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
 
 ### Store Architecture
 - **Class-based Stores**: Use classes with `$state()` runes for complex state management
@@ -111,19 +96,100 @@ npm run check    # Svelte type checking
 - **Color Scheme**: Primary brand color `#01c0a4` (aqua green) with grey (#374151, #f9fafb) for neutral elements
 - **Teams-like UI**: Grey navigation background, white content areas, professional styling
 
+## Complex Feature Patterns
+
+### Broadcast System Architecture
+- **Lifecycle Management**: Broadcasts have `isActive` status for soft deletion (active → done)
+- **Role-based Modals**: Creator view shows management controls, user view shows response forms
+- **Status Separation**: Active broadcasts sorted first, done broadcasts separated visually with dividers
+- **Global Search/Filter**: Search and filters work across all tabs, bypassing tab restrictions
+- **Response Types**: Supports none, required acknowledgment, preferred dates, multiple choice, text responses
+- **End Date Management**: Optional expiration dates for automatic broadcast completion
+- **Visual Indicators**: "NEW", "DONE" badges with different opacity and background colors
+- **Creator vs User Behavior**: 
+  - **Creators**: See "Mark as Done" button and end date management in modal
+  - **Users**: See response forms and acknowledge/answer options in modal
+  - **Conditional Rendering**: Use `{#if selectedBroadcast.createdBy === currentUser.id}` pattern
+
+### Broadcast Lifecycle Implementation Pattern
+```typescript
+// Sorting pattern for active/done separation
+const sortedBroadcasts = $derived(() => {
+  let filtered = [...broadcastStore.myBroadcasts];
+  
+  // Apply search and filters globally
+  if (searchTerm) {
+    filtered = filtered.filter(b => 
+      b.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.content.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }
+  
+  // Sort: active first, then by creation date
+  return filtered.sort((a, b) => {
+    if (a.isActive !== b.isActive) {
+      return a.isActive ? -1 : 1; // Active broadcasts first
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+});
+
+// Mark as Done functionality
+function markAsDone(id: number) {
+  broadcastStore.markAsDone(id);
+  selectedBroadcast = null;
+  showModal = false;
+}
+```
+
+### Modal Architecture Patterns
+- **Conditional Content**: Use `{#if createdBy === currentUser.id}` for role-specific modal content
+- **Form Sectioning**: Multi-step forms with numbered sections (1-4) for complex data entry
+- **Dynamic Fields**: Conditional form fields based on selection (e.g., choices array for multiple choice responses)
+- **X-Icon Close**: Single close method via X icon, avoid redundant close buttons
+- **Action Buttons**: Context-specific buttons (Mark as Done, Confirm, etc.) aligned with `justify-end`
+- **Creator Modal Pattern**:
+  ```svelte
+  {#if selectedBroadcast.createdBy === currentUser.id}
+    <!-- Creator view: Management controls -->
+    <div class="flex justify-between items-center mb-4">
+      <span class="text-sm text-gray-600">End Date:</span>
+      <span class="font-medium">{formatDate(selectedBroadcast.endDate)}</span>
+    </div>
+    <div class="flex justify-end mt-6">
+      <button onclick={() => markAsDone(selectedBroadcast.id)} 
+              class="primary-button">
+        Mark as Done
+      </button>
+    </div>
+  {:else}
+    <!-- User view: Response forms -->
+    <form><!-- Response UI --></form>
+  {/if}
+  ```
+
+### Search & Filter Implementation
+- **Global Scope**: Searches across title and content fields regardless of active tab
+- **Priority Filtering**: Dropdown filter with visual feedback for current selection
+- **Combined Logic**: Search + filter work together, bypassing normal tab restrictions
+- **Real-time**: Uses `$derived()` to reactively filter `sortedBroadcasts` array
+- **Positioning**: Search/filter controls positioned with `ml-auto` on tab bar for right alignment
+- **Visual Integration**: Search input with Search icon, filter dropdown with ChevronDown icon
+
+### Visual Status Patterns
+- **Active/Done Separation**: Use horizontal divider (`<hr class="my-4 border-gray-200">`) between sections
+- **Status Badges**: 
+  - NEW: `bg-green-100 text-green-800` with full opacity
+  - DONE: `bg-gray-100 text-gray-600` with reduced opacity (`opacity-75`)
+- **Card States**: Done broadcasts have `opacity-75` applied to entire card
+- **Color Coordination**: Consistent color usage across related elements (e.g., Export CSV and View Report buttons)
+
 ### Admin Interface Patterns
 - **Unified Navigation**: All admin pages use consistent layout navigation via `+layout.svelte`
-- **Modal Architecture**: Complex forms use split-panel modals (form left, settings/rules right)
-- **Role-based UI**: Dynamic columns and buttons based on user roles and permissions
-- **Hierarchical Data**: User management displays supervisor/manager relationships in expandable team views
-- **Password Management**: Comprehensive password controls with validation, visibility toggles, and reset functionality
+- **Tab-based Views**: Multiple status tabs (sent, scheduled, archived, reported) with count badges
 - **Bulk Operations**: CSV templates for bulk user imports with role-specific field requirements
-
-### TypeScript Integration
-- Strict TypeScript with full type checking enabled
-- Interface definitions for complex objects (User, OrganizationUnit, OURules, etc.)
-- Type-safe event handling with proper parameter typing
-- Use `bind:value` for two-way data binding with proper type inference
+- **Hierarchical Data**: User management displays supervisor/manager relationships in expandable team views
+- **OU Rules Engine**: Complex permission systems via Organization Unit rules for chat/broadcast policies
 
 ### Authentication & Role System
 - **Role Hierarchy**: admin > manager > supervisor > support > frontline
@@ -154,7 +220,28 @@ npm run check    # Svelte type checking
 3. **Consistent Styling**: Use established CSS classes and color schemes
 4. **Mock Data**: Add appropriate demo data for frontend-only behavior
 5. **Hierarchical Relationships**: Maintain user role relationships (manager > supervisor > frontline/support)
-6. **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
+6. **Lifecycle Management**: Use `isActive` boolean for soft deletion rather than hard removal
+7. **Visual Separation**: Use dividers and status badges to separate different states
+8. **Global Search Integration**: Ensure new filterable content works with existing search patterns
+9. **Creator/User Context**: Distinguish UI behavior based on content ownership using `createdBy` field
+10. **Icon Consistency**: Use Lucide Svelte icons with established sizing and color patterns
+
+### Broadcast Development Workflow
+1. **Interface Updates**: Add new fields to Broadcast interface (e.g., `endDate?: string`)
+2. **Store Integration**: Update broadcast store methods to handle new functionality
+3. **Modal Behavior**: Implement conditional rendering based on `createdBy === currentUser.id`
+4. **Visual States**: Apply consistent opacity and badge patterns for different states
+5. **Search Integration**: Ensure new content fields are included in global search logic
+6. **Sort Logic**: Maintain active/done separation in all broadcast lists
+7. **Button Styling**: Use coordinated colors for related actions (e.g., Export CSV + View Report)
+
+### UI Component Conventions
+- **Button Variations**: `.primary-button` (brand color), `.secondary-button` (grey), coordinated blues for related actions
+- **Icon + Text Pattern**: `<Icon class="w-4 h-4 mr-2" />Button Text` for consistent spacing
+- **Search Components**: Search icon + input field, positioned with `ml-auto` for right alignment
+- **Filter Dropdowns**: ChevronDown icon, show current selection, consistent styling with search
+- **Status Badges**: Small rounded badges with appropriate color coding and opacity variations
+- **Modal Headers**: X icon close in top-right, no redundant close buttons in content area
 
 ### Common Anti-patterns to Avoid
 - Using `@apply` directives in component `<style>` blocks (use regular CSS)
@@ -163,12 +250,13 @@ npm run check    # Svelte type checking
 - Missing role-based permission checks on sensitive features
 - Breaking the organizational hierarchy when creating users
 - Using outdated Svelte 4 patterns (avoid `on:click`, use `onclick` instead)
+- Hard deletion of data (use `isActive: false` for soft deletion)
 
-### Admin Development Notes
-- **User Management**: Supports bulk CSV import with role-specific templates
-- **Team Views**: Complex hierarchical displays with drill-down navigation
-- **Password Management**: Integrated into edit modals with security validation
-- **OU Management**: Organization units control chat/broadcast policies via detailed rule systems
-- **Mock Data Generation**: Dynamic generation of realistic hierarchical user data for testing
+### Large Component Management
+- **File Size**: Broadcast page exceeds 1400 lines - acceptable for complex feature hubs
+- **Interface Definitions**: Keep TypeScript interfaces at top of component files
+- **Mock Data**: Embed realistic test data directly in components for demo purposes
+- **Section Comments**: Use HTML comments to clearly delineate major sections
+- **State Grouping**: Group related `$state()` variables together for clarity
 
 When contributing to this codebase, prioritize consistency with existing patterns and maintain the professional, Teams-like aesthetic that has been established throughout the application.
