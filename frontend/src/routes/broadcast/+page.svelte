@@ -195,6 +195,7 @@
   let selectedTemplate = $state('');
   let templateName = $state('');
   let showSaveTemplate = $state(false);
+  let showOUDropdown = $state(false);
   let viewedBroadcasts = $state<Set<string>>(new Set());
   let newBroadcast = $state({
     title: '',
@@ -652,39 +653,44 @@
               
               <div class="space-y-4">
                 <div>
-                  <span class="block text-sm font-medium text-gray-700 mb-3">Organizational Units *</span>
-                  <div class="mb-3 p-3 bg-white rounded border border-gray-200">
-                    <label class="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={newBroadcast.targetOUs.length === targetOUs.length}
-                        onchange={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          if (target.checked) {
-                            newBroadcast.targetOUs = [...targetOUs];
-                          } else {
-                            newBroadcast.targetOUs = [];
-                          }
-                        }}
-                        disabled={newBroadcast.targetOUs.length === 3 && newBroadcast.targetOUs.length !== targetOUs.length}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                      />
-                      <span class="text-sm font-medium text-gray-700">Select All Units</span>
-                    </label>
-                  </div>
-                  <div class="grid grid-cols-2 gap-3">
-                    {#each targetOUs as ou}
-                      <label class="flex items-center space-x-2 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50 {newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
-                        <input
-                          type="checkbox"
-                          bind:group={newBroadcast.targetOUs}
-                          value={ou}
-                          disabled={newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou)}
-                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] disabled:opacity-50"
-                        />
-                        <span class="text-sm font-medium">{ou}</span>
-                      </label>
-                    {/each}
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Organizational Units *</label>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      onclick={() => showOUDropdown = !showOUDropdown}
+                      class="input-field w-full text-left flex items-center justify-between"
+                    >
+                      <span class="truncate">
+                        {#if newBroadcast.targetOUs.length === 0}
+                          <span class="text-gray-400">Select organizational units...</span>
+                        {:else if newBroadcast.targetOUs.length === 1}
+                          {newBroadcast.targetOUs[0]}
+                        {:else}
+                          {newBroadcast.targetOUs.length} units selected
+                        {/if}
+                      </span>
+                      <svg class="w-4 h-4 text-gray-400 transform transition-transform {showOUDropdown ? 'rotate-180' : ''}" 
+                           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </button>
+                    
+                    {#if showOUDropdown}
+                      <div class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {#each targetOUs as ou}
+                          <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer {newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou) ? 'opacity-50 cursor-not-allowed' : ''}">
+                            <input
+                              type="checkbox"
+                              bind:group={newBroadcast.targetOUs}
+                              value={ou}
+                              disabled={newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou)}
+                              class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] mr-3"
+                            />
+                            <span class="text-sm">{ou}</span>
+                          </label>
+                        {/each}
+                      </div>
+                    {/if}
                   </div>
                   {#if newBroadcast.targetOUs.length === 0}
                     <p class="text-xs text-red-500 mt-2">Please select at least one organizational unit</p>
