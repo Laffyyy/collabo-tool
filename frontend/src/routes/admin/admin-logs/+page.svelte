@@ -474,7 +474,6 @@
 								{#if activeTab === 'broadcast'}
 									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
 								{/if}
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
@@ -523,11 +522,6 @@
 											{/if}
 										</td>
 									{/if}
-									<td class="px-6 py-4 whitespace-nowrap">
-										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {log.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-											{log.success ? 'Success' : 'Failed'}
-										</span>
-									</td>
 									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 										<button
 											onclick={() => viewLogDetails(log)}
@@ -558,7 +552,7 @@
 
 <!-- Log Details Modal -->
 {#if showLogDetails && selectedLog}
-  <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" 
+  <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
        role="dialog" 
        aria-modal="true"
        tabindex="-1"
