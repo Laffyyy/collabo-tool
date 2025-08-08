@@ -12,15 +12,18 @@ This is a sophisticated hackathon collaboration tool built with SvelteKit 5, Typ
 - **ESLint + Prettier** with Svelte-specific configurations
 - **Lucide Svelte** for consistent iconography throughout the application
 
-### Directory Structure Pattern
+### Key Files & Directories
 ```
 frontend/src/
-├── lib/           # Shared library code ($lib alias)
-│   ├── components/ # Reusable UI components
-│   │   └── Navigation.svelte # Main navigation header
-│   └── stores/    # Svelte stores for state management
-│       ├── auth.svelte.ts    # Authentication and role management
-│       └── broadcast.svelte.ts # Broadcast messaging system
+├── lib/             # Shared library code
+│   ├── components/  # Reusable UI components
+│   │   ├── ConfirmationModal.svelte  # Global confirmation dialogs
+│   │   ├── Navigation.svelte         # Main app navigation
+│   │   └── ProfileAvatar.svelte      # User avatar display
+│   └── stores/     # State management
+│       ├── auth.svelte.ts    # Authentication & roles
+│       ├── broadcast.svelte.ts # Message broadcasting
+│       └── theme.svelte.ts   # Theme management
 └── routes/        # SvelteKit file-based routing
     ├── admin/      # Complete admin management suite
     │   ├── user-management/     # User CRUD, hierarchy, passwords
@@ -58,13 +61,29 @@ npm run check    # Svelte type checking
 
 ## Key Conventions
 
-### Svelte 5 Patterns
-- **State Management**: Use `$state()` runes for local component state
-- **Derived Values**: Use `$derived()` for simple computations, `$derived.by()` for complex logic
-- **Props**: Use `$props()` runes syntax with `$bindable()` for two-way binding
-- **Event Handlers**: Use `onclick` attribute syntax instead of `on:click` for better TypeScript support
-- **Children Rendering**: Use `{@render children()}` pattern in layout components
-- **Store Integration**: Class-based stores with `$state()` inside, exported as writable stores
+### Svelte Component Patterns
+- Use `$state()` runes for component state
+- Prefer `onclick` over `on:click` for TypeScript support
+- Use regular CSS in `<style>` blocks (no `@apply`)
+- Example from `ProfileAvatar.svelte`:
+```svelte
+<script lang="ts">
+  const user = $state<User | null>(null);
+  const size = $props<'sm' | 'md' | 'lg'>('md');
+</script>
+
+<div class="avatar {size}" onclick={handleClick}>
+  {user?.initials ?? '??'}
+</div>
+
+<style>
+  .avatar {
+    border-radius: 9999px;
+    background: #01c0a4;
+    color: white;
+  }
+</style>
+```
 
 ### Store Architecture
 - **Class-based Stores**: Use classes with `$state()` runes for complex state management
