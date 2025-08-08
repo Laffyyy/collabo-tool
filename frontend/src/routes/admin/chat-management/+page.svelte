@@ -23,9 +23,35 @@
     archived: boolean;
   }
 
-  let activeTab = $state<'conversations' | 'messages' | 'flagged'>('conversations');
+  let activeTab = $state<'conversations' | 'flagged'>('conversations');
   let searchQuery = $state('');
   let selectedType = $state<'all' | '1v1' | 'group'>('all');
+
+  // Input filtering function
+  const filterSearchInput = (value: string) => {
+    // Allow only alphanumeric characters, spaces, and specific symbols: &, _, -, (, )
+    const allowedPattern = /^[a-zA-Z0-9\s&_\-()]*$/;
+    const filtered = value.replace(/[^a-zA-Z0-9\s&_\-()]/g, '');
+    return filtered.slice(0, 50); // Limit to 50 characters
+  };
+
+  const handleSearchInput = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    const filteredValue = filterSearchInput(target.value);
+    searchQuery = filteredValue;
+    if (target.value !== filteredValue) {
+      target.value = filteredValue;
+    }
+  };
+
+  const handleSearchPaste = (event: ClipboardEvent) => {
+    event.preventDefault();
+    const clipboardData = event.clipboardData?.getData('text') || '';
+    const filteredValue = filterSearchInput(clipboardData);
+    const currentValue = searchQuery;
+    const newValue = filterSearchInput(currentValue + filteredValue);
+    searchQuery = newValue;
+  };
 
   // Mock data
   const mockConversations: ChatConversation[] = [
@@ -106,26 +132,22 @@
     });
   });
 
-  const filteredMessages = $derived(() => {
+  const flaggedMessages = $derived(() => {
     return mockMessages.filter(msg => {
+      const matchesFlag = msg.flagged;
       const matchesSearch = searchQuery === '' || 
-        msg.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        msg.conversationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         msg.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.conversationName.toLowerCase().includes(searchQuery.toLowerCase());
+        msg.content.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = selectedType === 'all' || msg.type === selectedType;
       
-      return matchesSearch && matchesType;
+      return matchesFlag && matchesSearch && matchesType;
     });
-  });
-
-  const flaggedMessages = $derived(() => {
-    return mockMessages.filter(msg => msg.flagged);
   });
 
   const tabCounts = $derived(() => {
     return {
       conversations: filteredConversations().length,
-      messages: filteredMessages().length,
       flagged: flaggedMessages().length
     };
   });
@@ -185,8 +207,11 @@
                 <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   bind:value={searchQuery}
+                  oninput={handleSearchInput}
+                  onpaste={handleSearchPaste}
                   type="text"
-                  placeholder="Search conversations, messages, or participants..."
+                  maxlength="50"
+                  placeholder="Search conversation name or sender..."
                   class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
                 />
               </div>
@@ -217,17 +242,6 @@
                 <MessageSquare class="w-4 h-4" />
                 <span>Conversations</span>
                 <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().conversations}</span>
-              </div>
-            </button>
-            
-            <button
-              onclick={() => activeTab = 'messages'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'messages' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
-            >
-              <div class="flex items-center space-x-2">
-                <MessageSquare class="w-4 h-4" />
-                <span>Messages</span>
-                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().messages}</span>
               </div>
             </button>
             
@@ -308,63 +322,6 @@
               </tbody>
             </table>
           </div>
-        {:else if activeTab === 'messages'}
-          <!-- Messages Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sender</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conversation</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Content</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredMessages() as message (message.id)}
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatTimestamp(message.timestamp)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {message.sender}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {message.conversationName}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                      {message.content}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {message.type === 'group' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
-                        {message.type === 'group' ? 'Group' : '1:1'}
-                      </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div class="flex items-center space-x-2">
-                        <button
-                          onclick={() => viewMessage(message)}
-                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
-                        >
-                          <Eye class="w-4 h-4" />
-                          <span>View</span>
-                        </button>
-                        <button
-                          onclick={() => deleteMessage(message)}
-                          class="text-red-600 hover:text-red-500 flex items-center space-x-1"
-                        >
-                          <Trash2 class="w-4 h-4" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
         {:else if activeTab === 'flagged'}
           <!-- Flagged Messages Table -->
           <div class="overflow-x-auto">
@@ -373,6 +330,7 @@
                 <tr>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sender</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conversation</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Content</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -386,6 +344,11 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {message.sender}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {message.type === 'group' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                        {message.type === 'group' ? 'Group' : '1:1'}
+                      </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {message.conversationName}
@@ -429,7 +392,7 @@
         {/if}
 
         <!-- Empty State -->
-        {#if (activeTab === 'conversations' && filteredConversations().length === 0) || (activeTab === 'messages' && filteredMessages().length === 0) || (activeTab === 'flagged' && flaggedMessages().length === 0)}
+        {#if (activeTab === 'conversations' && filteredConversations().length === 0) || (activeTab === 'flagged' && flaggedMessages().length === 0)}
           <div class="text-center py-12">
             <MessageSquare class="mx-auto h-12 w-12 text-gray-400" />
             <h3 class="mt-2 text-sm font-medium text-gray-900">No {activeTab} found</h3>

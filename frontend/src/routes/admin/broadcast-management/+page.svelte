@@ -23,7 +23,7 @@
     reportedAt?: Date;
   }
 
-  let activeTab = $state<'sent' | 'scheduled' | 'drafts' | 'archived' | 'deleted' | 'reported' | 'analytics'>('sent');
+  let activeTab = $state<'sent' | 'scheduled' | 'archived' | 'deleted' | 'reported'>('sent');
   let searchQuery = $state('');
   let selectedPriority = $state<'all' | 'low' | 'medium' | 'high'>('all');
   let selectedStatus = $state<'all' | 'draft' | 'scheduled' | 'sent' | 'archived' | 'deleted'>('all');
@@ -130,10 +130,9 @@
   // Computed values
   const filteredBroadcasts = $derived(() => {
     return mockBroadcasts.filter(broadcast => {
-      const matchesTab = activeTab === 'analytics' || broadcast.status === activeTab || 
+      const matchesTab = broadcast.status === activeTab || 
         (activeTab === 'sent' && broadcast.status === 'sent') ||
         (activeTab === 'scheduled' && broadcast.status === 'scheduled') ||
-        (activeTab === 'drafts' && broadcast.status === 'draft') ||
         (activeTab === 'archived' && broadcast.status === 'archived') ||
         (activeTab === 'deleted' && broadcast.status === 'deleted') ||
         (activeTab === 'reported' && broadcast.isReported === true);
@@ -154,27 +153,9 @@
     return {
       sent: mockBroadcasts.filter(b => b.status === 'sent').length,
       scheduled: mockBroadcasts.filter(b => b.status === 'scheduled').length,
-      drafts: mockBroadcasts.filter(b => b.status === 'draft').length,
       archived: mockBroadcasts.filter(b => b.status === 'archived').length,
       deleted: mockBroadcasts.filter(b => b.status === 'deleted').length,
-      reported: mockBroadcasts.filter(b => b.isReported === true).length,
-      analytics: mockBroadcasts.length
-    };
-  });
-
-  const analytics = $derived(() => {
-    const sent = mockBroadcasts.filter(b => b.status === 'sent');
-    const totalSent = sent.length;
-    const totalRecipients = sent.reduce((sum, b) => sum + b.totalRecipients, 0);
-    const totalAcknowledgments = sent.reduce((sum, b) => sum + b.acknowledgmentCount, 0);
-    const averageAckRate = totalRecipients > 0 ? (totalAcknowledgments / totalRecipients * 100) : 0;
-    
-    return {
-      totalSent,
-      totalRecipients,
-      totalAcknowledgments,
-      averageAckRate: Math.round(averageAckRate),
-      highPriority: sent.filter(b => b.priority === 'high').length,
+      reported: mockBroadcasts.filter(b => b.isReported === true).length
     };
   });
 
@@ -254,11 +235,6 @@
     }
   };
 
-  const viewBroadcastDetails = (broadcast: Broadcast) => {
-    selectedBroadcast = broadcast;
-    showBroadcastDetails = true;
-  };
-
   const exportAnalytics = () => {
     alert('Exporting analytics data...');
   };
@@ -275,13 +251,6 @@
           <h1 class="text-3xl font-bold text-gray-800 mb-2">Broadcast Management</h1>
           <p class="text-gray-600">Monitor and manage broadcast messages and announcements</p>
         </div>
-        <button
-          onclick={exportAnalytics}
-          class="primary-button flex items-center space-x-2"
-        >
-          <BarChart3 class="w-4 h-4" />
-          <span>Export Analytics</span>
-        </button>
       </div>
 
       <!-- Main Panel -->
@@ -357,17 +326,6 @@
             </button>
 
             <button
-              onclick={() => activeTab = 'drafts'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'drafts' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
-            >
-              <div class="flex items-center space-x-2">
-                <Archive class="w-4 h-4" />
-                <span>Drafts</span>
-                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().drafts}</span>
-              </div>
-            </button>
-
-            <button
               onclick={() => activeTab = 'archived'}
               class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'archived' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
@@ -399,197 +357,86 @@
                 <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().reported}</span>
               </div>
             </button>
-
-            <button
-              onclick={() => activeTab = 'analytics'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'analytics' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
-            >
-              <div class="flex items-center space-x-2">
-                <TrendingUp class="w-4 h-4" />
-                <span>Analytics</span>
-              </div>
-            </button>
           </nav>
         </div>
 
         <!-- Content -->
-        {#if activeTab === 'analytics'}
-          <!-- Analytics Dashboard -->
-          <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div class="bg-white p-6 rounded-lg border border-gray-200">
-                <div class="flex items-center">
-                  <div class="p-2 bg-blue-100 rounded-lg">
-                    <Send class="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div class="ml-4">
-                    <p class="text-2xl font-bold text-gray-900">{analytics().totalSent}</p>
-                    <p class="text-sm text-gray-500">Total Sent</p>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white p-6 rounded-lg border border-gray-200">
-                <div class="flex items-center">
-                  <div class="p-2 bg-green-100 rounded-lg">
-                    <Users class="w-6 h-6 text-green-600" />
-                  </div>
-                  <div class="ml-4">
-                    <p class="text-2xl font-bold text-gray-900">{analytics().totalRecipients}</p>
-                    <p class="text-sm text-gray-500">Total Recipients</p>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white p-6 rounded-lg border border-gray-200">
-                <div class="flex items-center">
-                  <div class="p-2 bg-purple-100 rounded-lg">
-                    <CheckCircle class="w-6 h-6 text-purple-600" />
-                  </div>
-                  <div class="ml-4">
-                    <p class="text-2xl font-bold text-gray-900">{analytics().averageAckRate}%</p>
-                    <p class="text-sm text-gray-500">Avg. Acknowledgment</p>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white p-6 rounded-lg border border-gray-200">
-                <div class="flex items-center">
-                  <div class="p-2 bg-red-100 rounded-lg">
-                    <Radio class="w-6 h-6 text-red-600" />
-                  </div>
-                  <div class="ml-4">
-                    <p class="text-2xl font-bold text-gray-900">{analytics().highPriority}</p>
-                    <p class="text-sm text-gray-500">High Priority</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Recent Activity -->
-            <div class="bg-white rounded-lg border border-gray-200">
-              <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Recent Broadcast Activity</h3>
-              </div>
-              <div class="p-6">
-                <div class="space-y-4">
-                  {#each mockBroadcasts.filter(b => b.status === 'sent').slice(0, 5) as broadcast}
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div class="flex items-center space-x-3">
-                        <div class="p-2 bg-blue-100 rounded-lg">
-                          <Radio class="w-4 h-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <p class="font-medium text-gray-900">{broadcast.title}</p>
-                          <p class="text-sm text-gray-500">Sent to {broadcast.totalRecipients} recipients</p>
-                        </div>
-                      </div>
-                      <div class="text-right">
-                        <p class="text-sm font-medium text-gray-900">{getAcknowledgmentRate(broadcast)}</p>
-                        <p class="text-xs text-gray-500">Acknowledgment Rate</p>
-                      </div>
+        <!-- Broadcast Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ack Rate</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                <tr class="hover:bg-gray-50">
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
+                      <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
                     </div>
-                  {/each}
-                </div>
-              </div>
-            </div>
-          </div>
-        {:else}
-          <!-- Broadcast Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ack Rate</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredBroadcasts() as broadcast (broadcast.id)}
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
-                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
-                      </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
-                        {broadcast.priority}
-                      </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getStatusColor(broadcast.status)}">
-                        {broadcast.status}
-                      </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {broadcast.totalRecipients}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getAcknowledgmentRate(broadcast)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {#if broadcast.status === 'sent' && broadcast.sentAt}
-                        {formatTimestamp(broadcast.sentAt)}
-                      {:else if broadcast.status === 'scheduled' && broadcast.scheduledFor}
-                        {formatTimestamp(broadcast.scheduledFor)}
-                      {:else}
-                        {formatTimestamp(broadcast.createdAt)}
-                      {/if}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div class="flex items-center space-x-2">
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
+                      {broadcast.priority}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getStatusColor(broadcast.status)}">
+                      {broadcast.status}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {broadcast.totalRecipients}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {getAcknowledgmentRate(broadcast)}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {#if broadcast.status === 'sent' && broadcast.sentAt}
+                      {formatTimestamp(broadcast.sentAt)}
+                    {:else if broadcast.status === 'scheduled' && broadcast.scheduledFor}
+                      {formatTimestamp(broadcast.scheduledFor)}
+                    {:else}
+                      {formatTimestamp(broadcast.createdAt)}
+                    {/if}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div class="flex items-center space-x-2">
+                      <button
+                        onclick={() => viewBroadcast(broadcast)}
+                        class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                      >
+                        <Eye class="w-4 h-4" />
+                        <span>View</span>
+                      </button>
+                      {#if broadcast.status === 'sent'}
                         <button
-                          onclick={() => viewBroadcast(broadcast)}
-                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                          onclick={() => archiveBroadcast(broadcast)}
+                          class="text-orange-600 hover:text-orange-500 flex items-center space-x-1"
                         >
-                          <Eye class="w-4 h-4" />
-                          <span>View</span>
+                          <Archive class="w-4 h-4" />
+                          <span>Archive</span>
                         </button>
-                        {#if broadcast.status === 'draft'}
-                          <button
-                            onclick={() => duplicateBroadcast(broadcast)}
-                            class="text-blue-600 hover:text-blue-500 flex items-center space-x-1"
-                          >
-                            <Radio class="w-4 h-4" />
-                            <span>Duplicate</span>
-                          </button>
-                        {/if}
-                        {#if broadcast.status === 'sent'}
-                          <button
-                            onclick={() => archiveBroadcast(broadcast)}
-                            class="text-orange-600 hover:text-orange-500 flex items-center space-x-1"
-                          >
-                            <Archive class="w-4 h-4" />
-                            <span>Archive</span>
-                          </button>
-                        {/if}
-                        {#if broadcast.status === 'draft'}
-                          <button
-                            onclick={() => deleteBroadcast(broadcast)}
-                            class="text-red-600 hover:text-red-500 flex items-center space-x-1"
-                          >
-                            <Trash2 class="w-4 h-4" />
-                            <span>Delete</span>
-                          </button>
-                        {/if}
-                      </div>
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
+                      {/if}
+                    </div>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
 
         <!-- Empty State -->
-        {#if activeTab !== 'analytics' && filteredBroadcasts().length === 0}
+        {#if filteredBroadcasts().length === 0}
           <div class="text-center py-12">
             <Radio class="mx-auto h-12 w-12 text-gray-400" />
             <h3 class="mt-2 text-sm font-medium text-gray-900">No broadcasts found</h3>
