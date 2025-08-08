@@ -6,7 +6,7 @@
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
 		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key,
-		UserPlus, Activity, Headphones, Crown, LockKeyhole
+		UserPlus, Activity, Headphones, Crown, LockKeyhole, ArrowUpDown, ArrowUp, ArrowDown
 	} from 'lucide-svelte';
 
 	// TypeScript interfaces
@@ -57,6 +57,10 @@
 	let selectedStatus = $state<string>('all');
 	let currentPage = $state<number>(1);
 	let itemsPerPage = 10;
+	
+	// Sorting states
+	let sortColumn = $state<string>('');
+	let sortDirection = $state<'asc' | 'desc'>('asc');
 	
 	// Selection states
 	let selectedRows = $state<Set<string>>(new Set());
@@ -323,16 +327,128 @@
 		filterUsers();
 	});
 
-	// Computed values
+	// Computed values - Dynamic tab counts based on current filters
 	const tabCounts = $derived({
-		frontline: users.filter(u => u.role === 'Frontline' && u.status === 'Active').length,
-		support: users.filter(u => u.role === 'Support' && u.status === 'Active').length,
-		supervisor: users.filter(u => u.role === 'Supervisor' && u.status === 'Active').length,
-		manager: users.filter(u => u.role === 'Manager' && u.status === 'Active').length,
-		admin: users.filter(u => u.type === 'admin' && u.status === 'Active').length,
-		deactivated: users.filter(u => u.status === 'Deactivated').length,
-		locked: users.filter(u => u.status === 'Locked').length,
-		firstTime: users.filter(u => u.status === 'First-time').length
+		frontline: (() => {
+			if (currentTab === 'frontline') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Frontline' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		support: (() => {
+			if (currentTab === 'support') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Support' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		supervisor: (() => {
+			if (currentTab === 'supervisor') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Supervisor' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		manager: (() => {
+			if (currentTab === 'manager') return filteredUsers.length;
+			let filtered = users.filter(u => u.role === 'Manager' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		admin: (() => {
+			if (currentTab === 'admin') return filteredUsers.length;
+			let filtered = users.filter(u => u.type === 'admin' && u.status === 'Active');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		deactivated: (() => {
+			if (currentTab === 'deactivated') return filteredUsers.length;
+			let filtered = users.filter(u => u.status === 'Deactivated');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		locked: (() => {
+			if (currentTab === 'locked') return filteredUsers.length;
+			let filtered = users.filter(u => u.status === 'Locked');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})(),
+		firstTime: (() => {
+			if (currentTab === 'first-time') return filteredUsers.length;
+			let filtered = users.filter(u => u.status === 'First-time');
+			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
+			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
+			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
+			if (searchQuery) {
+				filtered = filtered.filter(u => 
+					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+				);
+			}
+			return filtered.length;
+		})()
 	});
 
 	// Helper functions for hierarchy
@@ -435,12 +551,87 @@
 		currentPage = 1; // Reset to first page when filtering
 	};
 
+	const handleSort = (column: string) => {
+		if (sortColumn === column) {
+			// Three-state toggle: asc → desc → reset
+			if (sortDirection === 'asc') {
+				sortDirection = 'desc';
+			} else if (sortDirection === 'desc') {
+				// Reset sorting
+				sortColumn = '';
+				sortDirection = 'asc';
+				filterUsers(); // Re-filter to get original order
+				return;
+			}
+		} else {
+			// New column, default to ascending
+			sortColumn = column;
+			sortDirection = 'asc';
+		}
+		
+		// Sort filteredUsers
+		filteredUsers.sort((a, b) => {
+			let aValue: string | number;
+			let bValue: string | number;
+			
+			switch (column) {
+				case 'employeeId':
+					aValue = a.employeeId;
+					bValue = b.employeeId;
+					break;
+				case 'name':
+					aValue = a.name;
+					bValue = b.name;
+					break;
+				case 'email':
+					aValue = a.email;
+					bValue = b.email;
+					break;
+				case 'ou':
+					aValue = a.ou;
+					bValue = b.ou;
+					break;
+				case 'role':
+					// Custom role hierarchy for sorting
+					const roleOrder = { 'Admin': 5, 'Manager': 4, 'Supervisor': 3, 'Support': 2, 'Frontline': 1 };
+					aValue = roleOrder[a.role as keyof typeof roleOrder] || 0;
+					bValue = roleOrder[b.role as keyof typeof roleOrder] || 0;
+					break;
+				case 'status':
+					aValue = a.status;
+					bValue = b.status;
+					break;
+				default:
+					return 0;
+			}
+			
+			if (typeof aValue === 'string' && typeof bValue === 'string') {
+				const comparison = aValue.localeCompare(bValue);
+				return sortDirection === 'asc' ? comparison : -comparison;
+			} else if (typeof aValue === 'number' && typeof bValue === 'number') {
+				const comparison = aValue - bValue;
+				return sortDirection === 'asc' ? comparison : -comparison;
+			}
+			
+			return 0;
+		});
+	};
+
+	// Helper function to get sort icon
+	const getSortIcon = (column: string) => {
+		if (sortColumn !== column) return ArrowUpDown;
+		return sortDirection === 'asc' ? ArrowUp : ArrowDown;
+	};
+
 	const changeTab = (tab: string) => {
 		currentTab = tab;
 		// Clear selections when switching tabs
 		selectedRows = new Set();
 		selectAll = false;
 		lastSelectedIndex = -1;
+		// Reset sorting when switching tabs
+		sortColumn = '';
+		sortDirection = 'asc';
 		filterUsers();
 	};
 
@@ -960,6 +1151,13 @@
 		const currentPageUserIds = new Set(paginatedUsers().map(user => user.id));
 		selectAll = currentPageUserIds.size > 0 && [...currentPageUserIds].every(id => selectedRows.has(id));
 	});
+
+	// Reactive effect to filter users when dropdown selections change
+	$effect(() => {
+		// This effect runs whenever selectedOU, selectedRole, selectedStatus, or searchQuery changes
+		selectedOU; selectedRole; selectedStatus; searchQuery;
+		filterUsers();
+	});
 </script>
 
 <svelte:head>
@@ -1209,18 +1407,66 @@
 										class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
 									/>
 								</th>
-								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-								<th class="w-56 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-								<th class="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-								<th class="w-36 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OU</th>
-								<th class="w-32 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+								<th class="w-32 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('employeeId')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Employee ID</span>
+										<svelte:component this={getSortIcon('employeeId')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-56 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('name')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Name</span>
+										<svelte:component this={getSortIcon('name')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-64 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('email')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Email</span>
+										<svelte:component this={getSortIcon('email')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-36 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('ou')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>OU</span>
+										<svelte:component this={getSortIcon('ou')} class="w-3 h-3" />
+									</button>
+								</th>
+								<th class="w-32 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('role')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Role</span>
+										<svelte:component this={getSortIcon('role')} class="w-3 h-3" />
+									</button>
+								</th>
 								{#if currentTab === 'frontline' || currentTab === 'support'}
 									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
 									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
 								{:else if currentTab === 'supervisor'}
 									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
 								{/if}
-								<th class="w-28 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+								<th class="w-28 px-3 py-3 text-left">
+									<button 
+										onclick={() => handleSort('status')}
+										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+									>
+										<span>Status</span>
+										<svelte:component this={getSortIcon('status')} class="w-3 h-3" />
+									</button>
+								</th>
 								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
@@ -1303,6 +1549,107 @@
 									</td>
 								</tr>
 							{/each}
+							
+							<!-- Empty State Messages -->
+							{#if paginatedUsers().length === 0}
+								<tr>
+									<td colspan="9" class="px-6 py-12 text-center">
+										<div class="flex flex-col items-center justify-center space-y-3">
+											{#if currentTab === 'frontline'}
+												<Users class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Frontline Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No frontline users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active frontline users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'support'}
+												<Headphones class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Support Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No support users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active support users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'supervisor'}
+												<Activity class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Supervisors Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No supervisors match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active supervisors in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'manager'}
+												<Crown class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Managers Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No managers match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active managers in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'admin'}
+												<Shield class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Admin Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No admin users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no active admin users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'locked'}
+												<LockKeyhole class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Locked Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No locked users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no locked users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'deactivated'}
+												<X class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Deactivated Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No deactivated users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no deactivated users in the system.
+													{/if}
+												</div>
+											{:else if currentTab === 'first-time'}
+												<UserPlus class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No First-time Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No first-time users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no first-time users requiring setup in the system.
+													{/if}
+												</div>
+											{:else}
+												<User class="w-12 h-12 text-gray-300" />
+												<div class="text-lg font-medium text-gray-500">No Users Found</div>
+												<div class="text-sm text-gray-400 max-w-md">
+													{#if searchQuery || selectedOU !== 'all' || selectedRole !== 'all' || selectedStatus !== 'all'}
+														No users match your current filters. Try adjusting your search or filters.
+													{:else}
+														There are currently no users in the system.
+													{/if}
+												</div>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/if}
 						</tbody>
 					</table>
 				</div>
