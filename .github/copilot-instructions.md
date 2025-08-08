@@ -3,6 +3,8 @@
 ## Project Overview
 This is a sophisticated hackathon collaboration tool built with SvelteKit 5, TypeScript, and Tailwind CSS 4. The project is a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
 
+**Demo Nature**: This is a frontend-only demonstration with mock data - no backend integration. All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage.
+
 ## Architecture & Project Structure
 
 ### Core Framework Stack
@@ -44,6 +46,8 @@ npm run dev -- --open  # Development server with auto-open
 
 **Network Configuration**: Dev server exposes on `0.0.0.0:5173` with ngrok support for external testing.
 
+**PowerShell Users**: Use `npm run dev` ; `npm run dev -- --open` for auto-opening browser.
+
 ### Testing Strategy
 - **Svelte Component Tests**: Use `.svelte.test.ts` suffix, run in browser environment
 - **Server/Utility Tests**: Use `.test.ts` or `.spec.ts` suffix, run in Node environment
@@ -70,6 +74,7 @@ npm run check    # Svelte type checking
 - **Class-based Stores**: Use classes with `$state()` runes for complex state management
 - **Store Pattern**: Export as `writable()` stores from classes for reactivity
 - **Role-based Access**: Implement permission systems using derived getters
+- **Mock Data Integration**: Initialize stores with realistic demo data in constructors
 - **Example Pattern**:
   ```typescript
   class AuthStore {
@@ -83,7 +88,7 @@ npm run check    # Svelte type checking
 - **Hybrid Approach**: Mix Tailwind utility classes with component-scoped CSS
 - **Component Styles**: Use `<style>` blocks with regular CSS (not `@apply` directives)
 - **Utility Classes**: Use Tailwind classes directly in templates for layout and spacing
-- **Custom Classes**: Create semantic CSS classes for complex styling (e.g., `input-field`, `primary-button`)
+- **Global Utility Classes**: Use predefined classes in `app.css` like `.primary-button`, `.secondary-button`, `.input-field`
 - **Color Scheme**: Primary brand color `#01c0a4` (aqua green) with grey (#374151, #f9fafb) for neutral elements
 - **Teams-like UI**: Grey navigation background, white content areas, professional styling
 
@@ -107,6 +112,7 @@ npm run check    # Svelte type checking
 - **Demo Behavior**: All authentication is frontend-only with mock data
 - **Route Protection**: Pages check authentication state and redirect accordingly
 - **Navigation Hiding**: Layout uses `noNavPages` array to hide navigation on auth routes and chat
+- **Mock User Initialization**: Auth store provides demo users with realistic hierarchical relationships
 
 ## Configuration Notes
 
@@ -129,6 +135,7 @@ npm run check    # Svelte type checking
 3. **Consistent Styling**: Use established CSS classes and color schemes
 4. **Mock Data**: Add appropriate demo data for frontend-only behavior
 5. **Hierarchical Relationships**: Maintain user role relationships (manager > supervisor > frontline/support)
+6. **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
 
 ### Common Anti-patterns to Avoid
 - Using `@apply` directives in component `<style>` blocks (use regular CSS)
@@ -136,6 +143,7 @@ npm run check    # Svelte type checking
 - Inconsistent color usage (use the established palette)
 - Missing role-based permission checks on sensitive features
 - Breaking the organizational hierarchy when creating users
+- Using outdated Svelte 4 patterns (avoid `on:click`, use `onclick` instead)
 
 ### Admin Development Notes
 - **User Management**: Supports bulk CSV import with role-specific templates

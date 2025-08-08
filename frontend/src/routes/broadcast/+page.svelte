@@ -7,7 +7,10 @@
     AlertTriangle,
     CheckCircle,
     Clock,
-    Download
+    Download,
+    FileText,
+    Search,
+    Filter
   } from 'lucide-svelte';
 
   // Type definitions
@@ -197,6 +200,9 @@
   let showSaveTemplate = $state(false);
   let showOUDropdown = $state(false);
   let viewedBroadcasts = $state<Set<string>>(new Set());
+  let searchQuery = $state('');
+  let priorityFilter = $state('all');
+  let showFilterDropdown = $state(false);
   let newBroadcast = $state({
     title: '',
     content: '',
@@ -242,6 +248,23 @@
       .filter(b => {
         if (!b.isActive) return false;
         
+        // Search filter (applies globally across all tabs)
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          const matchesTitle = b.title.toLowerCase().includes(query);
+          const matchesContent = b.content.toLowerCase().includes(query);
+          if (!matchesTitle && !matchesContent) return false;
+        }
+        
+        // Priority filter (applies globally across all tabs)
+        if (priorityFilter !== 'all' && b.priority !== priorityFilter) return false;
+        
+        // If search or filter is active, show matching broadcasts from all tabs
+        if (searchQuery.trim() || priorityFilter !== 'all') {
+          return true; // Already filtered above, show all matching broadcasts
+        }
+        
+        // Otherwise, apply tab filtering only when no search/filter is active
         // Special handling for "My Broadcasts" tab
         if (activeTab === 'My Broadcasts') {
           return b.createdBy === currentUser.id;
@@ -395,6 +418,10 @@
 
   const exportCSV = (broadcast: Broadcast) => {
     alert('CSV export functionality would be implemented here.');
+  };
+
+  const viewReport = (broadcast: Broadcast) => {
+    alert('View detailed report functionality would be implemented here.');
   };
 
   const openBroadcastDetails = (broadcast: Broadcast) => {
@@ -900,30 +927,90 @@
 
   <!-- Tabs -->
   <div class="border-b border-gray-200 mb-6">
-    <nav class="-mb-px flex space-x-8">
-      {#each tabs as tab}
-        <button
-          onclick={() => activeTab = tab.id}
-          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors relative {activeTab === tab.id
-            ? 'border-[#01c0a4] text-[#01c0a4]'
-            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }"
-        >
-          {tab.label}
-          <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium {activeTab === tab.id
-            ? 'bg-[#01c0a4] text-white'
-            : 'bg-gray-100 text-gray-600'
-          }">
-            {tabCounts[tab.id] || 0}
-          </span>
+    <div class="flex items-center justify-between">
+      <nav class="-mb-px flex space-x-8">
+        {#each tabs as tab}
+          <button
+            onclick={() => activeTab = tab.id}
+            class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors relative {activeTab === tab.id
+              ? 'border-[#01c0a4] text-[#01c0a4]'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }"
+          >
+            {tab.label}
+            <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium {activeTab === tab.id
+              ? 'bg-[#01c0a4] text-white'
+              : 'bg-gray-100 text-gray-600'
+            }">
+              {tabCounts[tab.id] || 0}
+            </span>
+            
+            <!-- New Broadcast Indicator -->
+            {#if tabsWithNewBroadcasts[tab.id]}
+              <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
+            {/if}
+          </button>
+        {/each}
+      </nav>
+      
+      <!-- Search and Filters -->
+      <div class="flex items-center space-x-3 -mb-px">
+        <!-- Search -->
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search class="h-4 w-4 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            bind:value={searchQuery}
+            placeholder="Search broadcasts..."
+            class="block w-64 pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] text-sm"
+          />
+        </div>
+        
+        <!-- Priority Filter -->
+        <div class="relative">
+          <button
+            onclick={() => showFilterDropdown = !showFilterDropdown}
+            class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+          >
+            <Filter class="h-4 w-4 mr-2" />
+            {priorityFilter === 'all' ? 'All Priorities' : priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
+          </button>
           
-          <!-- New Broadcast Indicator -->
-          {#if tabsWithNewBroadcasts[tab.id]}
-            <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
+          {#if showFilterDropdown}
+            <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+              <div class="py-1">
+                <button
+                  onclick={() => { priorityFilter = 'all'; showFilterDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'all' ? 'bg-gray-100' : ''}"
+                >
+                  All Priorities
+                </button>
+                <button
+                  onclick={() => { priorityFilter = 'high'; showFilterDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'high' ? 'bg-gray-100' : ''}"
+                >
+                  High Priority
+                </button>
+                <button
+                  onclick={() => { priorityFilter = 'medium'; showFilterDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'medium' ? 'bg-gray-100' : ''}"
+                >
+                  Medium Priority
+                </button>
+                <button
+                  onclick={() => { priorityFilter = 'low'; showFilterDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'low' ? 'bg-gray-100' : ''}"
+                >
+                  Low Priority
+                </button>
+              </div>
+            </div>
           {/if}
-        </button>
-      {/each}
-    </nav>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Broadcasts List -->
@@ -989,17 +1076,26 @@
           <!-- Acknowledgment Count -->
           {#if broadcast.requiresAcknowledgment}
             <div class="text-right flex-shrink-0 ml-4">
-              <div class="text-sm text-gray-500 mb-2 whitespace-nowrap">
+              <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
                 {broadcast.acknowledgments.length} acknowledgments
               </div>
               {#if canAccessAdmin && broadcast.acknowledgments.length > 0}
-                <button 
-                  onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
-                  class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
-                >
-                  <Download class="w-4 h-4" />
-                  <span>Export CSV</span>
-                </button>
+                <div class="space-y-2">
+                  <button 
+                    onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
+                    class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
+                  >
+                    <Download class="w-4 h-4" />
+                    <span>Export CSV</span>
+                  </button>
+                  <button 
+                    onclick={(e) => { e.stopPropagation(); viewReport(broadcast); }}
+                    class="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1 whitespace-nowrap"
+                  >
+                    <FileText class="w-4 h-4" />
+                    <span>View Report</span>
+                  </button>
+                </div>
               {/if}
             </div>
           {/if}
