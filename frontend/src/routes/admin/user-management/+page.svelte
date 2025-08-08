@@ -969,13 +969,13 @@
 <div class="h-screen bg-gray-50 flex flex-col">
 	<div class="w-full max-w-[98%] mx-auto flex-1 flex flex-col p-6 min-h-0">
 		<!-- Header -->
-		<div class="mb-4">
+		<div class="mb-4 fade-in">
 			<h1 class="text-xl font-bold text-gray-900 mb-1">User Management</h1>
 			<p class="text-sm text-gray-600">Manage users, administrators, and access permissions</p>
 		</div>
 
 		<!-- Search and Filters -->
-		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0">
+		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0 fade-in">
 				<!-- Search Bar Section -->
 				<div class="p-4 border-b border-gray-200">
 					<div class="flex flex-col lg:flex-row gap-3">
@@ -1003,6 +1003,19 @@
 									<option value="all">All OUs</option>
 									{#each ouOptions as ou}
 										<option value={ou}>{ou}</option>
+									{/each}
+								</select>
+							{/if}
+
+							<!-- Role Filter - only show for locked, deactivated, and first-time tabs -->
+							{#if ['locked', 'deactivated', 'first-time'].includes(currentTab)}
+								<select
+									bind:value={selectedRole}
+									class="flex-1 max-w-[150px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								>
+									<option value="all">All Roles</option>
+									{#each roleOptions as role}
+										<option value={role}>{role}</option>
 									{/each}
 								</select>
 							{/if}
@@ -1286,26 +1299,6 @@
 												<Edit class="w-3 h-3" />
 												<span>Edit</span>
 											</button>
-
-											{#if currentTab === 'locked'}
-												<button
-													onclick={() => confirmAction(user, 'unlock')}
-													class="flex items-center space-x-1 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-													title="Unlock user"
-												>
-													<Unlock class="w-3 h-3" />
-													<span>Unlock</span>
-												</button>
-											{:else if currentTab === 'deactivated'}
-												<button
-													onclick={() => confirmAction(user, 'activate')}
-													class="flex items-center space-x-1 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-													title="Activate user"
-												>
-													<User class="w-3 h-3" />
-													<span>Activate</span>
-												</button>
-											{/if}
 										</div>
 									</td>
 								</tr>
@@ -1370,6 +1363,8 @@
 		onclick={() => showEditUserModal = false}
 		onkeydown={(e) => e.key === 'Escape' && (showEditUserModal = false)}
 	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div 
 			class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" 
 			role="document"

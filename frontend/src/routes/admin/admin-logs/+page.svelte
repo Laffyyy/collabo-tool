@@ -356,13 +356,13 @@
 <div class="h-screen bg-gray-50 flex flex-col">
 	<div class="w-full max-w-[98%] mx-auto flex-1 flex flex-col p-6 min-h-0">
 		<!-- Header -->
-		<div class="mb-4">
+		<div class="mb-4 fade-in">
 			<h1 class="text-3xl font-bold text-gray-800 mb-2">Admin Logs</h1>
 			<p class="text-gray-600">Monitor administrative activities and system events</p>
 		</div>
 
 		<!-- Main Panel -->
-		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0 flex-1 flex flex-col min-h-0">
+		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0 flex-1 flex flex-col min-h-0 fade-in">
 			<!-- Controls Section -->
 			<div class="p-4 border-b border-gray-200">
 				<div class="flex flex-col lg:flex-row gap-3">
