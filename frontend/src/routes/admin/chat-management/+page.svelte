@@ -128,7 +128,7 @@
     },
     {
       id: '2',
-      name: 'John & Jane',
+      name: 'John and Jane',
       type: '1v1',
       participants: ['john.doe@company.com', 'jane.smith@company.com'],
       messageCount: 45,
@@ -138,7 +138,7 @@
         {
           id: '4',
           conversationId: '2',
-          conversationName: 'John & Jane',
+          conversationName: 'John and Jane',
           sender: 'jane.smith@company.com',
           content: 'Can we review the budget proposal together?',
           timestamp: new Date('2024-01-15T14:20:00'),
@@ -150,7 +150,7 @@
         {
           id: '5',
           conversationId: '2',
-          conversationName: 'John & Jane',
+          conversationName: 'John and Jane',
           sender: 'john.doe@company.com',
           content: 'Sure, I\'m available after 3 PM today.',
           timestamp: new Date('2024-01-15T14:15:00'),
@@ -251,7 +251,7 @@
     {
       id: '2',
       conversationId: '2',
-      conversationName: 'John & Jane',
+      conversationName: 'John and Jane',
       sender: 'jane.smith@company.com',
       content: 'Can we review the budget proposal together?',
       timestamp: new Date('2024-01-15T14:20:00'),
@@ -289,7 +289,7 @@
     {
       id: '10',
       conversationId: '2',
-      conversationName: 'John & Jane',
+      conversationName: 'John and Jane',
       sender: 'john.doe@company.com',
       content: 'This is complete garbage work! Fire whoever did this!',
       timestamp: new Date('2024-01-15T11:45:00'),

@@ -1,174 +1,163 @@
 # Copilot Instructions for Collabo-Tool
 
 ## Project Overview
-This is a sophisticated hackathon collaboration tool built with SvelteKit 5, TypeScript, and Tailwind CSS 4. The project is a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
+This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**. It's a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
 
-**Demo Nature**: This is a frontend-only demonstration with mock data - no backend integration. All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage.
-
-## Architecture & Project Structure
-
-### Core Framework Stack
-- **SvelteKit 5** with TypeScript and Vite
-- **Tailwind CSS 4** with forms and typography plugins (`@import 'tailwindcss'` in `app.css`)
-- **Vitest** for testing with browser-based testing using Playwright
-- **ESLint + Prettier** with Svelte-specific configurations
-- **Lucide Svelte** for consistent iconography throughout the application
-
-### Key Files & Directories
-```
-frontend/src/
-├── lib/             # Shared library code
-│   ├── components/  # Reusable UI components
-│   │   ├── ConfirmationModal.svelte  # Global confirmation dialogs
-│   │   ├── Navigation.svelte         # Main app navigation
-│   │   └── ProfileAvatar.svelte      # User avatar display
-│   └── stores/     # State management
-│       ├── auth.svelte.ts    # Authentication & roles
-│       ├── broadcast.svelte.ts # Message broadcasting
-│       └── theme.svelte.ts   # Theme management
-└── routes/        # SvelteKit file-based routing
-    ├── admin/      # Complete admin management suite
-    │   ├── user-management/     # User CRUD, hierarchy, passwords
-    │   ├── ou-management/       # Organization unit & policies
-    │   ├── global-configuration/ # System-wide settings
-    │   ├── admin-logs/          # Activity monitoring
-    │   ├── chat-management/     # Chat moderation
-    │   └── broadcast-management/ # Broadcast oversight
-    ├── broadcast/  # Broadcast messaging interface
-    ├── chat/       # Real-time chat application (main landing page)
-    └── [auth routes]/ # login, forgot-password, otp, etc.
-```
+**Critical: Frontend-Only Demo** - All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage. No backend integration exists.
 
 ## Development Workflows
 
-### Running the Project
+### Quick Start
 ```bash
 cd frontend
-npm run dev -- --open  # Development server with auto-open
+npm run dev -- --open  # Auto-opens browser at localhost:5173
 ```
 
-**Network Configuration**: Dev server exposes on `0.0.0.0:5173` with ngrok support for external testing.
-
-**PowerShell Users**: Use `npm run dev` ; `npm run dev -- --open` for auto-opening browser.
+**Network Config**: Dev server exposes on `0.0.0.0:5173` with ngrok support (`allowedHosts: ['.ngrok-free.app']`)
 
 ### Testing Strategy
-- **Svelte Component Tests**: Use `.svelte.test.ts` suffix, run in browser environment
-- **Server/Utility Tests**: Use `.test.ts` or `.spec.ts` suffix, run in Node environment
-- Test commands: `npm run test:unit` (watch mode) or `npm test` (single run)
+- **Svelte Components**: Use `.svelte.test.ts` suffix → browser environment with Playwright
+- **Utilities/Logic**: Use `.test.ts` suffix → Node environment
+- Commands: `npm run test:unit` (watch) | `npm test` (single run)
+- Multi-project Vitest setup in `vite.config.ts` handles environment switching automatically
 
-### Code Quality
+### Code Quality Pipeline
 ```bash
-npm run lint     # ESLint + Prettier check
-npm run format   # Auto-format with Prettier
 npm run check    # Svelte type checking
+npm run lint     # ESLint + Prettier validation
+npm run format   # Auto-format codebase
 ```
 
-## Key Conventions
+## Architecture Patterns
 
-### Svelte Component Patterns
-- Use `$state()` runes for component state
-- Prefer `onclick` over `on:click` for TypeScript support
-- Use regular CSS in `<style>` blocks (no `@apply`)
-- Example from `ProfileAvatar.svelte`:
+### Svelte 5 Component Conventions
 ```svelte
 <script lang="ts">
-  const user = $state<User | null>(null);
-  const size = $props<'sm' | 'md' | 'lg'>('md');
+  // Use $state() for mutable state
+  let users = $state<User[]>([]);
+  
+  // Use $props() for component props with destructuring
+  let { user, size = 'md' }: { user?: User; size?: 'sm' | 'md' | 'lg' } = $props();
+  
+  // Use $derived() for computed values
+  let initials = $derived(user ? `${user.firstName[0]}${user.lastName[0]}` : 'U');
+  
+  // Prefer onclick over on:click for TypeScript support
+  <button onclick={handleClick}>Click</button>
 </script>
+```
 
-<div class="avatar {size}" onclick={handleClick}>
-  {user?.initials ?? '??'}
+### Store Architecture - Class-Based Pattern
+```typescript
+// src/lib/stores/auth.svelte.ts
+class AuthStore {
+  user = $state<User | null>(null);
+  isAuthenticated = $state(false);
+  
+  // Permission getters for role-based access
+  get canAccessAdmin() { return this.user?.role === 'admin'; }
+  get canSendBroadcasts() { return ['admin', 'manager', 'supervisor', 'support'].includes(this.user?.role || ''); }
+  
+  // Initialize with demo data for frontend-only behavior
+  constructor() {
+    this.user = { id: '1', username: 'admin', role: 'admin', /* ... */ };
+    this.isAuthenticated = true;
+  }
+}
+
+export const authStore = writable(new AuthStore());
+```
+
+### CSS Hybrid Approach
+- **Global Utilities**: Use predefined classes from `app.css` (`.primary-button`, `.secondary-button`, `.input-field`)
+- **Component Styles**: Regular CSS in `<style>` blocks (never use `@apply` directives)
+- **Tailwind Classes**: Utility classes for layout, spacing, colors in templates
+- **Brand Colors**: Primary `#01c0a4` (aqua green), neutral greys (#374151, #f9fafb)
+
+## Critical Architecture Knowledge
+
+### Role Hierarchy & Permissions
+**Hierarchy**: admin > manager > supervisor > support > frontline
+```typescript
+// Permission pattern used throughout admin interfaces
+get canAccessAdmin() { return this.user?.role === 'admin'; }
+get canManageUsers() { return ['admin', 'manager'].includes(this.user?.role || ''); }
+```
+
+### Navigation & Layout System
+- `+layout.svelte` conditionally shows `Navigation.svelte` based on `noNavPages` array
+- Hidden on: auth routes (`/login`, `/otp`, etc.) and `/chat` (main landing)
+- Admin dropdown in navigation provides access to 6 admin modules
+- Navigation uses `isActivePage()` helper for active state styling
+
+### Testing Configuration Specifics
+**Dual Environment Setup** in `vite.config.ts`:
+- Client tests (`.svelte.test.ts`) → browser environment with Playwright
+- Server tests (`.test.ts`) → Node environment  
+- Use `render()` from `vitest-browser-svelte` for component testing
+- Setup file: `vitest-setup-client.ts` for browser environment
+
+### Admin Interface Architecture
+**Modal Pattern**: Complex forms use split-panel modals (form left, rules/settings right)
+**Bulk Operations**: CSV import with role-specific field validation  
+**Hierarchical Views**: Team/supervisor relationships displayed in expandable tree views
+**Unified Layout**: All admin pages share consistent navigation via admin `+layout.svelte`
+
+### Chat System Architecture
+**File Sharing Permissions**: Granular access control (per person, per role, per OU, and dynamic combinations like "per role of OU")
+**Message Forwarding**: Disabled by default, configurable at global, OU, and role levels
+**Read Status Indicators**: Messenger-like greyed text for read conversations in navigation
+**Pinned Messages**: Disabled by default, configurable at group/global/OU/role levels with transparent panel UI
+**Media Compilation**: Organized tabs for Files/Attachments, Media (Images/Videos), and Links in member panel area
+**Group Creation**: Extended modal with search functionality and separate selected members panel showing OU and role
+
+## Tailwind CSS 4 Configuration
+- **Import Syntax**: `@import 'tailwindcss'` in `app.css` (not the old `@tailwind` directives)
+- **Plugins**: Uses `@plugin '@tailwindcss/forms'` and `@plugin '@tailwindcss/typography'`
+- **Vite Integration**: Configured via `tailwindcss()` plugin in `vite.config.ts`
+- **Critical**: Never use `@apply` in component `<style>` blocks - use regular CSS properties
+
+## Common Patterns & Anti-patterns
+
+### ✅ Do This
+```svelte
+<!-- Use onclick with TypeScript support -->
+<button onclick={handleClick}>Submit</button>
+
+<!-- Mix utilities with component CSS -->
+<div class="flex items-center space-x-4">
+  <div class="avatar">Content</div>
 </div>
 
 <style>
   .avatar {
-    border-radius: 9999px;
+    border-radius: 9999px;  /* Regular CSS, not @apply */
     background: #01c0a4;
-    color: white;
   }
 </style>
 ```
 
-### Store Architecture
-- **Class-based Stores**: Use classes with `$state()` runes for complex state management
-- **Store Pattern**: Export as `writable()` stores from classes for reactivity
-- **Role-based Access**: Implement permission systems using derived getters
-- **Mock Data Integration**: Initialize stores with realistic demo data in constructors
-- **Example Pattern**:
-  ```typescript
-  class AuthStore {
-    user = $state<User | null>(null);
-    get canAccessAdmin() { return this.user?.role === 'admin'; }
+### ❌ Avoid This
+```svelte
+<!-- Don't use on:click (Svelte 4 pattern) -->
+<button on:click={handleClick}>Submit</button>
+
+<!-- Don't use @apply in component styles -->
+<style>
+  .avatar {
+    @apply rounded-full bg-primary;  /* WRONG */
   }
-  export const authStore = writable(new AuthStore());
-  ```
+</style>
+```
 
-### CSS and Styling Approach
-- **Hybrid Approach**: Mix Tailwind utility classes with component-scoped CSS
-- **Component Styles**: Use `<style>` blocks with regular CSS (not `@apply` directives)
-- **Utility Classes**: Use Tailwind classes directly in templates for layout and spacing
-- **Global Utility Classes**: Use predefined classes in `app.css` like `.primary-button`, `.secondary-button`, `.input-field`
-- **Color Scheme**: Primary brand color `#01c0a4` (aqua green) with grey (#374151, #f9fafb) for neutral elements
-- **Teams-like UI**: Grey navigation background, white content areas, professional styling
+### Key Development Notes
+- **Mock Data**: All stores initialize with demo data for immediate functionality
+- **Role-based UI**: Check permissions before showing admin features or sensitive operations  
+- **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
+- **Icon System**: Consistent use of Lucide Svelte icons throughout the application
+- **Teams-like UI**: Professional grey navigation background with white content areas
+- **Chat Features**: File sharing with granular permissions, forwarding controls, read status indicators, pinned messages, and media compilation
+- **UI Text Standards**: Use "and" instead of "&" in all permission labels and chat management interfaces
+- **Group Chat UX**: Extended creation modal with search and selected members panel displaying OU/role information
 
-### Admin Interface Patterns
-- **Unified Navigation**: All admin pages use consistent layout navigation via `+layout.svelte`
-- **Modal Architecture**: Complex forms use split-panel modals (form left, settings/rules right)
-- **Role-based UI**: Dynamic columns and buttons based on user roles and permissions
-- **Hierarchical Data**: User management displays supervisor/manager relationships in expandable team views
-- **Password Management**: Comprehensive password controls with validation, visibility toggles, and reset functionality
-- **Bulk Operations**: CSV templates for bulk user imports with role-specific field requirements
-
-### TypeScript Integration
-- Strict TypeScript with full type checking enabled
-- Interface definitions for complex objects (User, OrganizationUnit, OURules, etc.)
-- Type-safe event handling with proper parameter typing
-- Use `bind:value` for two-way data binding with proper type inference
-
-### Authentication & Role System
-- **Role Hierarchy**: admin > manager > supervisor > support > frontline
-- **Permission Gates**: Use derived getters like `canAccessAdmin`, `canSendBroadcasts`
-- **Demo Behavior**: All authentication is frontend-only with mock data
-- **Route Protection**: Pages check authentication state and redirect accordingly
-- **Navigation Hiding**: Layout uses `noNavPages` array to hide navigation on auth routes and chat
-- **Mock User Initialization**: Auth store provides demo users with realistic hierarchical relationships
-
-## Configuration Notes
-
-### Tailwind CSS 4
-- Uses new `@import 'tailwindcss'` syntax in `app.css`
-- Includes `@plugin '@tailwindcss/forms'` and `@plugin '@tailwindcss/typography'`
-- Configured through Vite plugin: `tailwindcss()` in `vite.config.ts`
-- **No @apply Usage**: Use regular CSS properties instead of `@apply` directives in component styles
-
-### Vitest Multi-Project Setup
-- **Client tests**: Browser environment with Playwright for `.svelte.test.ts` files
-- **Server tests**: Node environment for `.test.ts/.spec.ts` files
-- Setup file: `vitest-setup-client.ts` for browser environment
-
-## Critical Patterns & Anti-patterns
-
-### When Adding New Features
-1. **Follow Established Patterns**: Use existing component structures and store patterns
-2. **Role-based Access**: Implement permission checks using auth store getters
-3. **Consistent Styling**: Use established CSS classes and color schemes
-4. **Mock Data**: Add appropriate demo data for frontend-only behavior
-5. **Hierarchical Relationships**: Maintain user role relationships (manager > supervisor > frontline/support)
-6. **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
-
-### Common Anti-patterns to Avoid
-- Using `@apply` directives in component `<style>` blocks (use regular CSS)
-- Mixing state management approaches (stick to class-based stores)
-- Inconsistent color usage (use the established palette)
-- Missing role-based permission checks on sensitive features
-- Breaking the organizational hierarchy when creating users
-- Using outdated Svelte 4 patterns (avoid `on:click`, use `onclick` instead)
-
-### Admin Development Notes
-- **User Management**: Supports bulk CSV import with role-specific templates
-- **Team Views**: Complex hierarchical displays with drill-down navigation
-- **Password Management**: Integrated into edit modals with security validation
-- **OU Management**: Organization units control chat/broadcast policies via detailed rule systems
-- **Mock Data Generation**: Dynamic generation of realistic hierarchical user data for testing
-
-When contributing to this codebase, prioritize consistency with existing patterns and maintain the professional, Teams-like aesthetic that has been established throughout the application.
+When working in this codebase, prioritize consistency with these established patterns and maintain the professional, Microsoft Teams-inspired aesthetic.

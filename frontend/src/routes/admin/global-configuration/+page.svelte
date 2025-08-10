@@ -26,7 +26,7 @@
     // Chat Settings - Global defaults for all OUs
     chat: {
       frontlineCanInitiate1v1: true,
-      frontlineCanReply1v1: true,
+      frontlineCanReply1v1: false,
       frontlineCanCreateGroups: false,
       frontlineCanJoinGroups: true,
       supervisorCanCreateGroups: true,
@@ -37,7 +37,53 @@
       maxFileSize: 10, // MB
       allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
       maxGroupSize: 50,
-      messageEditWindow: 15 // minutes
+      messageEditWindow: 15, // minutes
+      
+      // Advanced File Sharing Permissions
+      filePermissions: {
+        global: {
+          allowFileSharing: true,
+          requirePermission: false,
+          maxFileSize: 10
+        },
+        perPerson: {
+          enabled: false,
+          canDownload: true,
+          canForward: true
+        },
+        perRole: {
+          enabled: false,
+          roles: {
+            admin: true,
+            manager: true,
+            supervisor: true,
+            support: true,
+            frontline: false
+          }
+        },
+        perOU: {
+          enabled: false,
+          allowCrossOU: false,
+          inheritParent: true
+        },
+        dynamic: {
+          enabled: false,
+          roleOfOU: false,
+          hierarchical: false
+        }
+      },
+      
+      // Message Forwarding Settings
+      forwardingSettings: {
+        enabled: false
+      },
+      
+      // Pinned Messages Settings
+      pinnedMessages: {
+        enabled: true,
+        maxPinnedPerConversation: 10,
+        requirePermission: false
+      }
     },
     
     // Broadcast Settings - Global defaults for all OUs
@@ -606,6 +652,260 @@
                         placeholder="jpg, png, pdf, doc, docx"
                       />
                       <p class="text-xs text-gray-500 mt-1">Currently: {formatFileTypes(config.chat.allowedFileTypes)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Advanced File Sharing Permissions -->
+                <div class="bg-white p-4 rounded-lg border">
+                  <h4 class="font-semibold text-gray-900 mb-4">File Sharing Permissions</h4>
+                  <div class="space-y-6">
+                    <!-- Global File Settings -->
+                    <div class="space-y-4">
+                      <h5 class="text-md font-medium text-gray-900">Global Settings</h5>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="flex items-center justify-between">
+                          <span class="text-sm text-gray-700">Enable file sharing</span>
+                          <button
+                            type="button"
+                            onclick={() => config.chat.filePermissions.global.allowFileSharing = !config.chat.filePermissions.global.allowFileSharing}
+                            aria-label="Toggle file sharing"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.filePermissions.global.allowFileSharing ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          >
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.filePermissions.global.allowFileSharing ? 'translate-x-6' : 'translate-x-1'}"></span>
+                          </button>
+                        </label>
+                        <label class="flex items-center justify-between">
+                          <span class="text-sm text-gray-700">Require permission for file access</span>
+                          <button
+                            type="button"
+                            onclick={() => config.chat.filePermissions.global.requirePermission = !config.chat.filePermissions.global.requirePermission}
+                            aria-label="Toggle require permission"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.filePermissions.global.requirePermission ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          >
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.filePermissions.global.requirePermission ? 'translate-x-6' : 'translate-x-1'}"></span>
+                          </button>
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Per Person Permissions -->
+                    <div class="space-y-4">
+                      <div class="flex items-center justify-between">
+                        <h5 class="text-md font-medium text-gray-900">Per Person Permissions</h5>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.filePermissions.perPerson.enabled = !config.chat.filePermissions.perPerson.enabled}
+                          aria-label="Toggle per person permissions"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.filePermissions.perPerson.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perPerson.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </div>
+                      {#if config.chat.filePermissions.perPerson.enabled}
+                        <div class="ml-4 space-y-3 p-3 bg-gray-50 rounded-lg">
+                          <label class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">Allow download</span>
+                            <button
+                              type="button"
+                              onclick={() => config.chat.filePermissions.perPerson.canDownload = !config.chat.filePermissions.perPerson.canDownload}
+                              aria-label="Toggle download permission"
+                              class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {config.chat.filePermissions.perPerson.canDownload ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                            >
+                              <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perPerson.canDownload ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </button>
+                          </label>
+                          <label class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">Allow forwarding</span>
+                            <button
+                              type="button"
+                              onclick={() => config.chat.filePermissions.perPerson.canForward = !config.chat.filePermissions.perPerson.canForward}
+                              aria-label="Toggle forward permission"
+                              class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {config.chat.filePermissions.perPerson.canForward ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                            >
+                              <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perPerson.canForward ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </button>
+                          </label>
+                        </div>
+                      {/if}
+                    </div>
+
+                    <!-- Per Role Permissions -->
+                    <div class="space-y-4">
+                      <div class="flex items-center justify-between">
+                        <h5 class="text-md font-medium text-gray-900">Per Role Permissions</h5>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.filePermissions.perRole.enabled = !config.chat.filePermissions.perRole.enabled}
+                          aria-label="Toggle per role permissions"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.filePermissions.perRole.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perRole.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </div>
+                      {#if config.chat.filePermissions.perRole.enabled}
+                        <div class="ml-4 space-y-3 p-3 bg-gray-50 rounded-lg">
+                          {#each Object.entries(config.chat.filePermissions.perRole.roles) as [role, enabled]}
+                            <label class="flex items-center justify-between">
+                              <span class="text-sm text-gray-700 capitalize">{role}</span>
+                              <button
+                                type="button"
+                                onclick={() => {
+                                  const roleKey = role as keyof typeof config.chat.filePermissions.perRole.roles;
+                                  config.chat.filePermissions.perRole.roles[roleKey] = !config.chat.filePermissions.perRole.roles[roleKey];
+                                }}
+                                aria-label="Toggle {role} permission"
+                                class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                              >
+                                <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {enabled ? 'translate-x-5' : 'translate-x-1'}"></span>
+                              </button>
+                            </label>
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+
+                    <!-- Per OU Permissions -->
+                    <div class="space-y-4">
+                      <div class="flex items-center justify-between">
+                        <h5 class="text-md font-medium text-gray-900">Per Organization Unit Permissions</h5>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.filePermissions.perOU.enabled = !config.chat.filePermissions.perOU.enabled}
+                          aria-label="Toggle per OU permissions"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.filePermissions.perOU.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perOU.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </div>
+                      {#if config.chat.filePermissions.perOU.enabled}
+                        <div class="ml-4 space-y-3 p-3 bg-gray-50 rounded-lg">
+                          <label class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">Allow cross-OU sharing</span>
+                            <button
+                              type="button"
+                              onclick={() => config.chat.filePermissions.perOU.allowCrossOU = !config.chat.filePermissions.perOU.allowCrossOU}
+                              aria-label="Toggle cross-OU sharing"
+                              class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {config.chat.filePermissions.perOU.allowCrossOU ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                            >
+                              <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perOU.allowCrossOU ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </button>
+                          </label>
+                          <label class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">Inherit parent OU permissions</span>
+                            <button
+                              type="button"
+                              onclick={() => config.chat.filePermissions.perOU.inheritParent = !config.chat.filePermissions.perOU.inheritParent}
+                              aria-label="Toggle inherit parent OU"
+                              class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {config.chat.filePermissions.perOU.inheritParent ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                            >
+                              <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {config.chat.filePermissions.perOU.inheritParent ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </button>
+                          </label>
+                        </div>
+                      {/if}
+                    </div>
+
+                    <!-- Dynamic Combinations -->
+                    <div class="space-y-4">
+                      <div class="flex items-center justify-between">
+                        <h5 class="text-md font-medium text-gray-900">Dynamic Combinations</h5>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.filePermissions.dynamic.enabled = !config.chat.filePermissions.dynamic.enabled}
+                          aria-label="Toggle dynamic combinations"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.filePermissions.dynamic.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.filePermissions.dynamic.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </div>
+                      {#if config.chat.filePermissions.dynamic.enabled}
+                        <div class="ml-4 space-y-3 p-3 bg-gray-50 rounded-lg">
+                          <label class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">Per role of specific OU</span>
+                            <button
+                              type="button"
+                              onclick={() => config.chat.filePermissions.dynamic.roleOfOU = !config.chat.filePermissions.dynamic.roleOfOU}
+                              aria-label="Toggle role of OU"
+                              class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {config.chat.filePermissions.dynamic.roleOfOU ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                            >
+                              <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {config.chat.filePermissions.dynamic.roleOfOU ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </button>
+                          </label>
+                          <label class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">Hierarchical permissions</span>
+                            <button
+                              type="button"
+                              onclick={() => config.chat.filePermissions.dynamic.hierarchical = !config.chat.filePermissions.dynamic.hierarchical}
+                              aria-label="Toggle hierarchical permissions"
+                              class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors {config.chat.filePermissions.dynamic.hierarchical ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                            >
+                              <span class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform {config.chat.filePermissions.dynamic.hierarchical ? 'translate-x-5' : 'translate-x-1'}"></span>
+                            </button>
+                          </label>
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Message Forwarding Settings -->
+                <div class="bg-white p-4 rounded-lg border">
+                  <h4 class="font-semibold text-gray-900 mb-4">Message Forwarding Settings</h4>
+                  <div class="space-y-4">
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Enable message forwarding</span>
+                      <button
+                        type="button"
+                        onclick={() => config.chat.forwardingSettings.enabled = !config.chat.forwardingSettings.enabled}
+                        aria-label="Toggle message forwarding"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.forwardingSettings.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.forwardingSettings.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <p class="text-xs text-gray-500">When enabled, users can forward messages between conversations.</p>
+                  </div>
+                </div>
+
+                <!-- Pinned Messages Settings -->
+                <div class="bg-white p-4 rounded-lg border">
+                  <h4 class="font-semibold text-gray-900 mb-4">Pinned Messages Settings</h4>
+                  <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Enable pinned messages</span>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.pinnedMessages.enabled = !config.chat.pinnedMessages.enabled}
+                          aria-label="Toggle pinned messages"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.pinnedMessages.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.pinnedMessages.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </label>
+                      <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Require permission to pin</span>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.pinnedMessages.requirePermission = !config.chat.pinnedMessages.requirePermission}
+                          aria-label="Toggle pin permission requirement"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.pinnedMessages.requirePermission ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.pinnedMessages.requirePermission ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </label>
+                    </div>
+                    <div>
+                      <label for="maxPinnedPerConversation" class="block text-sm font-medium text-gray-700 mb-2">Max pinned messages per conversation</label>
+                      <input
+                        id="maxPinnedPerConversation"
+                        type="number"
+                        bind:value={config.chat.pinnedMessages.maxPinnedPerConversation}
+                        min="1"
+                        max="50"
+                        class="input-field w-32"
+                      />
                     </div>
                   </div>
                 </div>
