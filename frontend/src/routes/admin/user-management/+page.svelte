@@ -2058,7 +2058,7 @@
 					<!-- Supervisor Card -->
 					<div class="mb-6">
 						<div class="flex items-center justify-center mb-4">
-							<div class="bg-orange-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
+							<div class="bg-emerald-600 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
 								<img src="/placeholder.svg?height=48&width=48" alt="{selectedSupervisorView.name}" class="w-12 h-12 rounded-full mx-auto mb-2 bg-white bg-opacity-20" />
 								<div class="font-semibold">{selectedSupervisorView.name}</div>
 								<div class="text-sm opacity-90">{selectedSupervisorView.role}</div>
@@ -2089,17 +2089,17 @@
 								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
 									{#each supervisorTeam as member}
 										<div class="{
-											member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
-											member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
+											member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
 											'bg-green-100 border-green-200'
 										} border rounded-lg p-3 text-center min-w-[160px]">
 											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
-												member.role === 'Frontline' ? 'text-blue-700' :
-												member.role === 'Support' ? 'text-purple-700' :
+												member.role === 'Frontline' ? 'text-cyan-700' :
+												member.role === 'Support' ? 'text-teal-700' :
 												'text-gray-600'
-											}">{member.role}</div>
+											} font-semibold">{member.role}</div>
 											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
 											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
 										</div>
@@ -2142,7 +2142,7 @@
 					<!-- Supervisor Card -->
 					<div class="mb-6">
 						<div class="flex items-center justify-center mb-4">
-							<div class="bg-orange-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+							<div class="bg-emerald-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
 								<img src="/placeholder.svg?height=64&width=64" alt="{teamModalUser.name}" class="w-16 h-16 rounded-full mx-auto mb-3 bg-white bg-opacity-20" />
 								<div class="text-lg font-bold">{teamModalUser.name}</div>
 								<div class="text-sm opacity-90">{teamModalUser.role}</div>
@@ -2173,17 +2173,17 @@
 								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
 									{#each supervisorTeam as member}
 										<div class="{
-											member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
-											member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
+											member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
 											'bg-green-100 border-green-200'
 										} border rounded-lg p-3 text-center min-w-[160px]">
 											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
-												member.role === 'Frontline' ? 'text-blue-700' :
-												member.role === 'Support' ? 'text-purple-700' :
+												member.role === 'Frontline' ? 'text-cyan-700' :
+												member.role === 'Support' ? 'text-teal-700' :
 												'text-gray-600'
-											}">{member.role}</div>
+											} font-semibold">{member.role}</div>
 											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
 											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
 										</div>
@@ -2228,7 +2228,7 @@
 					<!-- Manager Card at the top -->
 					<div class="mb-6">
 						<div class="flex items-center justify-center mb-4">
-							<div class="bg-blue-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+							<div class="bg-teal-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
 								<img src="/placeholder.svg?height=64&width=64" alt="{teamModalUser.name}" class="w-16 h-16 rounded-full mx-auto mb-3 bg-white bg-opacity-20" />
 								<div class="text-lg font-bold">{teamModalUser.name}</div>
 								<div class="text-sm opacity-90">{teamModalUser.role}</div>
@@ -2260,21 +2260,21 @@
 									{@const supervisorTeamCount = getSupervisorTeam(supervisor.id).length}
 									<button
 										onclick={() => navigateToSupervisor(supervisor)}
-										class="bg-orange-100 border border-orange-200 rounded-lg p-3 text-center hover:bg-orange-200 transition-colors cursor-pointer group min-w-[180px]"
+										class="bg-emerald-100 border border-emerald-300 rounded-lg p-3 text-center hover:bg-emerald-200 transition-colors cursor-pointer group min-w-[180px]"
 									>
 										<img src="/placeholder.svg?height=40&width=40" alt="{supervisor.name}" class="w-10 h-10 rounded-full mx-auto mb-2 group-hover:opacity-90 transition-opacity" />
 										<div class="font-medium text-gray-900 text-sm truncate" title="{supervisor.name}">{supervisor.name}</div>
-										<div class="text-xs text-gray-600">{supervisor.role}</div>
+										<div class="text-xs text-emerald-700 font-semibold">{supervisor.role}</div>
 										<div class="text-xs text-gray-500 truncate" title="{supervisor.ou}">{supervisor.ou}</div>
 										<div class="text-xs text-gray-500 mt-1 truncate" title="{supervisor.email}">{supervisor.email}</div>
 										
 										<!-- Team count indicator -->
-										<div class="mt-2 pt-2 border-t border-orange-300">
-											<div class="text-xs text-orange-700 font-medium">
+										<div class="mt-2 pt-2 border-t border-emerald-400">
+											<div class="text-xs text-emerald-700 font-medium">
 												{supervisorTeamCount} Team Member{supervisorTeamCount === 1 ? '' : 's'}
 											</div>
 											{#if supervisorTeamCount > 0}
-												<div class="text-xs text-orange-600 mt-1">Click to view team</div>
+												<div class="text-xs text-emerald-600 mt-1">Click to view team</div>
 											{/if}
 										</div>
 									</button>

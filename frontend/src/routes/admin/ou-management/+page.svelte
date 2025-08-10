@@ -19,28 +19,52 @@
   interface OURules {
     chat: {
       frontlineCanInitiate1v1: boolean;
-      frontlineCanReply1v1: boolean;
       frontlineCanCreateGroups: boolean;
       frontlineCanJoinGroups: boolean;
+      frontlineCanShareFiles: boolean;
+      frontlineCanForwardMessages: boolean;
+      supportCanInitiate1v1: boolean;
+      supportCanCreateGroups: boolean;
+      supportCanJoinGroups: boolean;
+      supportCanShareFiles: boolean;
+      supportCanForwardMessages: boolean;
       supervisorCanCreateGroups: boolean;
+      supervisorCanShareFiles: boolean;
+      supervisorCanForwardMessages: boolean;
       managerCanAccessAllGroups: boolean;
+      managerCanShareFiles: boolean;
+      managerCanForwardMessages: boolean;
       allowFileSharing: boolean;
       allowEmojis: boolean;
       messageRetentionDays: number;
+      maxFileSize: number;
+      allowedFileTypes: string[];
+      maxGroupSize: number;
+      messageEditWindow: number;
+      pinnedMessages: {
+        enabled: boolean;
+        maxPinnedPerConversation: number;
+      };
     };
     broadcast: {
       frontlineCanCreateBroadcast: boolean;
       frontlineCanReplyToBroadcast: boolean;
+      supportCanCreateBroadcast: boolean;
+      supportCanReplyToBroadcast: boolean;
       supervisorCanCreateBroadcast: boolean;
       managerCanCreateBroadcast: boolean;
       requireApprovalForBroadcast: boolean;
       allowScheduledBroadcasts: boolean;
       allowPriorityBroadcasts: boolean;
       broadcastRetentionDays: number;
+      requireAcknowledgment: boolean;
+      acknowledgmentReminders: boolean;
+      reminderInterval: number;
+      maxBroadcastTargets: number;
     };
   }
 
-  // Mock OU data
+  // Mock OU data - simplified for demo
   let organizationUnits = $state<OrganizationUnit[]>([
     {
       id: '1',
@@ -55,63 +79,53 @@
       rules: {
         chat: {
           frontlineCanInitiate1v1: true,
-          frontlineCanReply1v1: true,
           frontlineCanCreateGroups: false,
           frontlineCanJoinGroups: true,
+          frontlineCanShareFiles: false,
+          frontlineCanForwardMessages: false,
+          supportCanInitiate1v1: true,
+          supportCanCreateGroups: false,
+          supportCanJoinGroups: true,
+          supportCanShareFiles: true,
+          supportCanForwardMessages: true,
           supervisorCanCreateGroups: true,
+          supervisorCanShareFiles: true,
+          supervisorCanForwardMessages: true,
           managerCanAccessAllGroups: true,
+          managerCanShareFiles: true,
+          managerCanForwardMessages: true,
           allowFileSharing: true,
           allowEmojis: true,
-          messageRetentionDays: 365
+          messageRetentionDays: 365,
+          maxFileSize: 10,
+          allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+          maxGroupSize: 50,
+          messageEditWindow: 15,
+          pinnedMessages: {
+            enabled: true,
+            maxPinnedPerConversation: 10
+          }
         },
         broadcast: {
           frontlineCanCreateBroadcast: false,
           frontlineCanReplyToBroadcast: true,
+          supportCanCreateBroadcast: false,
+          supportCanReplyToBroadcast: true,
           supervisorCanCreateBroadcast: true,
           managerCanCreateBroadcast: true,
           requireApprovalForBroadcast: false,
           allowScheduledBroadcasts: true,
           allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 365
+          broadcastRetentionDays: 365,
+          requireAcknowledgment: true,
+          acknowledgmentReminders: true,
+          reminderInterval: 1440,
+          maxBroadcastTargets: 1000
         }
       }
     },
     {
       id: '2',
-      name: 'Frontend Team',
-      description: 'UI/UX and frontend development',
-      parentId: '1',
-      memberCount: 8,
-      location: 'New York, NY',
-      createdAt: new Date(Date.now() - 86400000 * 120),
-      modifiedAt: new Date(Date.now() - 86400000 * 15),
-      status: 'active',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: true,
-          frontlineCanReply1v1: true,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: true,
-          supervisorCanCreateGroups: true,
-          managerCanAccessAllGroups: true,
-          allowFileSharing: true,
-          allowEmojis: true,
-          messageRetentionDays: 365
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: true,
-          supervisorCanCreateBroadcast: true,
-          managerCanCreateBroadcast: true,
-          requireApprovalForBroadcast: false,
-          allowScheduledBroadcasts: true,
-          allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 365
-        }
-      }
-    },
-    {
-      id: '3',
       name: 'Human Resources',
       description: 'HR operations and people management',
       parentId: null,
@@ -123,92 +137,48 @@
       rules: {
         chat: {
           frontlineCanInitiate1v1: false,
-          frontlineCanReply1v1: true,
           frontlineCanCreateGroups: false,
           frontlineCanJoinGroups: false,
+          frontlineCanShareFiles: false,
+          frontlineCanForwardMessages: false,
+          supportCanInitiate1v1: true,
+          supportCanCreateGroups: false,
+          supportCanJoinGroups: true,
+          supportCanShareFiles: false,
+          supportCanForwardMessages: false,
           supervisorCanCreateGroups: true,
+          supervisorCanShareFiles: true,
+          supervisorCanForwardMessages: true,
           managerCanAccessAllGroups: true,
+          managerCanShareFiles: true,
+          managerCanForwardMessages: true,
           allowFileSharing: false,
           allowEmojis: false,
-          messageRetentionDays: 90
+          messageRetentionDays: 90,
+          maxFileSize: 5,
+          allowedFileTypes: ['pdf', 'doc', 'docx'],
+          maxGroupSize: 20,
+          messageEditWindow: 5,
+          pinnedMessages: {
+            enabled: false,
+            maxPinnedPerConversation: 5
+          }
         },
         broadcast: {
           frontlineCanCreateBroadcast: false,
           frontlineCanReplyToBroadcast: false,
+          supportCanCreateBroadcast: false,
+          supportCanReplyToBroadcast: true,
           supervisorCanCreateBroadcast: false,
           managerCanCreateBroadcast: true,
           requireApprovalForBroadcast: true,
           allowScheduledBroadcasts: true,
           allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 90
-        }
-      }
-    },
-    {
-      id: '7',
-      name: 'Legacy QA Team',
-      description: 'Deactivated quality assurance team',
-      parentId: '1',
-      memberCount: 0,
-      location: 'San Francisco, CA',
-      createdAt: new Date(Date.now() - 86400000 * 365),
-      modifiedAt: new Date(Date.now() - 86400000 * 60),
-      status: 'inactive',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: false,
-          frontlineCanReply1v1: false,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: false,
-          supervisorCanCreateGroups: false,
-          managerCanAccessAllGroups: false,
-          allowFileSharing: false,
-          allowEmojis: false,
-          messageRetentionDays: 30
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: false,
-          supervisorCanCreateBroadcast: false,
-          managerCanCreateBroadcast: false,
-          requireApprovalForBroadcast: false,
-          allowScheduledBroadcasts: false,
-          allowPriorityBroadcasts: false,
-          broadcastRetentionDays: 30
-        }
-      }
-    },
-    {
-      id: '8',
-      name: 'Old Marketing Unit',
-      description: 'Deactivated marketing organizational unit',
-      parentId: null,
-      memberCount: 0,
-      location: 'Chicago, IL',
-      createdAt: new Date(Date.now() - 86400000 * 400),
-      modifiedAt: new Date(Date.now() - 86400000 * 90),
-      status: 'inactive',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: false,
-          frontlineCanReply1v1: false,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: false,
-          supervisorCanCreateGroups: false,
-          managerCanAccessAllGroups: false,
-          allowFileSharing: false,
-          allowEmojis: false,
-          messageRetentionDays: 30
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: false,
-          supervisorCanCreateBroadcast: false,
-          managerCanCreateBroadcast: false,
-          requireApprovalForBroadcast: false,
-          allowScheduledBroadcasts: false,
-          allowPriorityBroadcasts: false,
-          broadcastRetentionDays: 30
+          broadcastRetentionDays: 90,
+          requireAcknowledgment: true,
+          acknowledgmentReminders: true,
+          reminderInterval: 720,
+          maxBroadcastTargets: 500
         }
       }
     }
@@ -240,24 +210,48 @@
     rules: {
       chat: {
         frontlineCanInitiate1v1: true,
-        frontlineCanReply1v1: true,
         frontlineCanCreateGroups: false,
         frontlineCanJoinGroups: true,
+        frontlineCanShareFiles: false,
+        frontlineCanForwardMessages: false,
+        supportCanInitiate1v1: true,
+        supportCanCreateGroups: false,
+        supportCanJoinGroups: true,
+        supportCanShareFiles: true,
+        supportCanForwardMessages: true,
         supervisorCanCreateGroups: true,
+        supervisorCanShareFiles: true,
+        supervisorCanForwardMessages: true,
         managerCanAccessAllGroups: true,
+        managerCanShareFiles: true,
+        managerCanForwardMessages: true,
         allowFileSharing: true,
         allowEmojis: true,
-        messageRetentionDays: 365
+        messageRetentionDays: 365,
+        maxFileSize: 10,
+        allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+        maxGroupSize: 50,
+        messageEditWindow: 15,
+        pinnedMessages: {
+          enabled: true,
+          maxPinnedPerConversation: 10
+        }
       },
       broadcast: {
         frontlineCanCreateBroadcast: false,
         frontlineCanReplyToBroadcast: true,
+        supportCanCreateBroadcast: false,
+        supportCanReplyToBroadcast: true,
         supervisorCanCreateBroadcast: true,
         managerCanCreateBroadcast: true,
         requireApprovalForBroadcast: false,
         allowScheduledBroadcasts: true,
         allowPriorityBroadcasts: true,
-        broadcastRetentionDays: 365
+        broadcastRetentionDays: 365,
+        requireAcknowledgment: true,
+        acknowledgmentReminders: true,
+        reminderInterval: 1440,
+        maxBroadcastTargets: 1000
       }
     }
   });
@@ -316,24 +310,48 @@
         rules: {
           chat: {
             frontlineCanInitiate1v1: true,
-            frontlineCanReply1v1: true,
             frontlineCanCreateGroups: false,
             frontlineCanJoinGroups: true,
+            frontlineCanShareFiles: false,
+            frontlineCanForwardMessages: false,
+            supportCanInitiate1v1: true,
+            supportCanCreateGroups: false,
+            supportCanJoinGroups: true,
+            supportCanShareFiles: true,
+            supportCanForwardMessages: true,
             supervisorCanCreateGroups: true,
+            supervisorCanShareFiles: true,
+            supervisorCanForwardMessages: true,
             managerCanAccessAllGroups: true,
+            managerCanShareFiles: true,
+            managerCanForwardMessages: true,
             allowFileSharing: true,
             allowEmojis: true,
-            messageRetentionDays: 365
+            messageRetentionDays: 365,
+            maxFileSize: 10,
+            allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+            maxGroupSize: 50,
+            messageEditWindow: 15,
+            pinnedMessages: {
+              enabled: true,
+              maxPinnedPerConversation: 10
+            }
           },
           broadcast: {
             frontlineCanCreateBroadcast: false,
             frontlineCanReplyToBroadcast: true,
+            supportCanCreateBroadcast: false,
+            supportCanReplyToBroadcast: true,
             supervisorCanCreateBroadcast: true,
             managerCanCreateBroadcast: true,
             requireApprovalForBroadcast: false,
             allowScheduledBroadcasts: true,
             allowPriorityBroadcasts: true,
-            broadcastRetentionDays: 365
+            broadcastRetentionDays: 365,
+            requireAcknowledgment: true,
+            acknowledgmentReminders: true,
+            reminderInterval: 1440,
+            maxBroadcastTargets: 1000
           }
         }
       };
@@ -889,16 +907,6 @@
                     </button>
                   </label>
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can reply in 1:1 conversations</span>
-                    <button
-                      type="button"
-                      onclick={() => toggleRule('chat', 'frontlineCanReply1v1')}
-                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.frontlineCanReply1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-                    >
-                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.frontlineCanReply1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
-                    </button>
-                  </label>
-                  <label class="flex items-center justify-between">
                     <span class="text-sm text-gray-700">Can create group chats</span>
                     <button
                       type="button"
@@ -916,6 +924,85 @@
                       class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.frontlineCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                     >
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.frontlineCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'frontlineCanShareFiles')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.frontlineCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.frontlineCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'frontlineCanForwardMessages')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.frontlineCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.frontlineCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-lg border">
+                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                  <User class="w-4 h-4 mr-2" />
+                  Support User Permissions
+                </h4>
+                <div class="space-y-3">
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanInitiate1v1')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supportCanInitiate1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supportCanInitiate1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can create group chats</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanCreateGroups')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supportCanCreateGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supportCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can join group chats</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanJoinGroups')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supportCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supportCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanShareFiles')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supportCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supportCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanForwardMessages')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supportCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supportCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
                 </div>
@@ -937,6 +1024,26 @@
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supervisorCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supervisorCanShareFiles')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supervisorCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supervisorCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supervisorCanForwardMessages')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.supervisorCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.supervisorCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
                 </div>
               </div>
 
@@ -954,6 +1061,26 @@
                       class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.managerCanAccessAllGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                     >
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.managerCanAccessAllGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'managerCanShareFiles')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.managerCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.managerCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'managerCanForwardMessages')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.chat.managerCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.chat.managerCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
                 </div>
@@ -1024,6 +1151,35 @@
                       class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.broadcast.frontlineCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                     >
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.broadcast.frontlineCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-lg border">
+                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                  <User class="w-4 h-4 mr-2" />
+                  Support User Permissions
+                </h4>
+                <div class="space-y-3">
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('broadcast', 'supportCanCreateBroadcast')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.broadcast.supportCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.broadcast.supportCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can reply to broadcasts</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('broadcast', 'supportCanReplyToBroadcast')}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {newOU.rules.broadcast.supportCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {newOU.rules.broadcast.supportCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
                 </div>
@@ -1298,16 +1454,6 @@
                     </button>
                   </label>
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can reply in 1:1 conversations</span>
-                    <button
-                      type="button"
-                      onclick={() => toggleRule('chat', 'frontlineCanReply1v1', true)}
-                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.frontlineCanReply1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-                    >
-                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.frontlineCanReply1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
-                    </button>
-                  </label>
-                  <label class="flex items-center justify-between">
                     <span class="text-sm text-gray-700">Can create group chats</span>
                     <button
                       type="button"
@@ -1325,6 +1471,85 @@
                       class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.frontlineCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                     >
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.frontlineCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'frontlineCanShareFiles', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.frontlineCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.frontlineCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'frontlineCanForwardMessages', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.frontlineCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.frontlineCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-lg border">
+                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                  <User class="w-4 h-4 mr-2" />
+                  Support User Permissions
+                </h4>
+                <div class="space-y-3">
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanInitiate1v1', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supportCanInitiate1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supportCanInitiate1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can create group chats</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanCreateGroups', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supportCanCreateGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supportCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can join group chats</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanJoinGroups', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supportCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supportCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanShareFiles', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supportCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supportCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supportCanForwardMessages', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supportCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supportCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
                 </div>
@@ -1346,6 +1571,26 @@
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supervisorCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supervisorCanShareFiles', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supervisorCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supervisorCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'supervisorCanForwardMessages', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.supervisorCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.supervisorCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
                 </div>
               </div>
 
@@ -1363,6 +1608,26 @@
                       class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.managerCanAccessAllGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                     >
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.managerCanAccessAllGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can share files</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'managerCanShareFiles', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.managerCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.managerCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can forward messages</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('chat', 'managerCanForwardMessages', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.chat?.managerCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.chat?.managerCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
                 </div>
@@ -1433,6 +1698,35 @@
                       class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.broadcast?.frontlineCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                     >
                       <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.broadcast?.frontlineCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-lg border">
+                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                  <User class="w-4 h-4 mr-2" />
+                  Support User Permissions
+                </h4>
+                <div class="space-y-3">
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('broadcast', 'supportCanCreateBroadcast', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.broadcast?.supportCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.broadcast?.supportCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
+                    </button>
+                  </label>
+                  <label class="flex items-center justify-between">
+                    <span class="text-sm text-gray-700">Can reply to broadcasts</span>
+                    <button
+                      type="button"
+                      onclick={() => toggleRule('broadcast', 'supportCanReplyToBroadcast', true)}
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {editOU.rules?.broadcast?.supportCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                    >
+                      <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {editOU.rules?.broadcast?.supportCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                     </button>
                   </label>
                 </div>
