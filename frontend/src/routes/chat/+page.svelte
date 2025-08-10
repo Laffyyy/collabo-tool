@@ -3,6 +3,8 @@
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
+	import GroupAvatar from '$lib/components/GroupAvatar.svelte';
+	import UserProfileModal from '$lib/components/UserProfileModal.svelte';
 	import LoginBackground from '../login/LoginBackground.svelte';
 	import { 
 		Search, Plus, Archive, MessageCircle, Users, Send, Paperclip, 
@@ -22,8 +24,22 @@
 		avatar: string;
 		department: string;
 		role: string;
+		organizationalUnit?: string;
+		status?: 'online' | 'away' | 'idle' | 'offline';
+		lastLogin?: string;
+		managedTeams?: string[];
+		supervisors?: string[];
+		reportingTo?: string | null;
 		isOnline?: boolean;
 		isMuted?: boolean;
+		email?: string;
+		phone?: string;
+		joinDate?: string;
+		employeeId?: string;
+		onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
+		coverPhoto?: string;
+		manager?: string | null;
+		supervisor?: string | null;
 	}
 
 	interface Message {
@@ -126,6 +142,10 @@
 	let forwardModalMessage = $state<Message | null>(null);
 	let selectedForwardConversations = $state<string[]>([]);
 	
+	// User profile modal state
+	let showUserProfileModal = $state(false);
+	let selectedUserName = $state<string>('');
+	
 	// Chat state
 	let messageInput = $state('');
 	let replyingTo = $state<Message | null>(null);
@@ -179,30 +199,66 @@
 		{ 
 			id: '2', 
 			name: 'John Doe', 
+			firstName: 'John',
+			lastName: 'Doe',
 			avatar: '/placeholder.svg',
 			department: 'Engineering',
-			role: 'Manager'
+			role: 'Manager',
+			organizationalUnit: 'Product Development',
+			email: 'john.doe@company.com',
+			status: 'online',
+			lastLogin: '2024-01-15 14:30',
+			managedTeams: ['Frontend Team', 'Backend Team'],
+			supervisors: ['Sarah Wilson (Director)'],
+			reportingTo: 'Sarah Wilson'
 		},
 		{ 
 			id: '3', 
 			name: 'Alice Johnson', 
+			firstName: 'Alice',
+			lastName: 'Johnson',
 			avatar: '/placeholder.svg',
 			department: 'Marketing',
-			role: 'Supervisor'
+			role: 'Supervisor',
+			organizationalUnit: 'Digital Marketing',
+			email: 'alice.johnson@company.com',
+			status: 'online',
+			lastLogin: '2024-01-15 13:45',
+			managedTeams: ['Content Team'],
+			supervisors: ['Mike Chen (Manager)'],
+			reportingTo: 'Mike Chen'
 		},
 		{ 
 			id: '4', 
 			name: 'Bob Smith', 
+			firstName: 'Bob',
+			lastName: 'Smith',
 			avatar: '/placeholder.svg',
 			department: 'Sales',
-			role: 'Frontline'
+			role: 'Frontline',
+			organizationalUnit: 'Regional Sales',
+			email: 'bob.smith@company.com',
+			status: 'away',
+			lastLogin: '2024-01-15 12:20',
+			managedTeams: [],
+			supervisors: ['Lisa Brown (Supervisor)'],
+			reportingTo: 'Lisa Brown'
 		},
 		{ 
 			id: '5', 
 			name: 'Carol White', 
+			firstName: 'Carol',
+			lastName: 'White',
 			avatar: '/placeholder.svg',
 			department: 'Support',
-			role: 'Support'
+			role: 'Support',
+			organizationalUnit: 'Customer Success',
+			email: 'carol.white@company.com',
+			status: 'online',
+			lastLogin: '2024-01-15 15:10',
+			managedTeams: [],
+			supervisors: ['David Park (Supervisor)'],
+			reportingTo: 'David Park'
 		}
 	];
 
@@ -247,6 +303,8 @@
 					{ 
 						id: '1', 
 						name: 'You', 
+						firstName: 'Current',
+						lastName: 'User',
 						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
@@ -256,6 +314,8 @@
 					{ 
 						id: '2', 
 						name: 'John Doe', 
+						firstName: 'John',
+						lastName: 'Doe',
 						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
@@ -349,6 +409,8 @@
 					{ 
 						id: '1', 
 						name: 'You', 
+						firstName: 'Current',
+						lastName: 'User',
 						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
@@ -358,6 +420,8 @@
 					{ 
 						id: '3', 
 						name: 'Alice Johnson', 
+						firstName: 'Alice',
+						lastName: 'Johnson',
 						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: false,
@@ -367,6 +431,8 @@
 					{ 
 						id: '4', 
 						name: 'Bob Smith', 
+						firstName: 'Bob',
+						lastName: 'Smith',
 						avatar: '/placeholder.svg', 
 						isOnline: false, 
 						isMuted: false,
@@ -376,6 +442,8 @@
 					{ 
 						id: '5', 
 						name: 'Carol White', 
+						firstName: 'Carol',
+						lastName: 'White',
 						avatar: '/placeholder.svg', 
 						isOnline: true, 
 						isMuted: true,
@@ -824,6 +892,8 @@
 				{ 
 					id: '1', 
 					name: 'You', 
+					firstName: 'Current',
+					lastName: 'User',
 					avatar: '/placeholder.svg?height=32&width=32', 
 					isOnline: true, 
 					isMuted: false,
@@ -914,6 +984,8 @@
 				{ 
 					id: '1', 
 					name: 'You', 
+					firstName: 'Current',
+					lastName: 'User',
 					avatar: '/placeholder.svg?height=32&width=32', 
 					isOnline: true, 
 					isMuted: false,
@@ -1124,6 +1196,19 @@
 		reactionModalTab = 'all';
 	}
 
+	function showUserProfile(user: User) {
+		console.log('🎯 Chat showUserProfile called with:', user);
+		selectedUserName = user.name || '';
+		console.log('🎯 selectedUserName set to:', `"${selectedUserName}"`);
+		showUserProfileModal = true;
+		console.log('🎯 showUserProfileModal set to:', showUserProfileModal);
+	}
+
+	function closeUserProfile() {
+		showUserProfileModal = false;
+		selectedUserName = '';
+	}
+
 	function getReactionUsers(message: Message, emoji?: string) {
 		if (!message.reactions) return [];
 		
@@ -1164,57 +1249,125 @@
 		// Find user details from conversation members or available users
 		if (currentConversation) {
 			const member = currentConversation.members.find(m => m.id === userId);
-			if (member) return member;
+			if (member) return enhanceUserObject(member);
 		}
 		
 		const user = availableUsers.find(u => u.id === userId);
-		if (user) return user;
+		if (user) return enhanceUserObject(user);
 		
-		// Return mock user details for seen functionality
-		const mockUsers = {
-			'2': {
-				id: '2',
-				name: 'John Doe',
-				firstName: 'John',
-				lastName: 'Doe',
-				username: 'johndoe',
+		// Return basic mock user details for system functionality
+		const basicMockUsers = {
+			'1': {
+				id: '1',
+				name: 'Current User',
+				firstName: 'Current',
+				lastName: 'User',
 				avatar: '/placeholder.svg',
-				department: 'Engineering',
-				role: 'Manager'
-			},
-			'3': {
-				id: '3',
-				name: 'Alice Johnson',
-				firstName: 'Alice',
-				lastName: 'Johnson',
-				username: 'alicej',
-				avatar: '/placeholder.svg',
-				department: 'Marketing',
-				role: 'Supervisor'
-			},
-			'4': {
-				id: '4',
-				name: 'Bob Smith',
-				firstName: 'Bob',
-				lastName: 'Smith',
-				username: 'bobsmith',
-				avatar: '/placeholder.svg',
-				department: 'Sales',
-				role: 'Frontline'
-			},
-			'5': {
-				id: '5',
-				name: 'Carol White',
-				firstName: 'Carol',
-				lastName: 'White',
-				username: 'carolw',
-				avatar: '/placeholder.svg',
-				department: 'Support',
-				role: 'Support'
+				department: 'IT',
+				role: 'admin'
 			}
 		};
 		
-		return mockUsers[userId as keyof typeof mockUsers] || { id: userId, name: 'Unknown User', avatar: '/placeholder.svg', department: '', role: '' };
+		const mockUser = basicMockUsers[userId as keyof typeof basicMockUsers];
+		return mockUser ? enhanceUserObject(mockUser) : enhanceUserObject({
+			id: userId,
+			name: 'Unknown User',
+			firstName: 'Unknown',
+			lastName: 'User',
+			avatar: '/placeholder.svg',
+			department: '',
+			role: ''
+		});
+	}
+
+	// Helper function to enhance user objects with firstName/lastName
+	function enhanceUserObject(user: any): User {
+		if (!user) return { 
+			id: 'unknown', 
+			name: 'Unknown User', 
+			firstName: 'Unknown',
+			lastName: 'User',
+			avatar: '/placeholder.svg',
+			department: '',
+			role: '',
+			email: '',
+			phone: '',
+			joinDate: '',
+			employeeId: '',
+			lastLogin: '',
+			onlineStatus: 'offline',
+			coverPhoto: '/placeholder.svg?height=300&width=800',
+			manager: null,
+			supervisor: null
+		};
+		
+		// If user already has firstName and lastName, return enhanced version
+		if (user.firstName && user.lastName) {
+			return {
+				...user,
+				employeeId: user.employeeId || '',
+				lastLogin: user.lastLogin || '',
+				onlineStatus: user.onlineStatus || 'offline',
+				coverPhoto: user.coverPhoto || '/placeholder.svg?height=300&width=800',
+				manager: user.manager || null,
+				supervisor: user.supervisor || null
+			};
+		}
+		
+		// If user has a name but no firstName/lastName, try to parse
+		if (user.name && !user.firstName && !user.lastName) {
+			const nameParts = user.name.split(' ');
+			return {
+				...user,
+				firstName: nameParts[0] || '',
+				lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
+				employeeId: user.employeeId || '',
+				lastLogin: user.lastLogin || '',
+				onlineStatus: user.onlineStatus || 'offline',
+				coverPhoto: user.coverPhoto || '/placeholder.svg?height=300&width=800',
+				manager: user.manager || null,
+				supervisor: user.supervisor || null
+			};
+		}
+		
+		return {
+			...user,
+			employeeId: user.employeeId || '',
+			lastLogin: user.lastLogin || '',
+			onlineStatus: user.onlineStatus || 'offline',
+			coverPhoto: user.coverPhoto || '/placeholder.svg?height=300&width=800',
+			manager: user.manager || null,
+			supervisor: user.supervisor || null
+		};
+	}
+
+	// Helper function to ensure user objects have firstName and lastName for ProfileAvatar
+	function getUserForAvatar(user: any) {
+		if (!user) return { name: 'Unknown User' };
+		
+		// If user already has firstName and lastName, return as is
+		if (user.firstName && user.lastName) {
+			return user;
+		}
+		
+		// If user has a name, try to extract firstName and lastName
+		if (user.name) {
+			const nameParts = user.name.split(' ');
+			if (nameParts.length >= 2) {
+				return {
+					...user,
+					firstName: nameParts[0],
+					lastName: nameParts[nameParts.length - 1]
+				};
+			}
+			return {
+				...user,
+				firstName: nameParts[0] || user.name,
+				lastName: ''
+			};
+		}
+		
+		return user;
 	}
 
 	function groupMessagesByTime(messages: Message[]) {
@@ -1422,11 +1575,19 @@
 								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
-									<ProfileAvatar 
-										user={{ name: conversation.name, profilePhoto: conversation.avatar }} 
-										size="sm" 
-										showOnlineStatus={false}
-									/>
+									{#if conversation.type === 'group'}
+										<GroupAvatar 
+											members={conversation.members || []} 
+											size="sm" 
+											showOnlineStatus={false}
+										/>
+									{:else}
+										<ProfileAvatar 
+											user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
+											size="sm" 
+											showOnlineStatus={false}
+										/>
+									{/if}
 								</div>
 								
 								<div class="flex-1 min-w-0">
@@ -1472,16 +1633,47 @@
 					{#if shouldShowConversations}
 						{#each filteredConversations as conversation (conversation.id)}
 							<button
-								onclick={() => selectConversation(conversation)}
+								onclick={(e) => {
+									// Check if the click was on the avatar
+									const target = e.target as HTMLElement;
+									const avatarButton = target.closest('[data-avatar-click]');
+									
+									if (avatarButton) {
+										e.stopPropagation();
+										// Try to find the actual user data first
+										const actualUser = availableUsers.find(u => u.name === conversation.name);
+										if (actualUser) {
+											showUserProfile(actualUser);
+										} else {
+											// Fallback to enhanced user object
+											showUserProfile(enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar }));
+										}
+									} else {
+										selectConversation(conversation);
+									}
+								}}
 								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
-									<ProfileAvatar 
-										user={{ name: conversation.name, profilePhoto: conversation.avatar }} 
-										size="sm" 
-										showOnlineStatus={conversation.isOnline}
-										onlineStatus={conversation.isOnline ? 'online' : 'offline'}
-									/>
+									{#if conversation.type === 'group'}
+										<GroupAvatar 
+											members={conversation.members || []} 
+											size="sm" 
+											showOnlineStatus={false}
+										/>
+									{:else}
+										<div 
+											data-avatar-click="true"
+											class="hover:scale-110 transition-transform cursor-pointer"
+										>
+											<ProfileAvatar 
+												user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
+												size="sm" 
+												showOnlineStatus={conversation.isOnline}
+												onlineStatus={conversation.isOnline ? 'online' : 'offline'}
+											/>
+										</div>
+									{/if}
 								</div>
 								
 								<div class="flex-1 min-w-0">
@@ -1520,10 +1712,10 @@
 								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors"
 							>
 								<div class="relative flex-shrink-0">
-									<img
-										src={user.avatar || "/placeholder.svg"}
-										alt={user.name}
-										class="w-6 h-6 rounded-full"
+									<ProfileAvatar 
+										user={{ name: user.name, profilePhoto: user.avatar }} 
+										size="sm" 
+										showOnlineStatus={false}
 									/>
 								</div>
 								
@@ -1549,12 +1741,62 @@
 				<!-- Chat Header -->
 				<div class="px-4 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
 					<div class="flex items-center space-x-3">
-						<img
-							src={currentConversation.avatar || "/placeholder.svg"}
-							alt={currentConversation.name}
-							class="w-8 h-8 rounded-full"
-						/>
-						<div>
+						{#if currentConversation.type === 'group'}
+							<GroupAvatar 
+								members={currentConversation.members || []} 
+								size="sm" 
+								showOnlineStatus={false}
+							/>
+						{:else}
+							<button
+								type="button"
+								onclick={(event) => {
+									event.stopPropagation();
+									if (currentConversation) {
+										const otherUser = currentConversation.members.find(m => m.id !== '1');
+										if (otherUser) {
+											const userData = { 
+												id: otherUser.id, 
+												name: otherUser.name,
+												firstName: otherUser.firstName,
+												lastName: otherUser.lastName,
+											profilePhoto: otherUser.avatar,
+											department: otherUser.department,
+											role: otherUser.role
+										};
+										showUserProfile(enhanceUserObject(userData));
+									}
+								}
+								}}
+								class="hover:scale-105 transition-transform duration-200 rounded-full"
+							>
+								<img
+									src={currentConversation.avatar || "/placeholder.svg"}
+									alt={currentConversation.name}
+									class="w-8 h-8 rounded-full"
+								/>
+							</button>
+						{/if}
+						<div 
+							class="{currentConversation.type === 'direct' ? 'cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors' : ''}"
+							onclick={() => {
+								if (currentConversation && currentConversation.type === 'direct') {
+									const otherUser = currentConversation.members.find(m => m.id !== '1');
+									if (otherUser) {
+										const userData = { 
+											id: otherUser.id, 
+											name: otherUser.name,
+											firstName: otherUser.firstName,
+											lastName: otherUser.lastName,
+											profilePhoto: otherUser.avatar,
+											department: otherUser.department,
+											role: otherUser.role
+										};
+										showUserProfile(enhanceUserObject(userData));
+									}
+								}
+							}}
+						>
 							<h2 class="font-semibold text-gray-900 text-sm">{currentConversation.name}</h2>
 							{#if currentConversation.type === 'group'}
 								<p class="text-xs text-gray-500">{currentConversation.members.length} members</p>
@@ -1650,11 +1892,30 @@
 										{#if message.senderId !== '1'}
 											{@const sender = currentConversation.members.find(m => m.id === message.senderId)}
 											<div class="mt-1">
-												<ProfileAvatar 
-													user={{ name: message.senderName, profilePhoto: sender?.avatar }} 
-													size="sm" 
-													showOnlineStatus={false}
-												/>
+												<button 
+													type="button"
+													onclick={(event) => {
+														event.stopPropagation();
+														// Get full user details using the same logic as header
+														const fullUserData = getUserDetails(message.senderId);
+														if (fullUserData) {
+															showUserProfile(fullUserData);
+														}
+													}}
+													class="hover:scale-105 transition-transform duration-200"
+												>
+													<ProfileAvatar 
+														user={getUserForAvatar({ 
+															id: message.senderId,
+															name: message.senderName, 
+															firstName: sender?.firstName,
+															lastName: sender?.lastName,
+															profilePhoto: sender?.avatar 
+														})} 
+														size="sm" 
+														showOnlineStatus={false}
+													/>
+												</button>
 											</div>
 										{/if}
 										
@@ -1786,15 +2047,31 @@
 															<span class="text-xs text-gray-500">Seen by</span>
 															<div class="flex -space-x-1">
 																{#each message.seenBy.slice(0, 3) as seenUser}
-																	<img
-																		src={seenUser.userAvatar}
-																		alt={seenUser.userName}
-																		class="w-4 h-4 rounded-full border border-white cursor-pointer hover:scale-110 transition-transform"
+																	<button
+																		type="button"
+																		onclick={(event) => {
+																			event.stopPropagation();
+																			const fullUserData = getUserDetails(seenUser.userId);
+																			if (fullUserData) {
+																				showUserProfile(fullUserData);
+																			}
+																		}}
+																		class="w-6 h-6 border border-white rounded-full overflow-hidden cursor-pointer hover:scale-110 transition-transform" 
 																		title={`Seen by ${seenUser.userName} at ${formatTime(seenUser.seenAt)}`}
-																	/>
+																	>
+																		<ProfileAvatar 
+																			user={getUserForAvatar({ 
+																				id: seenUser.userId,
+																				name: seenUser.userName, 
+																				profilePhoto: seenUser.userAvatar 
+																			})} 
+																			size="sm" 
+																			showOnlineStatus={false}
+																		/>
+																	</button>
 																{/each}
 																{#if message.seenBy.length > 3}
-																	<div class="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-xs text-gray-600 cursor-pointer hover:scale-110 transition-transform"
+																	<div class="w-6 h-6 rounded-full bg-gray-200 border border-white flex items-center justify-center text-xs text-gray-600 cursor-pointer hover:scale-110 transition-transform"
 																		title={`And ${message.seenBy.length - 3} more`}
 																	>
 																		+{message.seenBy.length - 3}
@@ -1819,23 +2096,36 @@
 								</div>
 							{/each}					<!-- Typing Indicator -->
 					{#if othersTyping && currentConversation}
-						<div class="flex justify-start">
-							<div class="flex items-center space-x-2 max-w-xs">
-								<img
-									src={currentConversation.type === 'group' ? currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg' : currentConversation.members.find(m => m.id !== '1')?.avatar || '/placeholder.svg'}
-									alt=""
-									class="w-6 h-6 rounded-full"
-									loading="eager"
-								/>
-								<div class="bg-gray-200 px-3 py-2 rounded-2xl">
-									<div class="flex space-x-1">
-										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-										<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+						{#each currentConversation.members.filter(m => m.id !== '1') as typingMember}
+							<div class="flex justify-start">
+								<div class="flex items-center space-x-2 max-w-xs">
+									<button 
+										type="button"
+										onclick={(event) => {
+											event.stopPropagation();
+											const fullUserData = getUserDetails(typingMember.id);
+											if (fullUserData) {
+												showUserProfile(fullUserData);
+											}
+										}}
+										class="hover:scale-105 transition-transform duration-200"
+									>
+										<ProfileAvatar 
+											user={getUserForAvatar(typingMember)} 
+											size="sm" 
+											showOnlineStatus={false}
+										/>
+									</button>
+									<div class="bg-gray-200 px-3 py-2 rounded-2xl">
+										<div class="flex space-x-1">
+											<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+											<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+											<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+										</div>
 									</div>
 								</div>
 							</div>
-						</div>
+						{/each}
 					{/if}
 				</div>
 
@@ -2082,16 +2372,24 @@
 						{#each currentConversation.members as member (member.id)}
 							<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
 								<div class="flex items-center space-x-3">
-									<div class="relative">
-										<img
-											src={member.avatar || "/placeholder.svg"}
-											alt={member.name}
-											class="w-10 h-10 rounded-full"
+									<button 
+										type="button"
+										onclick={(event) => {
+											event.stopPropagation();
+											const fullUserData = getUserDetails(member.id);
+											if (fullUserData) {
+												showUserProfile(fullUserData);
+											}
+										}}
+										class="relative hover:scale-105 transition-transform duration-200"
+									>
+										<ProfileAvatar 
+											user={getUserForAvatar(member)} 
+											size="md" 
+											showOnlineStatus={member.isOnline}
+											onlineStatus={member.isOnline ? 'online' : 'offline'}
 										/>
-										{#if member.isOnline}
-											<div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-										{/if}
-									</div>
+									</button>
 									
 									<div>
 										<div class="flex items-center space-x-2">
@@ -2264,11 +2562,19 @@
 					<!-- Group Photo and Name -->
 					<div class="flex items-center space-x-4">
 						<div class="relative">
-							<img
-								src={currentConversation?.avatar || "/placeholder.svg"}
-								alt="Group avatar"
-								class="w-16 h-16 rounded-full object-cover"
-							/>
+							{#if currentConversation?.type === 'group'}
+								<GroupAvatar 
+									members={currentConversation.members || []} 
+									size="xl" 
+									showOnlineStatus={false}
+								/>
+							{:else}
+								<img
+									src={currentConversation?.avatar || "/placeholder.svg"}
+									alt="Group avatar"
+									class="w-16 h-16 rounded-full object-cover"
+								/>
+							{/if}
 							<button 
 								class="absolute -bottom-1 -right-1 w-8 h-8 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm hover:bg-[#00a085] transition-colors shadow-lg"
 								aria-label="Change group photo"
@@ -2466,16 +2772,28 @@
 						<p class="text-sm font-medium text-gray-700 mb-3">Add Members</p>
 						<div class="max-h-80 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
 							{#each filteredUsersForGroup as user}
-								<button
-									onclick={() => toggleUser(user)}
-									class="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors {selectedUsers.some(u => u.id === user.id) ? 'bg-[#01c0a4]/5 border border-[#01c0a4]/20' : ''}"
-									aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
-								>
-									<img src={user.avatar || "/placeholder.svg"} alt={user.name} class="w-10 h-10 rounded-full" />
-									<div class="flex-1 text-left">
+								<div class="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors {selectedUsers.some(u => u.id === user.id) ? 'bg-[#01c0a4]/5 border border-[#01c0a4]/20' : ''}">
+									<button 
+										type="button"
+										onclick={(event) => {
+											event.stopPropagation();
+											const fullUserData = getUserDetails(user.id);
+											if (fullUserData) {
+												showUserProfile(fullUserData);
+											}
+										}}
+										class="hover:scale-105 transition-transform duration-200"
+									>
+										<ProfileAvatar user={user} size="md" showOnlineStatus={false} />
+									</button>
+									<button
+										onclick={() => toggleUser(user)}
+										class="flex-1 text-left"
+										aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
+									>
 										<p class="font-medium text-gray-900">{user.name}</p>
 										<p class="text-sm text-gray-500">{user.department} • {user.role}</p>
-									</div>
+									</button>
 									{#if selectedUsers.some(u => u.id === user.id)}
 										<div class="w-5 h-5 bg-[#01c0a4] rounded-full flex items-center justify-center">
 											<span class="text-white text-xs">✓</span>
@@ -2483,7 +2801,7 @@
 									{:else}
 										<div class="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
 									{/if}
-								</button>
+								</div>
 							{/each}
 						</div>
 					</div>
@@ -2503,7 +2821,19 @@
 							<div class="space-y-3">
 								{#each selectedUsers as user}
 									<div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-										<img src={user.avatar || "/placeholder.svg"} alt={user.name} class="w-8 h-8 rounded-full" />
+										<button 
+											type="button"
+											onclick={(event) => {
+												event.stopPropagation();
+												const fullUserData = getUserDetails(user.id);
+												if (fullUserData) {
+													showUserProfile(fullUserData);
+												}
+											}}
+											class="hover:scale-105 transition-transform duration-200"
+										>
+											<ProfileAvatar user={user} size="sm" showOnlineStatus={false} />
+										</button>
 										<div class="flex-1 min-w-0">
 											<p class="font-medium text-gray-900 text-sm truncate">{user.name}</p>
 											<p class="text-xs text-gray-500 truncate">{user.department}</p>
@@ -2731,10 +3061,22 @@
 						<div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
 							<div class="flex items-start justify-between mb-2">
 								<div class="flex items-center space-x-2">
-									<ProfileAvatar 
-										user={{ name: pinnedMessage.senderName, profilePhoto: sender?.avatar }} 
-										size="sm" 
-									/>
+									<button 
+										type="button"
+										onclick={(event) => {
+											event.stopPropagation();
+											const fullUserData = getUserDetails(pinnedMessage.senderId);
+											if (fullUserData) {
+												showUserProfile(fullUserData);
+											}
+										}}
+										class="hover:scale-105 transition-transform duration-200"
+									>
+										<ProfileAvatar 
+											user={getUserForAvatar({ name: pinnedMessage.senderName, profilePhoto: sender?.avatar })} 
+											size="sm" 
+										/>
+									</button>
 									<div>
 										<span class="font-medium text-gray-900 text-sm">{pinnedMessage.senderName}</span>
 										<span class="text-xs text-gray-500 ml-2">{formatTime(pinnedMessage.timestamp)}</span>
@@ -2824,15 +3166,19 @@
 				{#each getReactionUsers(reactionModalMessage, reactionModalTab) as item}
 					{#if item}
 						<div class="flex items-center space-x-3 py-2">
-							<div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium">
-								{#if item.user.firstName && item.user.lastName}
-									{item.user.firstName[0]}{item.user.lastName[0]}
-								{:else if item.user.name}
-									{item.user.name.split(' ')[0]?.[0] || 'U'}{item.user.name.split(' ')[1]?.[0] || ''}
-								{:else}
-									UN
-								{/if}
-							</div>
+							<button 
+								type="button"
+								onclick={(event) => {
+									event.stopPropagation();
+									const fullUserData = getUserDetails(item.user.id);
+									if (fullUserData) {
+										showUserProfile(fullUserData);
+									}
+								}}
+								class="hover:scale-105 transition-transform duration-200"
+							>
+								<ProfileAvatar user={item.user} size="sm" showOnlineStatus={false} />
+							</button>
 							<div class="flex-1">
 								<div class="text-sm font-medium text-gray-900">
 									{#if item.user.firstName && item.user.lastName}
@@ -2904,13 +3250,17 @@
 							/>
 							<div class="flex items-center space-x-2 flex-1">
 								{#if conversation.type === 'group'}
-									<div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
-										{conversation.name[0]}
-									</div>
+									<GroupAvatar 
+										members={conversation.members || []} 
+										size="sm" 
+										showOnlineStatus={false}
+									/>
 								{:else}
-									<div class="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs font-medium">
-										{conversation.name[0]}
-									</div>
+									<ProfileAvatar 
+										user={{ name: conversation.name, profilePhoto: conversation.avatar }} 
+										size="sm" 
+										showOnlineStatus={false}
+									/>
 								{/if}
 								<div class="flex-1">
 									<div class="text-sm font-medium text-gray-900">{conversation.name}</div>
@@ -3130,4 +3480,13 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+<!-- User Profile Modal -->
+{#if showUserProfileModal && selectedUserName}
+	<UserProfileModal 
+		userName={selectedUserName} 
+		show={showUserProfileModal} 
+		onClose={closeUserProfile} 
+	/>
 {/if}
