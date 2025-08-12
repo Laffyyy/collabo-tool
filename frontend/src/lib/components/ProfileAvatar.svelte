@@ -67,32 +67,13 @@
 	let avatarClass = $derived(sizeClasses[size] || sizeClasses.md);
 	let statusClass = $derived(statusSizes[size] || statusSizes.md);
 	let statusColorClass = $derived(statusColors[onlineStatus] || statusColors.offline);
-	
-	// Track image loading state to prevent layout shifts
-	let imageLoaded = $state(false);
-	let imageError = $state(false);
 </script>
 
 <div class="relative {size === '2xl' ? 'block' : 'inline-block'} flex-shrink-0">
-	{#if user?.profilePhoto && !imageError}
-		<!-- Always show initials container to maintain layout, then overlay image when loaded -->
-		<div class="{avatarClass} rounded-full bg-[#01c0a4] flex items-center justify-center text-white font-medium flex-shrink-0">
-			{#if !imageLoaded}
-				{initials}
-			{/if}
-			<img 
-				src={user.profilePhoto}
-				alt={altText || `${user.firstName || user.name || 'User'} profile`}
-				class="{avatarClass} rounded-full object-cover flex-shrink-0 absolute inset-0 {imageLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200"
-				onload={() => imageLoaded = true}
-				onerror={() => { imageError = true; imageLoaded = false; }}
-			/>
-		</div>
-	{:else}
-		<div class="{avatarClass} rounded-full bg-[#01c0a4] flex items-center justify-center text-white font-medium flex-shrink-0">
-			{initials}
-		</div>
-	{/if}
+	<!-- Always show initials instead of profile photos -->
+	<div class="{avatarClass} rounded-full bg-[#01c0a4] flex items-center justify-center text-white font-medium flex-shrink-0">
+		{initials}
+	</div>
 	
 	{#if showOnlineStatus}
 		<div class="absolute -bottom-1 -right-1 {statusClass} {statusColorClass} rounded-full border-2 border-white"></div>

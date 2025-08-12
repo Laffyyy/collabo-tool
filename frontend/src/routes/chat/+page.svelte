@@ -787,10 +787,10 @@
 				<!-- Chat Header -->
 				<div class="px-4 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
 					<div class="flex items-center space-x-3">
-						<img
-							src={currentConversation.avatar || "/placeholder.svg"}
-							alt={currentConversation.name}
-							class="w-8 h-8 rounded-full"
+						<ProfileAvatar 
+							user={{ name: currentConversation.name, profilePhoto: currentConversation.avatar }} 
+							size="sm" 
+							showOnlineStatus={false}
 						/>
 						<div>
 							<h2 class="font-semibold text-gray-900 text-sm">{currentConversation.name}</h2>
@@ -1372,7 +1372,11 @@
 									class="flex items-center space-x-2 bg-[#01c0a4]/10 text-[#01c0a4] px-3 py-1 rounded-full text-sm"
 									aria-label={`Remove ${user.name} from group`}
 								>
-									<img src={user.avatar || "/placeholder.svg"} alt={user.name} class="w-4 h-4 rounded-full" />
+									<ProfileAvatar 
+										user={{ name: user.name, profilePhoto: user.avatar }} 
+										size="sm" 
+										showOnlineStatus={false}
+									/>
 									<span>{user.name}</span>
 									<span class="hover:text-[#00a085]">×</span>
 								</button>
@@ -1391,7 +1395,11 @@
 								class="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors {selectedUsers.some(u => u.id === user.id) ? 'bg-[#01c0a4]/5 border border-[#01c0a4]/20' : ''}"
 								aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
 							>
-								<img src={user.avatar || "/placeholder.svg"} alt={user.name} class="w-8 h-8 rounded-full" />
+								<ProfileAvatar 
+									user={{ name: user.name, profilePhoto: user.avatar }} 
+									size="sm" 
+									showOnlineStatus={false}
+								/>
 								<div class="flex-1 text-left">
 									<p class="font-medium text-gray-900">{user.name}</p>
 									<p class="text-sm text-gray-500">{user.department} • {user.role}</p>

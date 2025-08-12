@@ -1489,7 +1489,9 @@
 									</td>
 									<td class="w-56 px-3 py-3 whitespace-nowrap">
 										<div class="flex items-center">
-											<img src="/placeholder.svg?height=24&width=24" alt="" class="w-6 h-6 rounded-full mr-2" />
+											<div class="mr-2">
+												<ProfileAvatar user={{ name: user.name }} size="sm" showOnlineStatus={false} />
+											</div>
 											<div class="text-sm font-medium text-gray-900 truncate">{user.name}</div>
 										</div>
 									</td>
@@ -2059,7 +2061,9 @@
 					<div class="mb-6">
 						<div class="flex items-center justify-center mb-4">
 							<div class="bg-orange-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
-								<img src="/placeholder.svg?height=48&width=48" alt="{selectedSupervisorView.name}" class="w-12 h-12 rounded-full mx-auto mb-2 bg-white bg-opacity-20" />
+								<div class="mx-auto mb-2">
+									<ProfileAvatar user={{ name: selectedSupervisorView.name }} size="lg" showOnlineStatus={false} />
+								</div>
 								<div class="font-semibold">{selectedSupervisorView.name}</div>
 								<div class="text-sm opacity-90">{selectedSupervisorView.role}</div>
 								<div class="text-xs opacity-75">{selectedSupervisorView.ou}</div>
@@ -2143,7 +2147,9 @@
 					<div class="mb-6">
 						<div class="flex items-center justify-center mb-4">
 							<div class="bg-orange-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
-								<img src="/placeholder.svg?height=64&width=64" alt="{teamModalUser.name}" class="w-16 h-16 rounded-full mx-auto mb-3 bg-white bg-opacity-20" />
+								<div class="mx-auto mb-3">
+									<ProfileAvatar user={{ name: teamModalUser.name }} size="xl" showOnlineStatus={false} />
+								</div>
 								<div class="text-lg font-bold">{teamModalUser.name}</div>
 								<div class="text-sm opacity-90">{teamModalUser.role}</div>
 								<div class="text-xs opacity-75">{teamModalUser.ou}</div>
@@ -2229,7 +2235,9 @@
 					<div class="mb-6">
 						<div class="flex items-center justify-center mb-4">
 							<div class="bg-blue-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
-								<img src="/placeholder.svg?height=64&width=64" alt="{teamModalUser.name}" class="w-16 h-16 rounded-full mx-auto mb-3 bg-white bg-opacity-20" />
+								<div class="mx-auto mb-3">
+									<ProfileAvatar user={{ name: teamModalUser.name }} size="xl" showOnlineStatus={false} />
+								</div>
 								<div class="text-lg font-bold">{teamModalUser.name}</div>
 								<div class="text-sm opacity-90">{teamModalUser.role}</div>
 								<div class="text-xs opacity-75">{teamModalUser.ou}</div>
@@ -2262,7 +2270,9 @@
 										onclick={() => navigateToSupervisor(supervisor)}
 										class="bg-orange-100 border border-orange-200 rounded-lg p-3 text-center hover:bg-orange-200 transition-colors cursor-pointer group min-w-[180px]"
 									>
-										<img src="/placeholder.svg?height=40&width=40" alt="{supervisor.name}" class="w-10 h-10 rounded-full mx-auto mb-2 group-hover:opacity-90 transition-opacity" />
+										<div class="mx-auto mb-2">
+											<ProfileAvatar user={{ name: supervisor.name }} size="md" showOnlineStatus={false} />
+										</div>
 										<div class="font-medium text-gray-900 text-sm truncate" title="{supervisor.name}">{supervisor.name}</div>
 										<div class="text-xs text-gray-600">{supervisor.role}</div>
 										<div class="text-xs text-gray-500 truncate" title="{supervisor.ou}">{supervisor.ou}</div>
