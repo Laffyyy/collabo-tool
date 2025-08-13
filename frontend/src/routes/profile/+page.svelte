@@ -545,7 +545,7 @@
             <!-- Current Manager -->
             <div class="text-center">
               <div class="flex justify-center mb-4">
-                <div class="bg-red-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+                <div class="bg-teal-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
                   <div class="mx-auto mb-3"><ProfileAvatar user={{ name: user.name }} size="xl" showOnlineStatus={false} /></div>
                   <div class="text-lg font-bold">{user.name}</div>
                   <div class="text-sm opacity-90">{user.role}</div>
@@ -578,7 +578,7 @@
                     {#each teamData.supervisors as supervisor}
                       <button
                         onclick={() => selectedSupervisor = selectedSupervisor?.id === supervisor.id ? null : supervisor}
-                        class="bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-lg shadow-lg text-center min-w-[200px] transition-all duration-200 transform hover:scale-105 cursor-pointer"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-lg shadow-lg text-center min-w-[200px] transition-all duration-200 transform hover:scale-105 cursor-pointer"
                       >
                         <div class="mx-auto mb-2"><ProfileAvatar user={{ name: supervisor.name }} size="lg" showOnlineStatus={false} /></div>
                         <div class="font-semibold">{supervisor.name}</div>
@@ -601,15 +601,15 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {#each selectedSupervisor.teamMembers as member}
                         <div class="{
-                          member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
-                          member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+                          member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
+                          member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
                           'bg-green-100 border-green-200'
                         } border-2 rounded-lg p-4 text-center shadow-sm">
                           <div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="lg" showOnlineStatus={false} /></div>
                           <div class="font-medium text-gray-900 text-sm" title="{member.name}">{member.name}</div>
                           <div class="text-xs {
-                            member.role === 'Frontline' ? 'text-blue-700' :
-                            member.role === 'Support' ? 'text-purple-700' :
+                            member.role === 'Frontline' ? 'text-cyan-700' :
+                            member.role === 'Support' ? 'text-teal-700' :
                             'text-gray-600'
                           } font-semibold">{member.role}</div>
                           <div class="text-xs text-gray-500 mt-1" title="{member.ou}">{member.ou}</div>
@@ -631,7 +631,7 @@
             <!-- Current Supervisor -->
             <div class="text-center">
               <div class="flex justify-center mb-6">
-                <div class="bg-orange-500 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
+                <div class="bg-emerald-600 text-white p-6 rounded-lg shadow-lg min-w-[250px] text-center">
                   <div class="mx-auto mb-3"><ProfileAvatar user={{ name: user.name }} size="xl" showOnlineStatus={false} /></div>
                   <div class="text-lg font-bold">{user.name}</div>
                   <div class="text-sm opacity-90">{user.role}</div>
@@ -654,15 +654,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
                   {#each teamData.teamMembers || [] as member}
                     <div class="{
-                      member.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
-                      member.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+                      member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
+                      member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
                       'bg-green-100 border-green-200'
                     } border-2 rounded-lg p-4 text-center shadow-md hover:shadow-lg transition-shadow">
                       <div class="mx-auto mb-3"><ProfileAvatar user={{ name: member.name }} size="lg" showOnlineStatus={false} /></div>
                       <div class="font-semibold text-gray-900" title="{member.name}">{member.name}</div>
                       <div class="text-sm {
-                        member.role === 'Frontline' ? 'text-blue-700' :
-                        member.role === 'Support' ? 'text-purple-700' :
+                        member.role === 'Frontline' ? 'text-cyan-700' :
+                        member.role === 'Support' ? 'text-teal-700' :
                         'text-gray-600'
                       } font-medium">{member.role}</div>
                       <div class="text-xs text-gray-600 mt-1" title="{member.ou}">{member.ou}</div>
@@ -687,7 +687,7 @@
               <div class="text-center">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">My Manager</h3>
                 <div class="flex justify-center mb-4">
-                  <div class="bg-red-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
+                  <div class="bg-teal-600 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
                     <div class="mx-auto mb-2"><ProfileAvatar user={{ name: teamStructure.manager.name }} size="lg" showOnlineStatus={false} /></div>
                     <div class="font-semibold">{teamStructure.manager.name}</div>
                     <div class="text-sm opacity-90">{teamStructure.manager.role}</div>
@@ -709,7 +709,7 @@
               <div class="text-center">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">My Supervisor</h3>
                 <div class="flex justify-center mb-4">
-                  <div class="bg-orange-500 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
+                  <div class="bg-emerald-600 text-white p-4 rounded-lg shadow-lg min-w-[200px] text-center">
                     <div class="mx-auto mb-2"><ProfileAvatar user={{ name: teamStructure.supervisor.name }} size="lg" showOnlineStatus={false} /></div>
                     <div class="font-semibold">{teamStructure.supervisor.name}</div>
                     <div class="text-sm opacity-90">{teamStructure.supervisor.role}</div>
@@ -730,17 +730,17 @@
               <h3 class="text-lg font-medium text-gray-900 mb-4">Me</h3>
               <div class="flex justify-center">
                 <div class="{
-                  user.role === 'Frontline' ? 'bg-blue-100 border-blue-200' :
-                  user.role === 'Support' ? 'bg-purple-100 border-purple-200' :
+                  user.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
+                  user.role === 'Support' ? 'bg-teal-100 border-teal-300' :
                   'bg-green-100 border-green-200'
                 } border rounded-lg p-4 text-center min-w-[200px]">
                   <div class="mx-auto mb-2"><ProfileAvatar user={{ name: user.name }} size="lg" showOnlineStatus={false} /></div>
                   <div class="font-medium text-gray-900">{user.name}</div>
                   <div class="text-sm {
-                    user.role === 'Frontline' ? 'text-blue-700' :
-                    user.role === 'Support' ? 'text-purple-700' :
+                    user.role === 'Frontline' ? 'text-cyan-700' :
+                    user.role === 'Support' ? 'text-teal-700' :
                     'text-gray-600'
-                  }">{user.role}</div>
+                  } font-semibold">{user.role}</div>
                   <div class="text-sm text-gray-500">{user.ou}</div>
                   <div class="text-sm text-gray-500 mt-1">{user.email}</div>
                 </div>

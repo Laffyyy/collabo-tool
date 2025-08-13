@@ -76,6 +76,6 @@
 	</div>
 	
 	{#if showOnlineStatus}
-		<div class="absolute -bottom-1 -right-1 {statusClass} {statusColorClass} rounded-full border-2 border-white"></div>
+		<div class="absolute -bottom-1 -right-1 {statusClass} {statusColorClass} rounded-full"></div>
 	{/if}
 </div>

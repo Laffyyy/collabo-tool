@@ -26,24 +26,42 @@
     // Chat Settings - Global defaults for all OUs
     chat: {
       frontlineCanInitiate1v1: true,
-      frontlineCanReply1v1: true,
       frontlineCanCreateGroups: false,
       frontlineCanJoinGroups: true,
+      frontlineCanShareFiles: false,
+      frontlineCanForwardMessages: false,
+      supportCanInitiate1v1: true,
+      supportCanCreateGroups: false,
+      supportCanJoinGroups: true,
+      supportCanShareFiles: true,
+      supportCanForwardMessages: true,
       supervisorCanCreateGroups: true,
+      supervisorCanShareFiles: true,
+      supervisorCanForwardMessages: true,
       managerCanAccessAllGroups: true,
+      managerCanShareFiles: true,
+      managerCanForwardMessages: true,
       allowFileSharing: true,
       allowEmojis: true,
-      messageRetentionDays: 365,
+      inactiveGroupArchiveDays: 30,
       maxFileSize: 10, // MB
       allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
       maxGroupSize: 50,
-      messageEditWindow: 15 // minutes
+      messageEditWindow: 15, // minutes
+      
+      // Pinned Messages Settings
+      pinnedMessages: {
+        enabled: true,
+        maxPinnedPerConversation: 10
+      }
     },
     
     // Broadcast Settings - Global defaults for all OUs
     broadcast: {
       frontlineCanCreateBroadcast: false,
       frontlineCanReplyToBroadcast: true,
+      supportCanCreateBroadcast: false,
+      supportCanReplyToBroadcast: true,
       supervisorCanCreateBroadcast: true,
       managerCanCreateBroadcast: true,
       requireApprovalForBroadcast: false,
@@ -52,7 +70,7 @@
       broadcastRetentionDays: 730,
       requireAcknowledgment: true,
       acknowledgmentReminders: true,
-      reminderInterval: 24, // hours
+      reminderInterval: 1440, // minutes
       maxBroadcastTargets: 1000
     },
     
@@ -445,17 +463,6 @@
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can reply in 1:1 conversations</span>
-                      <button
-                        type="button"
-                        onclick={() => toggleRule('chat', 'frontlineCanReply1v1')}
-                        aria-label="Toggle frontline can reply in 1v1 chats"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanReply1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-                      >
-                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanReply1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
-                      </button>
-                    </label>
-                    <label class="flex items-center justify-between">
                       <span class="text-sm text-gray-700">Can create group chats</span>
                       <button
                         type="button"
@@ -475,6 +482,92 @@
                         class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can share files</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'frontlineCanShareFiles')}
+                        aria-label="Toggle frontline can share files"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'frontlineCanForwardMessages')}
+                        aria-label="Toggle frontline can forward messages"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border">
+                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                    <User class="w-5 h-5 mr-2" />
+                    Support User Permissions
+                  </h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supportCanInitiate1v1')}
+                        aria-label="Toggle support can initiate 1v1 chats"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanInitiate1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanInitiate1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can create group chats</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supportCanCreateGroups')}
+                        aria-label="Toggle support can create groups"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanCreateGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can join group chats</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supportCanJoinGroups')}
+                        aria-label="Toggle support can join groups"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can share files</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supportCanShareFiles')}
+                        aria-label="Toggle support can share files"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supportCanForwardMessages')}
+                        aria-label="Toggle support can forward messages"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                   </div>
@@ -497,6 +590,28 @@
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supervisorCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can share files</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supervisorCanShareFiles')}
+                        aria-label="Toggle supervisor can share files"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supervisorCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'supervisorCanForwardMessages')}
+                        aria-label="Toggle supervisor can forward messages"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supervisorCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
                   </div>
                 </div>
 
@@ -517,6 +632,28 @@
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.managerCanAccessAllGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can share files</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'managerCanShareFiles')}
+                        aria-label="Toggle manager can share files"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.managerCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('chat', 'managerCanForwardMessages')}
+                        aria-label="Toggle manager can forward messages"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.managerCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
                   </div>
                 </div>
 
@@ -524,17 +661,6 @@
                   <h4 class="font-semibold text-gray-900 mb-4">General Chat Settings</h4>
                   <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Allow file sharing</span>
-                        <button
-                          type="button"
-                          onclick={() => toggleRule('chat', 'allowFileSharing')}
-                          aria-label="Toggle allow file sharing"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.allowFileSharing ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-                        >
-                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.allowFileSharing ? 'translate-x-6' : 'translate-x-1'}"></span>
-                        </button>
-                      </label>
                       <label class="flex items-center justify-between">
                         <span class="text-sm text-gray-700">Allow emojis and reactions</span>
                         <button
@@ -550,13 +676,13 @@
                     
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label for="messageRetentionDays" class="block text-sm font-medium text-gray-700 mb-2">Message retention (days)</label>
+                        <label for="inactiveGroupArchiveDays" class="block text-sm font-medium text-gray-700 mb-2">Archive inactive Group chats (days)</label>
                         <input
-                          id="messageRetentionDays"
+                          id="inactiveGroupArchiveDays"
                           type="number"
-                          bind:value={config.chat.messageRetentionDays}
+                          bind:value={config.chat.inactiveGroupArchiveDays}
                           min="1"
-                          max="3650"
+                          max="365"
                           class="input-field"
                         />
                       </div>
@@ -584,28 +710,61 @@
                       </div>
                     </div>
                     
-                    <div>
-                      <label for="messageEditWindow" class="block text-sm font-medium text-gray-700 mb-2">Message edit window (minutes)</label>
-                      <input
-                        id="messageEditWindow"
-                        type="number"
-                        bind:value={config.chat.messageEditWindow}
-                        min="0"
-                        max="60"
-                        class="input-field w-32"
-                      />
-                      <p class="text-xs text-gray-500 mt-1">Set to 0 to disable message editing</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label for="messageEditWindow" class="block text-sm font-medium text-gray-700 mb-2">Message edit window (minutes)</label>
+                        <input
+                          id="messageEditWindow"
+                          type="number"
+                          bind:value={config.chat.messageEditWindow}
+                          min="0"
+                          max="60"
+                          class="input-field"
+                        />
+                        <p class="text-xs text-gray-500 mt-1">Set to 0 to disable message editing</p>
+                      </div>
+                      
+                      <div>
+                        <label for="allowedFileTypes" class="block text-sm font-medium text-gray-700 mb-2">Allowed file types</label>
+                        <input
+                          id="allowedFileTypes"
+                          bind:value={config.chat.allowedFileTypes}
+                          class="input-field"
+                          placeholder="jpg, png, pdf, doc, docx"
+                        />
+                        <p class="text-xs text-gray-500 mt-1">Currently: {formatFileTypes(config.chat.allowedFileTypes)}</p>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <label for="allowedFileTypes" class="block text-sm font-medium text-gray-700 mb-2">Allowed file types</label>
-                      <input
-                        id="allowedFileTypes"
-                        bind:value={config.chat.allowedFileTypes}
-                        class="input-field"
-                        placeholder="jpg, png, pdf, doc, docx"
-                      />
-                      <p class="text-xs text-gray-500 mt-1">Currently: {formatFileTypes(config.chat.allowedFileTypes)}</p>
+                  </div>
+                </div>
+
+                <!-- Pinned Messages Settings -->
+                <div class="bg-white p-4 rounded-lg border">
+                  <h4 class="font-semibold text-gray-900 mb-4">Pinned Messages Settings</h4>
+                  <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <label class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">Enable pinned messages</span>
+                        <button
+                          type="button"
+                          onclick={() => config.chat.pinnedMessages.enabled = !config.chat.pinnedMessages.enabled}
+                          aria-label="Toggle pinned messages"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.pinnedMessages.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        >
+                          <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.pinnedMessages.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
+                        </button>
+                      </label>
+                      <div>
+                        <label for="maxPinnedPerConversation" class="block text-sm font-medium text-gray-700 mb-2">Max pinned messages per conversation</label>
+                        <input
+                          id="maxPinnedPerConversation"
+                          type="number"
+                          bind:value={config.chat.pinnedMessages.maxPinnedPerConversation}
+                          min="1"
+                          max="50"
+                          class="input-field"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -646,6 +805,37 @@
                         class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.frontlineCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.frontlineCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg border">
+                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                    <User class="w-5 h-5 mr-2" />
+                    Support User Permissions
+                  </h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can create broadcasts</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('broadcast', 'supportCanCreateBroadcast')}
+                        aria-label="Toggle support can create broadcasts"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supportCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.supportCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
+                      </button>
+                    </label>
+                    <label class="flex items-center justify-between">
+                      <span class="text-sm text-gray-700">Can reply to broadcasts</span>
+                      <button
+                        type="button"
+                        onclick={() => toggleRule('broadcast', 'supportCanReplyToBroadcast')}
+                        aria-label="Toggle support can reply to broadcasts"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supportCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                      >
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.supportCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                   </div>
@@ -754,7 +944,7 @@
                     
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label for="broadcastRetentionDays" class="block text-sm font-medium text-gray-700 mb-2">Broadcast retention (days)</label>
+                        <label for="broadcastRetentionDays" class="block text-sm font-medium text-gray-700 mb-2">Archive Broadcast (days)</label>
                         <input
                           id="broadcastRetentionDays"
                           type="number"
@@ -765,13 +955,13 @@
                         />
                       </div>
                       <div>
-                        <label for="reminderInterval" class="block text-sm font-medium text-gray-700 mb-2">Reminder interval (hours)</label>
+                        <label for="reminderInterval" class="block text-sm font-medium text-gray-700 mb-2">Reminder interval (minutes)</label>
                         <input
                           id="reminderInterval"
                           type="number"
                           bind:value={config.broadcast.reminderInterval}
                           min="1"
-                          max="168"
+                          max="10080"
                           class="input-field"
                         />
                       </div>
