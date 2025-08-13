@@ -37,8 +37,17 @@
   transition: background-color 0.2s;
 }
 
+.dark .secondary-button {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
 .secondary-button:hover {
   background-color: #e5e7eb;
+}
+
+.dark .secondary-button:hover {
+  background-color: #4b5563;
 }
 
 .secondary-button:disabled {
@@ -56,6 +65,12 @@
   transition: border-color 0.2s;
 }
 
+.dark .input-field {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
 .input-field:focus {
   border-color: #01c0a4;
 }
@@ -64,11 +79,21 @@
   color: #9ca3af;
 }
 
+.dark .input-field::placeholder {
+  color: #6b7280;
+}
+
 .collaboration-card {
   background-color: white;
   border-radius: 1rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   border: 1px solid #f3f4f6;
+}
+
+.dark .collaboration-card {
+  background-color: #1f2937;
+  border-color: #374151;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
 }
 
 .fade-in {

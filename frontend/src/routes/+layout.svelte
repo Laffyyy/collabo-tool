@@ -17,6 +17,6 @@
 	<Navigation />
 {/if}
 
-<main class="min-h-screen {showNavigation ? 'bg-gray-50 pt-0' : ''}">
+<main class="min-h-screen transition-colors duration-200 {showNavigation ? 'bg-gray-50 dark:bg-gray-900 pt-0' : 'bg-white dark:bg-gray-900'}">
 	{@render children()}
 </main>

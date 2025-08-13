@@ -1522,7 +1522,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="h-screen flex flex-col bg-gray-50" onclick={() => showEmojiPicker = false}>
+<div class="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-200" onclick={() => showEmojiPicker = false}>
 	<Navigation />
 	
 	<div class="flex-1 flex overflow-hidden">
@@ -1737,7 +1737,7 @@
 
 		<!-- Chat Area -->
 		{#if currentConversation}
-			<main class="flex-1 flex flex-col bg-gray-50">
+			<main class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
 				<!-- Chat Header -->
 				<div class="px-4 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
 					<div class="flex items-center space-x-3">
@@ -1870,7 +1870,7 @@
 				{/if}
 
 				<!-- Messages -->
-				<div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+				<div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
 					{#each groupedMessages() as timeGroup (timeGroup.timestamp.getTime())}
 						<!-- Time Divider -->
 						<div class="flex items-center space-x-4 my-6">
