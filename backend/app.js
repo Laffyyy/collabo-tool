@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const routes = require('./routes');
 const { env } = require('./config');
+const securityQuestionsRoutes = require('./routes/v1/securityQuestions.routes');
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.get('/health', (_req, res) => {
 
 // API Routes
 app.use('/api', routes);
+app.use('/api/v1/security-questions', securityQuestionsRoutes);
 
 // 404 handler
 app.use((req, res, _next) => {
