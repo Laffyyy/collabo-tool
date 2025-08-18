@@ -17,11 +17,47 @@
 	let forgotPasswordSuccess = $state(false);
 	let forgotPasswordEmailInput: HTMLInputElement | undefined;
 	
-	const handleLoginSubmit = (event: Event) => {
-		event.preventDefault();
-		// Navigate to OTP page after successful login
-		goto('/otp');
-	};
+	const handleLoginSubmit = async (event: Event) => {
+        event.preventDefault();
+        console.log('Login attempt with username:', loginUsername);
+        
+        try {
+            console.log('Preparing API request to /api/v1/auth/login');
+            // Call the backend API to check if user exists
+            const response = await fetch('http://localhost:5000/api/v1/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: loginUsername,
+                    password: loginPassword
+                })
+            });
+            
+            console.log('API response status:', response.status);
+            console.log('API response headers:', [...response.headers.entries()]);
+            
+            const data = await response.json();
+            console.log('API response data:', data);
+            
+            // Show appropriate alert based on user existence
+            if (data.exists) {
+                console.log('User exists in database, navigating to OTP');
+                alert("User in database");
+                // Once verification is complete, proceed to OTP page
+                goto('/otp');
+            } else {
+                console.log('User does not exist in database');
+                alert("User not in database");
+            }
+        } catch (error) {
+            console.error('Login error details:', error);
+            console.log('Error type:', typeof error);
+            console.log('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+            alert("Error connecting to the server");
+        }
+    };
 	
 	const toggleLoginPasswordVisibility = () => {
 		loginShowPassword = !loginShowPassword;

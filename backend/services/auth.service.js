@@ -3,6 +3,11 @@ const jwt = require('jsonwebtoken');
 const { env } = require('../config');
 const { BadRequestError, UnauthorizedError } = require('../utils/errors');
 const { generateOtp, verifyOtpCode } = require('../utils/otp');
+const { getPool } = require('../config/db');
+const UserModel = require('../model/user.model');
+
+// Initialize UserModel with database pool
+const userModel = new UserModel(getPool());
 
 // In-memory demo store (replace with DB later)
 const users = new Map();
@@ -12,20 +17,41 @@ function signToken(payload) {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: `${env.TOKEN_EXP_MINUTES}m` });
 }
 
+/**
+ * User login function
+ * @param {Object} credentials - Login credentials
+ * @param {string} credentials.username - User's email/username
+ * @param {string} credentials.password - User's password
+ * @returns {Promise<Object>} Login result with next step
+ */
 async function login({ username, password }) {
-  const user = users.get(username);
-  if (!user) throw new UnauthorizedError('Invalid credentials');
-  const isValid = await bcrypt.compare(password, user.passwordHash);
-  if (!isValid) throw new UnauthorizedError('Invalid credentials');
-
-  // Simulate OTP requirement
-  const otp = generateOtp();
-  pendingOtps.set(username, otp);
-  return {
-    step: 'OTP_REQUIRED',
-    message: 'OTP sent',
-    otpPreview: (env.NODE_ENV || 'development') === 'development' ? otp.code : undefined,
-  };
+  try {
+    // First check if the user exists in database by email (since username field is actually email)
+    const user = await userModel.findByEmail(username);
+    
+    // For this initial integration, just check existence without password verification
+    if (!user) {
+      return {
+        step: 'FAILED',
+        exists: false,
+        message: 'User not in database'
+      };
+    }
+    
+    // User exists in database - we'll add password verification later
+    // For now just return success with user existence flag
+    return {
+      step: 'SUCCESS',
+      exists: true,
+      message: 'User in database'
+    };
+    
+    // Note: We're not generating OTP or continuing login flow yet
+    // That will be implemented in the next phase
+  } catch (error) {
+    console.error('Database login error:', error);
+    throw new UnauthorizedError('Authentication error');
+  }
 }
 
 async function verifyOtp({ username, otp }) {

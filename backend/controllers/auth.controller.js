@@ -1,10 +1,24 @@
 const authService = require('../services/auth.service');
 
+/**
+ * Login controller - handles user authentication requests
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
 async function login(req, res, next) {
   try {
     const { username, password } = req.body;
     const result = await authService.login({ username, password });
-    res.status(200).json({ ok: true, ...result });
+    
+    // For the initial integration, we'll return a simple response
+    // that the frontend can use to show an alert
+    res.status(200).json({ 
+      ok: true,
+      exists: result.exists, 
+      message: result.message,
+      step: result.step
+    });
   } catch (err) {
     next(err);
   }
