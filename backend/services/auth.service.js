@@ -2,12 +2,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { env } = require('../config');
 const { BadRequestError, UnauthorizedError } = require('../utils/errors');
-const { generateOtp, verifyOtpCode } = require('../utils/otp');
+const { generateOtp, generateAlphanumericOtp, verifyOtpCode, sendOtpEmail } = require('../utils/otp');
 const { getPool } = require('../config/db');
 const UserModel = require('../model/user.model');
+const OTPModel = require('../model/otp.model');
 
 // Initialize UserModel with database pool
 const userModel = new UserModel(getPool());
+const otpModel = new OTPModel(getPool());
 
 // In-memory demo store (replace with DB later)
 const users = new Map();
@@ -26,44 +28,128 @@ function signToken(payload) {
  */
 async function login({ username, password }) {
   try {
-    // First check if the user exists in database by email (since username field is actually email)
-    const user = await userModel.findByEmail(username);
+    // First check if the user exists in database by email - include sensitive data for auth
+    const query = 'SELECT * FROM tblusers WHERE demail = $1';
+    const result = await userModel.pool.query(query, [username]);
     
-    // For this initial integration, just check existence without password verification
-    if (!user) {
+    // If user not found
+    if (result.rows.length === 0) {
       return {
         step: 'FAILED',
         exists: false,
-        message: 'User not in database'
+        message: 'User not found'
       };
     }
     
-    // User exists in database - we'll add password verification later
-    // For now just return success with user existence flag
+    const userData = result.rows[0];
+    const passwordHash = userData.dpasswordhash;
+    
+    // User exists in database - verify password
+    if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
+      return {
+        step: 'FAILED',
+        exists: true,
+        message: 'Invalid password'
+      };
+    }
+    
+    // Format the user without sensitive data for the response
+    const user = userModel.formatUser(userData);
+    
+    // Generate OTP and send it to user's email
+    const otpData = await generateAndSendOtp(user.email);
+    
+    // Store the OTP in the database or in-memory store
+    await otpModel.create({
+      userId: user.id,
+      code: otpData.code,
+      expiresAt: new Date(otpData.expiresAt)
+    });
+    
+    // Return success with user info for OTP verification
     return {
-      step: 'SUCCESS',
+      ok: true,
+      step: 'OTP',
       exists: true,
-      message: 'User in database'
+      message: 'OTP sent to your email',
+      userId: user.id,
+      email: user.email,
+      username: user.username
     };
     
-    // Note: We're not generating OTP or continuing login flow yet
-    // That will be implemented in the next phase
   } catch (error) {
     console.error('Database login error:', error);
     throw new UnauthorizedError('Authentication error');
   }
 }
 
-async function verifyOtp({ username, otp }) {
-  const expected = pendingOtps.get(username);
-  if (!expected || !verifyOtpCode(expected, otp)) {
-    throw new UnauthorizedError('Invalid or expired OTP');
+/**
+ * Generate an OTP and send it to user's email
+ * @param {string} email - User's email address 
+ * @returns {Promise<Object>} OTP data
+ */
+async function generateAndSendOtp(email) {
+  const otpData = generateAlphanumericOtp();
+  
+  try {
+    // Send OTP via email
+    await sendOtpEmail(email, otpData.code);
+    console.log(`OTP sent to ${email}`);
+  } catch (error) {
+    console.error('Failed to send OTP email:', error);
+    // Log but don't throw so authentication can still proceed
   }
-  pendingOtps.delete(username);
+  
+  return otpData;
+}
 
-  const user = users.get(username);
-  const token = signToken({ id: user.id, username });
-  return { token, user: { id: user.id, username } };
+/**
+ * Verify an OTP code
+ * @param {Object} verifyData - Verification data
+ * @param {string} verifyData.userId - User ID
+ * @param {string} verifyData.otp - OTP code entered by user
+ * @returns {Promise<Object>} Verification result with user data and token
+ */
+async function verifyOtp({ userId, otp }) {
+  try {
+    console.log(`Verifying OTP for user ${userId}`);
+    // Find the OTP record in the database
+    const otpRecord = await otpModel.findActiveByCodeAndUserId(userId, otp);
+    
+    if (!otpRecord) {
+      throw new UnauthorizedError('Invalid or expired OTP');
+    }
+
+    console.log('Valid OTP found, marking as used');
+    
+    // Mark OTP as used
+    await otpModel.markAsUsed(otpRecord.did);
+    
+    // Get user info
+    const user = await userModel.findById(userId);
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+    
+    // Update last login timestamp
+    await userModel.updateLastLogin(userId);
+    
+    // Generate JWT token
+    const token = signToken({ 
+      id: user.id, 
+      username: user.username,
+      email: user.email,
+      role: user.role
+    });
+    
+    return { 
+      token,
+      user
+    };
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    throw new UnauthorizedError('OTP verification failed');
+  }
 }
 
 async function firstTimeSetup({ username, password }) {

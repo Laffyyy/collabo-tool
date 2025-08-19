@@ -5,9 +5,11 @@
 	import LoginHeader from './LoginHeader.svelte';
 	import { onMount } from 'svelte';
 	
-	let loginUsername = $state('');
-	let loginPassword = $state('');
-	let loginShowPassword = $state(false);
+   	let loginUsername = $state('');
+    let loginPassword = $state('');
+    let loginShowPassword = $state(false);
+    let loginIsLoading = $state(false);
+    let loginError = $state('');
 	
 	// Forgot password modal state
 	let showForgotPasswordModal = $state(false);
@@ -19,11 +21,11 @@
 	
 	const handleLoginSubmit = async (event: Event) => {
         event.preventDefault();
-        console.log('Login attempt with username:', loginUsername);
+        loginIsLoading = true;
+        loginError = '';
         
         try {
-            console.log('Preparing API request to /api/v1/auth/login');
-            // Call the backend API to check if user exists
+            // Call the backend API to authenticate user
             const response = await fetch('http://localhost:5000/api/v1/auth/login', {
                 method: 'POST',
                 headers: {
@@ -35,27 +37,28 @@
                 })
             });
             
-            console.log('API response status:', response.status);
-            console.log('API response headers:', [...response.headers.entries()]);
-            
             const data = await response.json();
-            console.log('API response data:', data);
             
-            // Show appropriate alert based on user existence
-            if (data.exists) {
-                console.log('User exists in database, navigating to OTP');
-                alert("User in database");
-                // Once verification is complete, proceed to OTP page
+            if (response.ok && data.ok) {
+                // Store info needed for OTP verification
+                localStorage.setItem('auth_userId', data.userId);
+                localStorage.setItem('auth_userEmail', data.email);
+                localStorage.setItem('auth_username', data.username || loginUsername);
+                localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
+                
+                // Set OTP expiry time (5 minutes from now)
+                const expiryTime = Date.now() + (5 * 60 * 1000);
+                localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+                
+                // Navigate to OTP verification page
                 goto('/otp');
             } else {
-                console.log('User does not exist in database');
-                alert("User not in database");
+                loginError = data.message || 'Invalid credentials';
             }
         } catch (error) {
-            console.error('Login error details:', error);
-            console.log('Error type:', typeof error);
-            console.log('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-            alert("Error connecting to the server");
+            loginError = 'Connection error. Please try again later.';
+        } finally {
+            loginIsLoading = false;
         }
     };
 	
@@ -214,6 +217,8 @@
 				bind:loginUsername
 				bind:loginPassword
 				bind:loginShowPassword
+				isLoading={loginIsLoading}
+				error={loginError}
 				onSubmit={handleLoginSubmit}
 				onTogglePassword={toggleLoginPasswordVisibility}
 				onForgotPassword={openForgotPasswordModal}

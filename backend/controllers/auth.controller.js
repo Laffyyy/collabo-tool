@@ -24,11 +24,32 @@ async function login(req, res, next) {
   }
 }
 
+/**
+ * OTP verification controller
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
 async function verifyOtp(req, res, next) {
   try {
-    const { username, otp } = req.body;
-    const result = await authService.verifyOtp({ username, otp });
-    res.status(200).json({ ok: true, ...result });
+    const { userId, otp } = req.body;
+    const result = await authService.verifyOtp({ userId, otp });
+    
+    // Set JWT as HTTP-only cookie
+    const cookieOptions = {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    };
+    
+    res.cookie('token', result.token, cookieOptions);
+    
+    res.status(200).json({
+      ok: true,
+      user: result.user,
+      message: 'Authentication successful'
+    });
   } catch (err) {
     next(err);
   }
