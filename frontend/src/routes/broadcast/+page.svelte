@@ -695,10 +695,11 @@
               
               <div class="space-y-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">Organizational Units *</label>
+                  <label for="ou-selector" class="block text-sm font-medium text-gray-700 mb-2">Organizational Units *</label>
                   <div class="relative">
                     <button
                       type="button"
+                      id="ou-selector"
                       onclick={() => showOUDropdown = !showOUDropdown}
                       class="input-field w-full text-left flex items-center justify-between"
                     >
@@ -1277,7 +1278,7 @@
             <!-- Actions for Creator -->
             <div class="flex justify-end pt-4 border-t border-gray-200">
               <button
-                onclick={() => markAsDone(selectedBroadcast.id)}
+                onclick={() => selectedBroadcast && markAsDone(selectedBroadcast.id)}
                 class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
               >
                 Mark as Done
