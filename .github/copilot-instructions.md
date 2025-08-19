@@ -1,25 +1,44 @@
 # Copilot Instructions for Collabo-Tool
 
 ## Project Overview
-This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**. It's a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
+This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4** frontend, plus a **Node.js/Express** backend with **PostgreSQL** database integration. The frontend is currently a fully-featured demo with simulated data, while the backend provides production-ready API infrastructure.
 
-**Critical: Frontend-Only Demo** - All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage. No backend integration exists.
+**Project Structure**:
+- **Frontend**: SvelteKit 5 app with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces
+- **Backend**: Express.js API server with JWT authentication, PostgreSQL integration, comprehensive user management, and security features
+
+**Development Mode**: Frontend uses simulated data (in-memory stores and localStorage) for immediate functionality. Backend provides production-ready API infrastructure that can be integrated when needed.
 
 ## Development Workflows
 
 ### Quick Start
+**Frontend Development**:
 ```bash
 cd frontend
 npm run dev -- --open  # Auto-opens browser at localhost:5173
 ```
 
-**Network Config**: Dev server exposes on `0.0.0.0:5173` with ngrok support (`allowedHosts: ['.ngrok-free.app']`)
+**Backend Development**:
+```bash
+cd backend
+npm run dev  # Starts Express server at localhost:4000
+```
+
+**Network Config**: 
+- Frontend dev server exposes on `0.0.0.0:5173` with ngrok support (`allowedHosts: ['.ngrok-free.app']`)
+- Backend API server runs on `localhost:4000` with CORS enabled for frontend integration
 
 ### Testing Strategy
+**Frontend Testing**:
 - **Svelte Components**: Use `.svelte.test.ts` suffix → browser environment with Playwright
 - **Utilities/Logic**: Use `.test.ts` suffix → Node environment
 - Commands: `npm run test:unit` (watch) | `npm test` (single run)
 - Multi-project Vitest setup in `vite.config.ts` handles environment switching automatically
+
+**Backend Testing**:
+- Health check available at `GET /health`
+- API routes under `/api/auth/*` for authentication endpoints
+- No test suite currently configured
 
 ### Code Quality Pipeline
 ```bash
@@ -29,6 +48,30 @@ npm run format   # Auto-format codebase
 ```
 
 ## Architecture Patterns
+
+### Backend API Architecture
+**Express.js Setup**: 
+- JWT authentication with middleware protection (`requireAuth.js`)
+- Validation middleware using `express-validator`
+- Error handling with custom error classes (`HttpError`, `BadRequestError`, `UnauthorizedError`)
+- CORS enabled for frontend integration
+
+**Database Model Pattern**:
+```javascript
+// backend/model/user.model.js - Class-based PostgreSQL model
+class UserModel {
+  static ACCOUNT_STATUS = { ACTIVE: 'active', FIRST_TIME: 'first-time', /* ... */ };
+  
+  async create(userData) { /* PostgreSQL operations */ }
+  async findByUsername(username) { /* ... */ }
+  formatUser(user, includeSensitive = false) { /* Clean sensitive data */ }
+}
+```
+
+**Authentication Flow**:
+- `/api/auth/login` → OTP generation → `/api/auth/otp` verification → JWT token
+- Password management: `/api/auth/password` (change), `/api/auth/forgot-password`
+- Security questions: `/api/auth/security-questions`, `/api/auth/answer-security-questions`
 
 ### Svelte 5 Component Conventions
 ```svelte
@@ -151,7 +194,10 @@ get canManageUsers() { return ['admin', 'manager'].includes(this.user?.role || '
 ```
 
 ### Key Development Notes
-- **Mock Data**: All stores initialize with demo data for immediate functionality
+- **Mock Data**: All frontend stores initialize with demo data for immediate functionality
+- **Backend Integration**: Production-ready Express API available but frontend currently uses simulated data
+- **API Structure**: RESTful endpoints under `/api/auth/*` with JWT authentication and validation middleware
+- **Database Ready**: PostgreSQL user model with comprehensive field mapping and security features
 - **Role-based UI**: Check permissions before showing admin features or sensitive operations  
 - **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
 - **Icon System**: Consistent use of Lucide Svelte icons throughout the application
