@@ -12,11 +12,13 @@ router.get('/questions', SecurityQuestionsController.getAllQuestions);
 router.post(
   '/user-answers',
   [
+    // Changed back to isUUID() for UUID user IDs
     body('userId').isUUID().withMessage('Valid user ID is required'),
     body('questionAnswers')
       .isArray({ min: 3, max: 5 })
       .withMessage('Question answers must be an array with 3-5 items'),
     body('questionAnswers.*.questionId')
+      // Changed back to isUUID() for UUID question IDs
       .isUUID()
       .withMessage('Each question must have a valid question ID'),
     body('questionAnswers.*.answer')
@@ -33,6 +35,7 @@ router.post(
 router.get(
   '/user-questions/:userId',
   [
+    // Changed back to isUUID()
     param('userId').isUUID().withMessage('Valid user ID is required')
   ],
   validate,
@@ -43,11 +46,13 @@ router.get(
 router.post(
   '/verify-answers',
   [
+    // Changed back to isUUID()
     body('userId').isUUID().withMessage('Valid user ID is required'),
     body('questionAnswers')
       .isArray({ min: 1 })
       .withMessage('Question answers array is required'),
     body('questionAnswers.*.questionId')
+      // Changed back to isUUID()
       .isUUID()
       .withMessage('Each question must have a valid question ID'),
     body('questionAnswers.*.answer')
@@ -64,6 +69,7 @@ router.post(
 router.get(
   '/user-status/:userId',
   [
+    // Changed back to isUUID()
     param('userId').isUUID().withMessage('Valid user ID is required')
   ],
   validate,
