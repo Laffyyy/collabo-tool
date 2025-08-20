@@ -152,6 +152,118 @@ async function verifyOtp({ userId, otp }) {
   }
 }
 
+/**
+ * Resend OTP to user's email
+ * @param {Object} userData - User data object
+ * @param {string} userData.username - User's email/username
+ * @returns {Promise<Object>} Result with success message
+ */
+async function resendOtp({ username }) {
+  try {
+    console.log(`Attempting to resend OTP for: ${username}`);
+    
+    // Check if the input is an email or username
+    let user;
+    let rawUserData;
+    
+    if (username.includes('@')) {
+      // If it looks like an email - get raw user data for proper property access
+      const query = 'SELECT * FROM tblusers WHERE demail = $1';
+      const result = await userModel.pool.query(query, [username]);
+      
+      if (result.rows.length === 0) {
+        console.log(`User not found for email: ${username}`);
+        throw new BadRequestError('User not found');
+      }
+      
+      rawUserData = result.rows[0];
+      user = userModel.formatUser(rawUserData);
+    } else {
+      // If it looks like a username
+      const query = 'SELECT * FROM tblusers WHERE dusername = $1';
+      const result = await userModel.pool.query(query, [username]);
+      
+      if (result.rows.length === 0) {
+        console.log(`User not found for username: ${username}`);
+        throw new BadRequestError('User not found');
+      }
+      
+      rawUserData = result.rows[0];
+      user = userModel.formatUser(rawUserData);
+    }
+    
+    // Use the raw data's did property which contains the UUID
+    const userId = rawUserData.did;
+    const email = rawUserData.demail;
+    
+    if (!userId) {
+      throw new BadRequestError('Invalid user ID');
+    }
+    
+    if (!email) {
+      throw new BadRequestError('Invalid email address');
+    }
+    
+    console.log(`Found user: ${userId}, email: ${email}`);
+    
+    // Invalidate any existing active OTPs for this user
+    await invalidateExistingOtps(userId);
+    
+    // Generate new OTP and send it to user's email
+    const otpData = generateAlphanumericOtp();
+    
+    try {
+      // Send OTP via email - only pass the required parameters
+      await sendOtpEmail(email, otpData.code);
+      console.log(`New OTP sent to: ${email}`);
+    } catch (emailError) {
+      console.error('Failed to send OTP email:', emailError);
+      // Continue with the process even if email sending fails
+    }
+    
+    console.log(`Creating OTP record for user: ${userId}`);
+    
+    // Store the new OTP
+    await otpModel.create({
+      userId: userId,
+      code: otpData.code,
+      expiresAt: new Date(otpData.expiresAt)
+    });
+    
+    return {
+      ok: true,
+      message: 'New OTP sent to your email',
+      userId: userId,
+      email: email,
+      username: rawUserData.dusername
+    };
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    throw new BadRequestError('Failed to resend OTP');
+  }
+}
+
+/**
+ * Invalidate any existing active OTPs for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<void>}
+ */
+async function invalidateExistingOtps(userId) {
+  try {
+    // This SQL will mark all active OTPs for the user as used
+    const query = `
+      UPDATE tblotp
+      SET dusagestatus = true, tusedat = NOW()
+      WHERE duserid = $1 AND dusagestatus = false AND texpiresat > NOW()
+    `;
+    
+    await otpModel.pool.query(query, [userId]);
+  } catch (error) {
+    console.error('Failed to invalidate existing OTPs:', error);
+    // Don't throw here so the overall resend process can continue
+  }
+}
+
 async function firstTimeSetup({ username, password }) {
   if (users.has(username)) throw new BadRequestError('User already exists');
   const passwordHash = await bcrypt.hash(password, 10);
@@ -202,6 +314,7 @@ async function answerSecurityQuestions({ username, answers }) {
 module.exports = {
   login,
   verifyOtp,
+  resendOtp,
   firstTimeSetup,
   changePassword,
   setSecurityQuestions,

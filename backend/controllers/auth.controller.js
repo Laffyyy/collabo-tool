@@ -17,7 +17,10 @@ async function login(req, res, next) {
       ok: true,
       exists: result.exists, 
       message: result.message,
-      step: result.step
+      step: result.step,
+      userId: result.userId,  // Add this to pass userId to frontend
+      email: result.email,
+      username: result.username
     });
   } catch (err) {
     next(err);
@@ -32,10 +35,21 @@ async function login(req, res, next) {
  */
 async function verifyOtp(req, res, next) {
   try {
+    console.log('OTP verification request body:', req.body);
     const { userId, otp } = req.body;
+    console.log(`Extracted userId: ${userId}, otp: ${otp}`);
+    
+    // Return early if userId is missing
+    if (!userId) {
+      return res.status(400).json({
+        ok: false,
+        message: 'User ID is required for OTP verification'
+      });
+    }
+    
     const result = await authService.verifyOtp({ userId, otp });
     
-    // Set JWT as HTTP-only cookie
+    // Rest of function remains the same
     const cookieOptions = {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 1 day
@@ -51,6 +65,33 @@ async function verifyOtp(req, res, next) {
       message: 'Authentication successful'
     });
   } catch (err) {
+    console.error('Error in verifyOtp controller:', err);
+    next(err);
+  }
+}
+
+/**
+ * Resend OTP controller
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function resendOtp(req, res, next) {
+  try {
+    const { username } = req.body;
+    console.log(`Resending OTP for user: ${username}`);
+    
+    const result = await authService.resendOtp({ username });
+    
+    res.status(200).json({
+      ok: true,
+      message: result.message,
+      userId: result.userId,
+      email: result.email,
+      username: result.username
+    });
+  } catch (err) {
+    console.error('Error in resendOtp controller:', err);
     next(err);
   }
 }
@@ -120,6 +161,7 @@ async function answerSecurityQuestions(req, res, next) {
 module.exports = {
   login,
   verifyOtp,
+  resendOtp,
   firstTimeSetup,
   changePassword,
   setSecurityQuestions,

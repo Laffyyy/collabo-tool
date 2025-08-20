@@ -2,17 +2,22 @@
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
+    import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
+    import type { OtpVerificationResponse, LoginResponse } from '$lib/api/types';
     
     let otpValues = $state(['', '', '', '', '', '']);
     let otpTimeLeft = $state(300); // 5 minutes in seconds
     let otpResendTimeLeft = $state(150); // 2:30 in seconds for resend availability
     let otpIsExpired = $state(false);
     let otpIsLoading = $state(false);
+    let otpResendLoading = $state(false);
     let otpShowCancelModal = $state(false);
     let otpFromForgotPassword = false;
     let userEmail = $state('');
     let userId = $state('');
     let otpError = $state('');
+    let otpSuccessMessage = $state('');
     
     // Timer functionality
     let otpTimerInterval: ReturnType<typeof setInterval>;
@@ -23,26 +28,28 @@
         const urlParams = new URLSearchParams(window.location.search);
         otpFromForgotPassword = urlParams.get('from') === 'forgot-password';
         
-        // Get stored data from localStorage
+        // Get stored user data from localStorage
         userId = localStorage.getItem('auth_userId') || '';
         userEmail = localStorage.getItem('auth_userEmail') || '';
+        const username = localStorage.getItem('auth_username') || '';
         
-        // If no user data found, redirect back to login
-        if (!userId || !userEmail) {
+        console.log('Retrieved from localStorage - userId:', userId);
+        console.log('Retrieved from localStorage - userEmail:', userEmail);
+        
+        // If no email is found, redirect back to login
+        if (!userEmail) {
             goto('/login');
             return;
         }
         
-        // Check if OTP has expired based on stored expiry time
-        const expiryTime = Number(localStorage.getItem('auth_otpExpiresAt') || '0');
-        if (expiryTime && expiryTime > 0) {
-            const now = Date.now();
-            if (expiryTime < now) {
-                otpIsExpired = true;
-            } else {
-                // Calculate remaining time
-                otpTimeLeft = Math.floor((expiryTime - now) / 1000);
-            }
+        // Check if OTP has expired
+        const expiresAt = parseInt(localStorage.getItem('auth_otpExpiresAt') || '0');
+        if (expiresAt < Date.now()) {
+            otpIsExpired = true;
+        } else {
+            // Set remaining time
+            otpTimeLeft = Math.floor((expiresAt - Date.now()) / 1000);
+            otpResendTimeLeft = Math.min(otpTimeLeft - 150, 150); // Resend after 2:30 or half the remaining time
         }
         
         otpStartTimers();
@@ -118,84 +125,87 @@
         }
     };
     
-    const otpHandleSubmit = async () => {
-		if (otpValues.every(val => val !== '') && !otpIsExpired) {
-			otpIsLoading = true;
-			otpError = '';
-			
-			const otpCode = otpValues.join('');
-			
-			try {
-				// Get stored username and userId from localStorage 
-				const username = localStorage.getItem('auth_username');
-				const userId = localStorage.getItem('auth_userId');
-				
-				// Make sure we have both values
-				if (!username || !userId) {
-					otpError = 'Session expired. Please log in again.';
-					otpIsLoading = false;
-					return;
-				}
-				
-				const response = await fetch('http://localhost:5000/api/v1/auth/otp', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify({
-						username, // For express-validator
-						userId,   // For OTP verification
-						otp: otpCode
-					}),
-					credentials: 'include'
-				});
-				
-				const data = await response.json();
-				
-				if (response.ok && data.ok) {
-					// Rest of your success handling code remains the same
-				} else {
-					otpError = data.message || 'Invalid OTP';
-					otpIsLoading = false;
-				}
-			} catch (error) {
-				otpError = 'Connection error. Please try again.';
-				otpIsLoading = false;
-			}
-		}
-	};
+        const otpHandleSubmit = async () => {
+            if (otpValues.every(val => val !== '') && !otpIsExpired) {
+                otpIsLoading = true;
+                otpError = '';
+                
+                const otpCode = otpValues.join('');
+                
+                try {
+                    // Get stored username and userId from localStorage 
+                    const username = localStorage.getItem('auth_username');
+                    const userId = localStorage.getItem('auth_userId');
+                    
+                    if (!username || !userId) {
+                        otpError = 'Session expired. Please log in again.';
+                        otpIsLoading = false;
+                        return;
+                    }
+                    
+                    // Use the API client instead of direct fetch
+                    const data = await apiClient.post<OtpVerificationResponse>(
+                    API_CONFIG.endpoints.auth.otp,
+                    {
+                        username,
+                        userId,
+                        otp: otpCode
+                    }
+                    );
+                    
+                    // Handle success
+                    // Clear localStorage
+                    localStorage.removeItem('auth_userId');
+                    localStorage.removeItem('auth_userEmail');
+                    localStorage.removeItem('auth_otpExpiresAt');
+                    localStorage.removeItem('auth_username');
+                    localStorage.removeItem('auth_tempPassword');
+                    
+                    // Redirect based on flow
+                    if (otpFromForgotPassword) {
+                        goto('/reset-password');
+                    } else {
+                        goto('/chat');
+                    }
+                } catch (error: any) {
+                    otpError = error.message || 'Invalid OTP';
+                    otpIsLoading = false;
+                }
+            }
+        };
     
-    const otpHandleResend = async () => {
-        // Only allow resend if resend timer has reached zero
-        if (otpResendTimeLeft > 0 || otpIsLoading) {
-            return;
-        }
-        
-        otpIsLoading = true;
-        otpValues = ['', '', '', '', '', ''];
-        otpError = '';
-        
-        try {
-            // Get username/email from localStorage
-            const username = localStorage.getItem('auth_username') || userEmail;
-            const password = localStorage.getItem('auth_tempPassword') || '';
+        const otpHandleResend = async () => {
+            // Only allow resend if resend timer has reached zero
+            if (otpResendTimeLeft > 0 || otpIsLoading || otpResendLoading) {
+                return;
+            }
             
-            // Call login API again to generate a new OTP
-            const response = await fetch('http://localhost:5000/api/v1/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    username,
-                    password
-                })
-            });
+            otpResendLoading = true;
+            otpValues = ['', '', '', '', '', ''];
+            otpError = '';
+            otpSuccessMessage = '';
             
-            const data = await response.json();
-            
-            if (response.ok && data.ok) {
-                // Store new data in localStorage
+            try {
+                // Get username from localStorage
+                const username = localStorage.getItem('auth_username') || userEmail;
+                
+                if (!username) {
+                    otpError = 'Session expired. Please log in again.';
+                    otpResendLoading = false;
+                    return;
+                }
+                
+                // Use the API client to call the dedicated resend-otp endpoint
+                const data = await apiClient.post<LoginResponse>(
+                    API_CONFIG.endpoints.auth.resendOtp, 
+                    { username }
+                );
+                
+                if (!data.ok) {
+                    throw new Error(data.message || 'Failed to resend verification code');
+                }
+                
+                // Update stored data in localStorage
                 localStorage.setItem('auth_userId', data.userId);
                 localStorage.setItem('auth_userEmail', data.email);
                 localStorage.setItem('auth_username', data.username);
@@ -212,17 +222,18 @@
                 // Restart timers
                 otpStartTimers();
                 
+                // Show success message
+                otpSuccessMessage = 'New verification code sent to your email';
+                
                 // Focus first input
                 document.getElementById('otp-input-0')?.focus();
-            } else {
-                otpError = data.message || 'Failed to resend OTP';
+            } catch (error: any) {
+                console.error('OTP resend error:', error);
+                otpError = error.message || 'Failed to resend verification code';
+            } finally {
+                otpResendLoading = false;
             }
-        } catch (error) {
-            otpError = 'Connection error. Please try again.';
-        }
-        
-        otpIsLoading = false;
-    };
+        };
     
     const otpHandleCancel = () => {
         otpShowCancelModal = true;

@@ -4,6 +4,9 @@
 	import LoginBackground from './LoginBackground.svelte';
 	import LoginHeader from './LoginHeader.svelte';
 	import { onMount } from 'svelte';
+	import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
+    import type { LoginResponse } from '$lib/api/types';
 	
    	let loginUsername = $state('');
     let loginPassword = $state('');
@@ -25,38 +28,29 @@
         loginError = '';
         
         try {
-            // Call the backend API to authenticate user
-            const response = await fetch('http://localhost:5000/api/v1/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
+            // Use the API client instead of direct fetch
+            const data = await apiClient.post<LoginResponse>(
+                API_CONFIG.endpoints.auth.login,
+                {
                     username: loginUsername,
                     password: loginPassword
-                })
-            });
+                }
+            );
             
-            const data = await response.json();
+            // Store info needed for OTP verification
+            localStorage.setItem('auth_userId', data.userId);
+            localStorage.setItem('auth_userEmail', data.email);
+            localStorage.setItem('auth_username', data.username || loginUsername);
+            localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
             
-            if (response.ok && data.ok) {
-                // Store info needed for OTP verification
-                localStorage.setItem('auth_userId', data.userId);
-                localStorage.setItem('auth_userEmail', data.email);
-                localStorage.setItem('auth_username', data.username || loginUsername);
-                localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
-                
-                // Set OTP expiry time (5 minutes from now)
-                const expiryTime = Date.now() + (5 * 60 * 1000);
-                localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
-                
-                // Navigate to OTP verification page
-                goto('/otp');
-            } else {
-                loginError = data.message || 'Invalid credentials';
-            }
-        } catch (error) {
-            loginError = 'Connection error. Please try again later.';
+            // Set OTP expiry time (5 minutes from now)
+            const expiryTime = Date.now() + (5 * 60 * 1000);
+            localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+            
+            // Navigate to OTP verification page
+            goto('/otp');
+        } catch (error: any) {
+            loginError = error.message || 'Invalid credentials';
         } finally {
             loginIsLoading = false;
         }
