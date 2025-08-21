@@ -4,6 +4,7 @@
     import { page } from '$app/stores';
     import { apiClient } from '$lib/api/client';
     import { API_CONFIG } from '$lib/api/config';
+    import { authStore } from '$lib/stores/auth.svelte';
     import type { OtpVerificationResponse, LoginResponse } from '$lib/api/types';
     
     let otpValues = $state(['', '', '', '', '', '']);
@@ -23,7 +24,7 @@
     let otpTimerInterval: ReturnType<typeof setInterval>;
     let otpResendTimerInterval: ReturnType<typeof setInterval>;
     
-    onMount(() => {
+onMount(() => {
         // Check if coming from forgot password
         const urlParams = new URLSearchParams(window.location.search);
         otpFromForgotPassword = urlParams.get('from') === 'forgot-password';
@@ -125,54 +126,82 @@
         }
     };
     
-        const otpHandleSubmit = async () => {
-            if (otpValues.every(val => val !== '') && !otpIsExpired) {
-                otpIsLoading = true;
-                otpError = '';
+    const otpHandleSubmit = async () => {
+        if (otpValues.every(val => val !== '') && !otpIsExpired) {
+            otpIsLoading = true;
+            otpError = '';
+            
+            const otpCode = otpValues.join('');
+            
+            try {
+                // Get stored username and userId from localStorage 
+                const username = localStorage.getItem('auth_username');
+                const userId = localStorage.getItem('auth_userId');
                 
-                const otpCode = otpValues.join('');
+                console.log('Submitting OTP with:', { username, userId, otpCode });
                 
-                try {
-                    // Get stored username and userId from localStorage 
-                    const username = localStorage.getItem('auth_username');
-                    const userId = localStorage.getItem('auth_userId');
-                    
-                    if (!username || !userId) {
-                        otpError = 'Session expired. Please log in again.';
-                        otpIsLoading = false;
-                        return;
-                    }
-                    
-                    // Use the API client instead of direct fetch
-                    const data = await apiClient.post<OtpVerificationResponse>(
-                    API_CONFIG.endpoints.auth.otp,
-                    {
+                // Make sure we have both values
+                if (!username || !userId) {
+                    otpError = 'Session expired. Please log in again.';
+                    otpIsLoading = false;
+                    return;
+                }
+                
+                const response = await fetch('http://localhost:5000/api/v1/auth/otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
                         username,
                         userId,
                         otp: otpCode
-                    }
-                    );
+                    }),
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                console.log('OTP verification response:', data);
+                
+                if (response.ok && data.ok) {
+                    // Store authentication data and user info
+                    const token = document.cookie
+                        .split('; ')
+                        .find(row => row.startsWith('token='))
+                        ?.split('=')[1] || '';
                     
-                    // Handle success
-                    // Clear localStorage
+                    const sessionToken = document.cookie
+                        .split('; ')
+                        .find(row => row.startsWith('session='))
+                        ?.split('=')[1] || '';
+                    
+                    // Login using authStore
+                    $authStore.login(data.user, token, sessionToken);
+                    
+                    // Clear OTP-related localStorage
                     localStorage.removeItem('auth_userId');
                     localStorage.removeItem('auth_userEmail');
                     localStorage.removeItem('auth_otpExpiresAt');
                     localStorage.removeItem('auth_username');
                     localStorage.removeItem('auth_tempPassword');
                     
-                    // Redirect based on flow
-                    if (otpFromForgotPassword) {
-                        goto('/reset-password');
+                    // Redirect based on user role
+                    if (data.user.role.toLowerCase() === 'admin') {
+                        goto('/admin');
                     } else {
                         goto('/chat');
                     }
-                } catch (error: any) {
-                    otpError = error.message || 'Invalid OTP';
+                } else {
+                    otpError = data.message || 'Invalid OTP';
                     otpIsLoading = false;
                 }
+            } catch (error) {
+                console.error('OTP verification error:', error);
+                otpError = 'Connection error. Please try again.';
+                otpIsLoading = false;
             }
-        };
+        }
+    };
     
         const otpHandleResend = async () => {
             // Only allow resend if resend timer has reached zero

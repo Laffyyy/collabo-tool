@@ -1,4 +1,10 @@
 const authService = require('../services/auth.service');
+const SessionModel = require('../model/session.model');
+const { getPool } = require('../config/db');
+
+// Initialize SessionModel with database pool
+const pool = getPool();
+const sessionModel = new SessionModel(getPool());
 
 /**
  * Login controller - handles user authentication requests
@@ -47,9 +53,13 @@ async function verifyOtp(req, res, next) {
       });
     }
     
-    const result = await authService.verifyOtp({ userId, otp });
+    // Get IP and user agent for the session
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
     
-    // Rest of function remains the same
+    const result = await authService.verifyOtp({ userId, otp, ipAddress, userAgent });
+    
+    // Set cookies for authentication
     const cookieOptions = {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 1 day
@@ -57,11 +67,24 @@ async function verifyOtp(req, res, next) {
       sameSite: 'strict'
     };
     
+    // Set JWT token in cookie
     res.cookie('token', result.token, cookieOptions);
+    
+    // Set session token in cookie
+    res.cookie('session', result.sessionToken, {
+      ...cookieOptions,
+      maxAge: result.expiresAt - Date.now() // Use the exact expiry time
+    });
     
     res.status(200).json({
       ok: true,
-      user: result.user,
+      user: {
+        id: result.user.id,
+        name: `${result.user.firstName} ${result.user.lastName}`,
+        email: result.user.email,
+        role: result.user.role,
+        username: result.user.username
+      },
       message: 'Authentication successful'
     });
   } catch (err) {
@@ -158,6 +181,41 @@ async function answerSecurityQuestions(req, res, next) {
   }
 }
 
+/**
+ * Logout controller - invalidates the user's session
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function logout(req, res, next) {
+  try {
+    const { user, session } = req;
+    
+    if (session) {
+      // Invalidate the session
+      await sessionModel.invalidate(session.id);
+      console.log(`Session invalidated for user: ${user?.id || 'unknown'}`);
+    } else {
+      console.log('No active session found to invalidate');
+    }
+    
+    // Clear cookies
+    res.clearCookie('token');
+    res.clearCookie('session');
+    
+    res.status(200).json({ 
+      ok: true, 
+      message: 'Logged out successfully' 
+    });
+  } catch (err) {
+    console.error('Error during logout:', err);
+    // Even if there's an error, try to clear cookies
+    res.clearCookie('token');
+    res.clearCookie('session');
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   verifyOtp,
@@ -168,5 +226,6 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  logout
 };
 

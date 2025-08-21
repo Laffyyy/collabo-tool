@@ -1,15 +1,23 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 const { env } = require('../config');
 const { BadRequestError, UnauthorizedError } = require('../utils/errors');
 const { generateOtp, generateAlphanumericOtp, verifyOtpCode, sendOtpEmail } = require('../utils/otp');
 const { getPool } = require('../config/db');
 const UserModel = require('../model/user.model');
 const OTPModel = require('../model/otp.model');
+const SessionModel = require('../model/session.model');
+const UserRoleModel = require('../model/user-role.model');
+const RoleModel = require('../model/role.model');
 
 // Initialize UserModel with database pool
-const userModel = new UserModel(getPool());
-const otpModel = new OTPModel(getPool());
+const pool = getPool(); // Get the pool once
+const userModel = new UserModel(pool);
+const otpModel = new OTPModel(pool);
+const sessionModel = new SessionModel(pool);
+const userRoleModel = new UserRoleModel(pool);
+const roleModel = new RoleModel(pool);
 
 // In-memory demo store (replace with DB later)
 const users = new Map();
@@ -110,9 +118,10 @@ async function generateAndSendOtp(email) {
  * @param {string} verifyData.otp - OTP code entered by user
  * @returns {Promise<Object>} Verification result with user data and token
  */
-async function verifyOtp({ userId, otp }) {
+async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
   try {
     console.log(`Verifying OTP for user ${userId}`);
+    
     // Find the OTP record in the database
     const otpRecord = await otpModel.findActiveByCodeAndUserId(userId, otp);
     
@@ -131,20 +140,47 @@ async function verifyOtp({ userId, otp }) {
       throw new UnauthorizedError('User not found');
     }
     
+    // Get user role(s)
+    const userRoles = await userRoleModel.findByUserId(userId);
+    const userRole = userRoles.length > 0 ? userRoles[0] : null; // Get primary role
+    const role = userRole ? userRole.roleName.toLowerCase() : 'user'; // Default to 'user' if no role
+    
     // Update last login timestamp
     await userModel.updateLastLogin(userId);
     
-    // Generate JWT token
+    // Generate JWT token with user info and role
     const token = signToken({ 
       id: user.id, 
       username: user.username,
       email: user.email,
-      role: user.role
+      role: role,
+      name: `${user.firstName} ${user.lastName}`
+    });
+    
+    // Generate session token and create session
+    const sessionToken = uuidv4();
+    const refreshToken = uuidv4();
+    const expiresAt = new Date(Date.now() + parseInt(env.SESSION_EXP_HOURS || 24) * 60 * 60 * 1000);
+    
+    // Create session record
+    await sessionModel.create({
+      userId: user.id,
+      sessionToken,
+      refreshToken,
+      expiresAt,
+      ipAddress,
+      userAgent
     });
     
     return { 
       token,
-      user
+      sessionToken,
+      refreshToken,
+      expiresAt,
+      user: {
+        ...user,
+        role
+      }
     };
   } catch (error) {
     console.error('OTP verification error:', error);

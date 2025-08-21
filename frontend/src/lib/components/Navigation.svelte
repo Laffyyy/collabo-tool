@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { Users, Bell, Search, User, Megaphone, Clock, AlertTriangle, ChevronDown, Settings, UserCog, Building2, MessageSquare, Radio, Globe, FileText } from 'lucide-svelte';
+	import { LogOut } from 'lucide-svelte';
+  	import { apiClient } from '$lib/api/client';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { broadcastStore } from '$lib/stores/broadcast.svelte';
@@ -64,6 +66,12 @@
 		showAdminDropdown = false;
 		// Force page reload to ensure fresh content
 		goto(`/admin/${page}`, { invalidateAll: true });
+	};
+
+	// Add logout function
+	const handleLogout = async () => {
+		await apiClient.logout();
+		goto('/login');
 	};
 </script>
 
@@ -335,9 +343,13 @@
 								onlineStatus={user?.onlineStatus || 'offline'} 
 							/>
 							<div>
-								<p class="text-sm font-medium text-gray-900">{user?.firstName} {user?.lastName}</p>
-								<p class="text-xs text-gray-500 capitalize">{user?.role}</p>
-								<p class="text-xs text-gray-400 capitalize">{user?.onlineStatus}</p>
+								<p class="text-sm font-medium text-gray-900">
+									{user?.firstName && user?.lastName 
+										? `${user.firstName} ${user.lastName}` 
+										: user?.username || 'User'}
+								</p>
+								<p class="text-xs text-gray-500 capitalize">{user?.role || 'User'}</p>
+								<p class="text-xs text-gray-400 capitalize">{user?.onlineStatus || 'offline'}</p>
 							</div>
 						</div>
 					</div>
@@ -395,10 +407,10 @@
 					
 					<div class="border-t border-gray-200 mt-2 pt-2">
 						<button 
-							onclick={() => { showProfile = false; goto('/login'); }}
+							onclick={handleLogout}
 							class="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-colors"
 						>
-							<Users class="w-4 h-4" />
+							<LogOut class="w-4 h-4" />
 							<span>Sign Out</span>
 						</button>
 					</div>
