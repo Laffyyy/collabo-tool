@@ -2,11 +2,23 @@
 	import { goto } from '$app/navigation';
 	import { writable } from 'svelte/store';
 	import { onMount } from 'svelte';
+	import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
 	
 	const firstTimeShowTermsModal = writable(true);
 	const firstTimeTermsAccepted = writable(false);
 	const firstTimeShowCancelModal = writable(false);
 	const firstTimeIsLoading = writable(false);
+
+	// User data from OTP verification
+    let userId = $state('');
+    let username = $state('');
+    let userEmail = $state('');
+    let userRole = $state('');
+    let userName = $state('');
+
+	// Error handling
+    let error = $state('');
 	
 	// Auto-focus reference
 	let firstTimeFirstAnswerInput: HTMLInputElement | undefined;
@@ -19,6 +31,23 @@
 	};
 	
 	onMount(() => {
+		// Get stored user data from OTP verification
+        userId = localStorage.getItem('firstTime_userId') || '';
+        username = localStorage.getItem('firstTime_username') || '';
+        userEmail = localStorage.getItem('firstTime_email') || '';
+        userRole = localStorage.getItem('firstTime_role') || '';
+        userName = localStorage.getItem('firstTime_name') || '';
+        
+        console.log('First-time page loaded with user data:', { userId, username, userEmail });
+        
+        // If no user data is found, redirect to login
+        if (!userId || !username) {
+            console.log('No first-time user data found, redirecting to login');
+            goto('/login');
+            return;
+        }
+
+
 		// Wait for terms modal to close, then focus first answer input
 		const unsubscribe = firstTimeShowTermsModal.subscribe(showModal => {
 			if (!showModal && firstTimeFirstAnswerInput) {
@@ -118,15 +147,65 @@
 	};
 	
 	const firstTimeHandleSubmit = async () => {
-		if (firstTimeCanSubmit()) {
-			firstTimeIsLoading.set(true);
+        if (!firstTimeCanSubmit()) {
+            error = 'Please complete all security questions';
+            return;
+        }
+        
+        firstTimeIsLoading.set(true);
+        error = '';
+        
+        try {
+            // Prepare security questions data
+            const securityQuestions = $firstTimeSelectedQuestions.map((question, index) => ({
+                question,
+                answer: $firstTimeAnswers[index].trim()
+            }));
+            
+            console.log('Submitting security questions for user:', userId);
+            
+			// Submit security questions to backend
+			const response = await apiClient.post(
+				API_CONFIG.endpoints.auth.setupSecurityQuestions || '/api/v1/auth/security-questions',
+				{
+					userId,
+					securityQuestions
+				}
+			);
 			
-			// Simulate API call
-			await new Promise(resolve => setTimeout(resolve, 2000));
-			
-			goto('/change-password?from=first-time');
-		}
-	};
+			console.log('Security questions setup response:', response);
+
+			// Type guard for expected response shape
+			const res = response as { ok?: boolean; success?: boolean; message?: string };
+
+			if (res.ok || res.success) {
+				// Store data for password change step
+				localStorage.setItem('passwordChange_userId', userId);
+				localStorage.setItem('passwordChange_username', username);
+				localStorage.setItem('passwordChange_email', userEmail);
+				localStorage.setItem('passwordChange_role', userRole);
+				localStorage.setItem('passwordChange_name', userName);
+				
+				// Clear first-time data
+				localStorage.removeItem('firstTime_userId');
+				localStorage.removeItem('firstTime_username');
+				localStorage.removeItem('firstTime_email');
+				localStorage.removeItem('firstTime_role');
+				localStorage.removeItem('firstTime_name');
+				localStorage.removeItem('firstTime_tempPassword');
+				
+				// Redirect to password change
+				goto('/change-password?from=first-time');
+			} else {
+				error = res.message || 'Failed to save security questions';
+			}
+        } catch (err: any) {
+            console.error('Error submitting security questions:', err);
+            error = err.message || 'Connection error. Please try again.';
+        } finally {
+            firstTimeIsLoading.set(false);
+        }
+    };
 	
 	const firstTimeHandleCancel = () => {
 		firstTimeShowCancelModal.set(true);

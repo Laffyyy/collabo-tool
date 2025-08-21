@@ -11,6 +11,7 @@ export const API_CONFIG = {
       logout: '/api/v1/auth/logout',      
       forgotPassword: '/api/v1/auth/forgot-password',
       resetPassword: '/api/v1/auth/reset-password',
+      setupSecurityQuestions: '/api/v1/auth/security-questions',
       securityQuestions: '/api/v1/auth/security-questions',
       answerSecurityQuestions: '/api/v1/auth/answer-security-questions'
     },

@@ -179,7 +179,8 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       expiresAt,
       user: {
         ...user,
-        role
+        role,
+        mustChangePassword: user.mustChangePassword
       }
     };
   } catch (error) {
