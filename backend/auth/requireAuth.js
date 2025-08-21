@@ -1,19 +1,50 @@
 const jwt = require('jsonwebtoken');
 const { env } = require('../config');
 const { UnauthorizedError } = require('../utils/errors');
+const { getPool } = require('../config/db');
+const SessionModel = require('../model/session.model');
 
-function requireAuth(req, _res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return next(new UnauthorizedError('Missing bearer token'));
+const sessionModel = new SessionModel(getPool());
+
+/**
+ * Middleware to require authentication
+ */
+async function requireAuth(req, res, next) {
   try {
+    // Check for token in cookies or Authorization header
+    const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
+    const sessionToken = req.cookies?.session;
+    
+    if (!token || !sessionToken) {
+      throw new UnauthorizedError('Authentication required');
+    }
+    
+    // Verify token
     const decoded = jwt.verify(token, env.JWT_SECRET);
-    req.user = { id: decoded.id, username: decoded.username };
-    return next();
-  } catch (_err) {
-    return next(new UnauthorizedError('Invalid token'));
+    
+    // Verify session exists and is active
+    const session = await sessionModel.findBySessionToken(sessionToken);
+    if (!session || !session.isActive || new Date(session.expiresAt) < new Date()) {
+      throw new UnauthorizedError('Session expired');
+    }
+    
+    // Check if the token's user ID matches the session's user ID
+    if (decoded.id !== session.userId) {
+      throw new UnauthorizedError('Invalid session');
+    }
+    
+    // Attach user and session info to request
+    req.user = decoded;
+    req.session = session;
+    
+    next();
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      next(new UnauthorizedError('Invalid or expired token'));
+    } else {
+      next(err);
+    }
   }
 }
 
 module.exports = { requireAuth };
-

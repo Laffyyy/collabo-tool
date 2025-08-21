@@ -17,9 +17,20 @@ router.post(
 // OTP Verify
 router.post(
   '/otp',
-  [body('username').isString().notEmpty(), body('otp').isString().isLength({ min: 4, max: 8 })],
+  [
+    body('username').isString().notEmpty(),
+    body('userId').isString().notEmpty(), // Add validation for userId
+    body('otp').isString().isLength({ min: 4, max: 8 })
+  ],
   validate,
   authController.verifyOtp
+);
+
+router.post(
+  '/resend-otp',
+  [body('username').isString().notEmpty()],
+  validate,
+  authController.resendOtp
 );
 
 // First Time Setup
@@ -70,6 +81,13 @@ router.post(
   [body('username').isString().notEmpty(), body('answers').isArray({ min: 1 })],
   validate,
   authController.answerSecurityQuestions
+);
+
+// Logout
+router.post(
+  '/logout',
+  requireAuth,
+  authController.logout
 );
 
 module.exports = router;

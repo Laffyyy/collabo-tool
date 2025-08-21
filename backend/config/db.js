@@ -1,18 +1,31 @@
-const postgres = require('postgres');
-require('dotenv').config();
+const { Pool } = require('pg');
 
-const connectionString = process.env.DATABASE_URL;
+// Database pool for connection reuse
+let pool = null;
 
-if (!connectionString) {
-  console.error('DATABASE_URL environment variable is required');
-  console.error('Please set DATABASE_URL in your .env file');
-  process.exit(1);
+/**
+ * Get PostgreSQL connection pool
+ * @returns {Object} Postgres SQL connection pool
+ */
+function getPool() {
+  if (!pool) {
+    const connectionString = process.env.DATABASE_URL;
+    pool = new Pool({ connectionString });
+  }
+  return pool;
 }
 
-const sql = postgres(connectionString, {
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 30,
-});
+/**
+ * Close all database connections
+ */
+function closePool() {
+  if (pool) {
+    pool.end();
+    pool = null;
+  }
+}
 
-module.exports = { sql };
+module.exports = {
+  getPool,
+  closePool
+};
