@@ -49,29 +49,82 @@ npm run format   # Auto-format codebase
 
 ## Architecture Patterns
 
-### Backend API Architecture
-**Express.js Setup**: 
-- JWT authentication with middleware protection (`requireAuth.js`)
-- Validation middleware using `express-validator`
-- Error handling with custom error classes (`HttpError`, `BadRequestError`, `UnauthorizedError`)
-- CORS enabled for frontend integration
+### Backend Project Structure
+**Project Architecture**: Clean layered architecture with separation of concerns
 
-**Database Model Pattern**:
-```javascript
-// backend/model/user.model.js - Class-based PostgreSQL model
-class UserModel {
-  static ACCOUNT_STATUS = { ACTIVE: 'active', FIRST_TIME: 'first-time', /* ... */ };
-  
-  async create(userData) { /* PostgreSQL operations */ }
-  async findByUsername(username) { /* ... */ }
-  formatUser(user, includeSensitive = false) { /* Clean sensitive data */ }
-}
+**Directory Structure & Responsibilities**:
+```
+backend/
+├── models/          # Database interaction layer (PostgreSQL)
+│   ├── user.model.js        # User CRUD operations, password hashing, formatting
+│   ├── session.model.js     # JWT session management, token validation
+│   ├── otp.model.js         # OTP generation, verification, cleanup
+│   ├── role.model.js        # Role definitions and permissions
+│   └── user-role.model.js   # User-role relationship management
+├── services/        # Business logic layer
+│   └── auth.service.js      # Authentication workflows, OTP generation, validation
+├── controllers/     # HTTP request/response handling
+│   └── auth.controller.js   # Route handlers, request validation, response formatting
+├── routes/          # API endpoint definitions
+│   └── v1/auth.routes.js    # Route definitions with validation middleware
+├── auth/            # Authentication middleware
+│   ├── requireAuth.js       # JWT token validation middleware
+│   └── requireRole.js       # Role-based authorization middleware
+├── config/          # Configuration management
+│   ├── index.js             # Environment variables
+│   ├── db.js                # PostgreSQL connection pool
+│   └── api.js               # API endpoints and settings centralization
+└── utils/           # Utility functions
+    ├── errors.js            # Custom error classes (HttpError, BadRequestError, etc.)
+    ├── otp.js               # OTP generation and verification utilities
+    └── validate.js          # Express-validator error handling
 ```
 
-**Authentication Flow**:
-- `/api/auth/login` → OTP generation → `/api/auth/otp` verification → JWT token
-- Password management: `/api/auth/password` (change), `/api/auth/forgot-password`
-- Security questions: `/api/auth/security-questions`, `/api/auth/answer-security-questions`
+**Data Flow Pattern**:
+`Route → Controller → Service → Model → Database`
+- **Routes**: Define endpoints + validation rules
+- **Controllers**: Handle HTTP concerns, call services  
+- **Services**: Business logic, coordinate multiple models
+- **Models**: Database operations, data formatting
+- **Config**: Centralized settings, database connections
+
+### Frontend Project Structure  
+**SvelteKit 5 Architecture**: File-based routing with role-based access control
+
+**Directory Structure & Responsibilities**:
+```
+frontend/src/
+├── routes/                  # Page components (SvelteKit file-based routing)
+│   ├── +layout.svelte              # Global layout with conditional navigation
+│   ├── +page.svelte                # Root page (redirects to /login)
+│   ├── login/                      # Authentication pages
+│   ├── chat/+page.svelte           # Main chat interface (landing page)
+│   ├── admin/                      # Admin module pages
+│   │   ├── user-management/        # User CRUD, bulk operations, role assignments
+│   │   ├── ou-management/          # Organizational unit hierarchy management
+│   │   ├── chat-management/        # Chat permissions, message moderation
+│   │   ├── broadcast-management/   # System-wide messaging control
+│   │   ├── global-configuration/   # System settings, security policies
+│   │   └── admin-logs/             # Audit trail and activity monitoring
+│   └── profile/                    # User profile management
+├── lib/
+│   ├── components/                 # Reusable UI components
+│   │   ├── Navigation.svelte       # Main navigation with admin dropdown
+│   │   ├── ProfileAvatar.svelte    # User avatar display
+│   │   ├── GroupAvatar.svelte      # Group chat avatar
+│   │   └── ConfirmationModal.svelte # Delete/action confirmations
+│   ├── stores/                     # State management (Svelte 5 runes)
+│   │   ├── auth.svelte.ts          # Authentication state, role permissions
+│   │   ├── broadcast.svelte.ts     # Broadcast message management
+│   │   └── theme.svelte.ts         # UI theme and preferences
+│   └── utils/                      # Helper functions and utilities
+└── app.css                         # Global styles with predefined component classes
+```
+
+**Store Architecture Pattern**:
+- **Class-based stores** using Svelte 5 runes within class constructors
+- **Permission getters** for role-based UI conditional rendering
+- **Demo data initialization** for immediate frontend functionality without backend
 
 ### Svelte 5 Component Conventions
 ```svelte
