@@ -67,6 +67,17 @@ router.post(
   authController.forgotPassword
 );
 
+// Add this route after the existing forgot-password route
+router.post(
+  '/reset-password',
+  [
+    body('token').isString().notEmpty().withMessage('Reset token is required'),
+    body('newPassword').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+  ],
+  validate,
+  authController.resetPassword
+);
+
 // Send Reset Password Link
 router.post(
   '/send-reset-link',

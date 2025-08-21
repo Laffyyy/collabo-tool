@@ -12,6 +12,7 @@ export const API_CONFIG = {
       register: '/auth/register',
       password: '/auth/password',
       forgotPassword: '/auth/forgot-password',
+      resetPassword: '/auth/reset-password',
       securityQuestions: '/auth/security-questions'
     },
     user: {

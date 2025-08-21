@@ -128,12 +128,30 @@ async function setSecurityQuestions(req, res, next) {
   }
 }
 
+// Replace the existing forgotPassword function with this
 async function forgotPassword(req, res, next) {
   try {
     const { username } = req.body;
+    console.log(`Forgot password request for: ${username}`);
+    
     const result = await authService.forgotPassword({ username });
-    res.status(200).json({ ok: true, ...result });
+    res.status(200).json(result);
   } catch (err) {
+    console.error('Error in forgotPassword controller:', err);
+    next(err);
+  }
+}
+
+// Add this new function for password reset
+async function resetPassword(req, res, next) {
+  try {
+    const { token, newPassword } = req.body;
+    console.log(`Password reset request with token: ${token?.substring(0, 8)}...`);
+    
+    const result = await authService.resetPassword({ token, newPassword });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('Error in resetPassword controller:', err);
     next(err);
   }
 }
@@ -168,5 +186,5 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  resetPassword, // Add this
 };
-

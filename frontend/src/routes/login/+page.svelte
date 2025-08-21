@@ -153,32 +153,48 @@
 		return emailRegex.test(email);
 	};
 	
+	// Replace the existing forgotPasswordHandleSubmit function
 	const forgotPasswordHandleSubmit = async () => {
 		const emailFormatError = forgotPasswordValidateEmailFormat(forgotPasswordEmail);
 		if (emailFormatError) {
 			forgotPasswordError = emailFormatError;
 			return;
 		}
-		
+
 		if (!forgotPasswordValidateEmail(forgotPasswordEmail)) {
 			forgotPasswordError = 'Please enter a valid email address';
 			return;
 		}
-		
+
 		forgotPasswordIsLoading = true;
 		forgotPasswordError = '';
-		
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-		
-		forgotPasswordIsLoading = false;
-		forgotPasswordSuccess = true;
-		
-		// Auto-close modal after showing success message
-		setTimeout(() => {
-			closeForgotPasswordModal();
-			goto('/security-question');
-		}, 2000);
+
+		try {
+			// Call the actual backend API
+			const response = await apiClient.post(
+				API_CONFIG.endpoints.auth.forgotPassword,
+				{ username: forgotPasswordEmail }
+			);
+
+			if (response.ok) {
+				forgotPasswordSuccess = true;
+				console.log('✅ Password reset email sent successfully');
+				
+				// Auto-close modal after showing success message
+				setTimeout(() => {
+					closeForgotPasswordModal();
+					// Don't redirect to security-question automatically
+					// Let the user check their email instead
+				}, 3000);
+			} else {
+				forgotPasswordError = response.message || 'Failed to send reset email';
+			}
+		} catch (error: any) {
+			console.error('Forgot password error:', error);
+			forgotPasswordError = error.message || 'Failed to send reset email. Please try again.';
+		} finally {
+			forgotPasswordIsLoading = false;
+		}
 	};
 	
 	const forgotPasswordHandleKeydown = (event: KeyboardEvent) => {
