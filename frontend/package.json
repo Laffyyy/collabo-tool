@@ -43,6 +43,7 @@
 		"vitest-browser-svelte": "^0.1.0"
 	},
 	"dependencies": {
-		"lucide-svelte": "^0.535.0"
+		"lucide-svelte": "^0.535.0",
+		"uuid": "^11.1.0"
 	}
 }

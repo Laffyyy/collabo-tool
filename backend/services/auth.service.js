@@ -37,15 +37,15 @@ function signToken(payload) {
 async function login({ username, password }) {
   try {
     // First check if the user exists in database by email - include sensitive data for auth
-    const query = 'SELECT * FROM tblusers WHERE demail = $1';
+  const query = 'SELECT * FROM tblusers WHERE demail = $1';
     const result = await userModel.pool.query(query, [username]);
     
-    // If user not found
+    // If user not found - return generic error message for security
     if (result.rows.length === 0) {
       return {
         step: 'FAILED',
         exists: false,
-        message: 'User not found'
+        message: 'Invalid Email/Password'
       };
     }
     
@@ -57,7 +57,7 @@ async function login({ username, password }) {
       return {
         step: 'FAILED',
         exists: true,
-        message: 'Invalid password'
+        message: 'Invalid Email/Password'
       };
     }
     
@@ -103,8 +103,10 @@ async function generateAndSendOtp(email) {
     // Send OTP via email
     await sendOtpEmail(email, otpData.code);
     console.log(`OTP sent to ${email}`);
+    console.log(`🔑 DEVELOPMENT MODE: OTP CODE: ${otpData.code}`);
   } catch (error) {
     console.error('Failed to send OTP email:', error);
+    console.log(`🔑 DEVELOPMENT MODE - EMAIL FAILED BUT OTP IS: ${otpData.code}`);
     // Log but don't throw so authentication can still proceed
   }
   
@@ -252,8 +254,10 @@ async function resendOtp({ username }) {
       // Send OTP via email - only pass the required parameters
       await sendOtpEmail(email, otpData.code);
       console.log(`New OTP sent to: ${email}`);
+      console.log(`🔑 RESEND OTP CODE: ${otpData.code}`);
     } catch (emailError) {
       console.error('Failed to send OTP email:', emailError);
+      console.log(`🔑 RESEND OTP FAILED BUT CODE: ${otpData.code}`);
       // Continue with the process even if email sending fails
     }
     

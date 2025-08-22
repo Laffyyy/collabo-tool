@@ -2,6 +2,8 @@
 	import '../app.css';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import { page } from '$app/stores';
+	import { authStore } from '$lib/stores/auth.svelte';
+  	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	
 	let { children } = $props();
 	
@@ -12,6 +14,8 @@
 	const isSettingsPage = $derived($page.url.pathname === '/settings');
 	let showNavigation = $derived(!noNavPages.includes($page.url.pathname) && !isProfilePage && !isSettingsPage);
 </script>
+
+<ToastContainer />
 
 {#if showNavigation}
 	<Navigation />
