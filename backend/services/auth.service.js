@@ -36,12 +36,15 @@ function signToken(payload) {
  */
 async function login({ username, password }) {
   try {
+    console.log(`[Auth Service] Login attempt for user: ${username}`);
+    
     // First check if the user exists in database by email - include sensitive data for auth
-  const query = 'SELECT * FROM tblusers WHERE demail = $1';
+    const query = 'SELECT * FROM tblusers WHERE demail = $1';
     const result = await userModel.pool.query(query, [username]);
     
     // If user not found - return generic error message for security
     if (result.rows.length === 0) {
+      console.log(`[Auth Service] Login failed - user not found: ${username}`);
       return {
         step: 'FAILED',
         exists: false,
@@ -50,10 +53,12 @@ async function login({ username, password }) {
     }
     
     const userData = result.rows[0];
+    console.log(`[Auth Service] User found: ${userData.did}, username: ${userData.dusername}`);
     const passwordHash = userData.dpasswordhash;
     
     // User exists in database - verify password
     if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
+      console.log(`[Auth Service] Login failed - invalid password for user: ${username}`);
       return {
         step: 'FAILED',
         exists: true,
@@ -61,11 +66,15 @@ async function login({ username, password }) {
       };
     }
     
+    console.log(`[Auth Service] Password verified successfully for user: ${username}`);
+    
     // Format the user without sensitive data for the response
     const user = userModel.formatUser(userData);
+    console.log(`[Auth Service] Formatted user data:`, JSON.stringify(user));
     
     // Generate OTP and send it to user's email
     const otpData = await generateAndSendOtp(user.email);
+    console.log(`[Auth Service] OTP generated for user: ${username}, expires: ${new Date(otpData.expiresAt).toISOString()}`);
     
     // Store the OTP in the database or in-memory store
     await otpModel.create({
@@ -73,6 +82,7 @@ async function login({ username, password }) {
       code: otpData.code,
       expiresAt: new Date(otpData.expiresAt)
     });
+    console.log(`[Auth Service] OTP stored in database for user: ${user.id}`);
     
     // Return success with user info for OTP verification
     return {
@@ -86,7 +96,7 @@ async function login({ username, password }) {
     };
     
   } catch (error) {
-    console.error('Database login error:', error);
+    console.error('[Auth Service] Database login error:', error);
     throw new UnauthorizedError('Authentication error');
   }
 }
@@ -122,33 +132,41 @@ async function generateAndSendOtp(email) {
  */
 async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
   try {
-    console.log(`Verifying OTP for user ${userId}`);
+    console.log(`[Auth Service] Verifying OTP for user ${userId}, IP: ${ipAddress}, UA: ${userAgent?.substring(0, 50)}...`);
     
     // Find the OTP record in the database
     const otpRecord = await otpModel.findActiveByCodeAndUserId(userId, otp);
     
     if (!otpRecord) {
+      console.log(`[Auth Service] Invalid or expired OTP for user: ${userId}`);
       throw new UnauthorizedError('Invalid or expired OTP');
     }
 
-    console.log('Valid OTP found, marking as used');
+    console.log(`[Auth Service] Valid OTP found for user: ${userId}, OTP record ID: ${otpRecord.did}`);
     
     // Mark OTP as used
     await otpModel.markAsUsed(otpRecord.did);
+    console.log(`[Auth Service] OTP marked as used: ${otpRecord.did}`);
     
     // Get user info
     const user = await userModel.findById(userId);
     if (!user) {
+      console.log(`[Auth Service] User not found after OTP validation: ${userId}`);
       throw new UnauthorizedError('User not found');
     }
+    
+    console.log(`[Auth Service] User retrieved: ${user.id}, name: ${user.firstName} ${user.lastName}`);
     
     // Get user role(s)
     const userRoles = await userRoleModel.findByUserId(userId);
     const userRole = userRoles.length > 0 ? userRoles[0] : null; // Get primary role
     const role = userRole ? userRole.roleName.toLowerCase() : 'user'; // Default to 'user' if no role
     
+    console.log(`[Auth Service] User role determined: ${role} for user: ${userId}`);
+    
     // Update last login timestamp
     await userModel.updateLastLogin(userId);
+    console.log(`[Auth Service] Last login updated for user: ${userId}`);
     
     // Generate JWT token with user info and role
     const token = signToken({ 
@@ -158,11 +176,17 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       role: role,
       name: `${user.firstName} ${user.lastName}`
     });
+    console.log(`[Auth Service] JWT token generated for user: ${userId}`);
     
     // Generate session token and create session
     const sessionToken = uuidv4();
     const refreshToken = uuidv4();
     const expiresAt = new Date(Date.now() + parseInt(env.SESSION_EXP_HOURS || 24) * 60 * 60 * 1000);
+    
+    console.log(`[Auth Service] Session tokens generated:
+      - Session Token: ${sessionToken}
+      - Refresh Token: ${refreshToken.substring(0, 8)}...
+      - Expires At: ${expiresAt.toISOString()}`);
     
     // Create session record
     await sessionModel.create({
@@ -173,6 +197,7 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       ipAddress,
       userAgent
     });
+    console.log(`[Auth Service] Session created successfully in database for user: ${userId}`);
     
     return { 
       token,
@@ -185,7 +210,7 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       }
     };
   } catch (error) {
-    console.error('OTP verification error:', error);
+    console.error('[Auth Service] OTP verification error:', error);
     throw new UnauthorizedError('OTP verification failed');
   }
 }

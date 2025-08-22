@@ -191,24 +191,32 @@ async function logout(req, res, next) {
   try {
     const { user, session } = req;
     
+    console.log(`[Auth Controller] Logout request received for user: ${user?.id || 'unknown'}`);
+    console.log(`[Auth Controller] Session details: ${JSON.stringify({
+      sessionId: session?.id,
+      isActive: session?.isActive,
+      expiresAt: session?.expiresAt
+    })}`);
+    
     if (session) {
       // Invalidate the session
       await sessionModel.invalidate(session.id);
-      console.log(`Session invalidated for user: ${user?.id || 'unknown'}`);
+      console.log(`[Auth Controller] Session invalidated successfully: ${session.id}`);
     } else {
-      console.log('No active session found to invalidate');
+      console.log('[Auth Controller] No active session found to invalidate');
     }
     
     // Clear cookies
     res.clearCookie('token');
     res.clearCookie('session');
+    console.log('[Auth Controller] Authentication cookies cleared');
     
     res.status(200).json({ 
       ok: true, 
       message: 'Logged out successfully' 
     });
   } catch (err) {
-    console.error('Error during logout:', err);
+    console.error('[Auth Controller] Error during logout:', err);
     // Even if there's an error, try to clear cookies
     res.clearCookie('token');
     res.clearCookie('session');
