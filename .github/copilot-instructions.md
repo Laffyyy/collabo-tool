@@ -1,25 +1,44 @@
 # Copilot Instructions for Collabo-Tool
 
 ## Project Overview
-This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**. It's a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
+This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4** frontend, plus a **Node.js/Express** backend with **PostgreSQL** database integration. The frontend is currently a fully-featured demo with simulated data, while the backend provides production-ready API infrastructure.
 
-**Critical: Frontend-Only Demo** - All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage. No backend integration exists.
+**Project Structure**:
+- **Frontend**: SvelteKit 5 app with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces
+- **Backend**: Express.js API server with JWT authentication, PostgreSQL integration, comprehensive user management, and security features
+
+**Development Mode**: Frontend uses simulated data (in-memory stores and localStorage) for immediate functionality. Backend provides production-ready API infrastructure that can be integrated when needed.
 
 ## Development Workflows
 
 ### Quick Start
+**Frontend Development**:
 ```bash
 cd frontend
 npm run dev -- --open  # Auto-opens browser at localhost:5173
 ```
 
-**Network Config**: Dev server exposes on `0.0.0.0:5173` with ngrok support (`allowedHosts: ['.ngrok-free.app']`)
+**Backend Development**:
+```bash
+cd backend
+npm run dev  # Starts Express server at localhost:4000
+```
+
+**Network Config**: 
+- Frontend dev server exposes on `0.0.0.0:5173` with ngrok support (`allowedHosts: ['.ngrok-free.app']`)
+- Backend API server runs on `localhost:4000` with CORS enabled for frontend integration
 
 ### Testing Strategy
+**Frontend Testing**:
 - **Svelte Components**: Use `.svelte.test.ts` suffix → browser environment with Playwright
 - **Utilities/Logic**: Use `.test.ts` suffix → Node environment
 - Commands: `npm run test:unit` (watch) | `npm test` (single run)
 - Multi-project Vitest setup in `vite.config.ts` handles environment switching automatically
+
+**Backend Testing**:
+- Health check available at `GET /health`
+- API routes under `/api/auth/*` for authentication endpoints
+- No test suite currently configured
 
 ### Code Quality Pipeline
 ```bash
@@ -29,6 +48,83 @@ npm run format   # Auto-format codebase
 ```
 
 ## Architecture Patterns
+
+### Backend Project Structure
+**Project Architecture**: Clean layered architecture with separation of concerns
+
+**Directory Structure & Responsibilities**:
+```
+backend/
+├── models/          # Database interaction layer (PostgreSQL)
+│   ├── user.model.js        # User CRUD operations, password hashing, formatting
+│   ├── session.model.js     # JWT session management, token validation
+│   ├── otp.model.js         # OTP generation, verification, cleanup
+│   ├── role.model.js        # Role definitions and permissions
+│   └── user-role.model.js   # User-role relationship management
+├── services/        # Business logic layer
+│   └── auth.service.js      # Authentication workflows, OTP generation, validation
+├── controllers/     # HTTP request/response handling
+│   └── auth.controller.js   # Route handlers, request validation, response formatting
+├── routes/          # API endpoint definitions
+│   └── v1/auth.routes.js    # Route definitions with validation middleware
+├── auth/            # Authentication middleware
+│   ├── requireAuth.js       # JWT token validation middleware
+│   └── requireRole.js       # Role-based authorization middleware
+├── config/          # Configuration management
+│   ├── index.js             # Environment variables
+│   ├── db.js                # PostgreSQL connection pool
+│   └── api.js               # API endpoints and settings centralization
+└── utils/           # Utility functions
+    ├── errors.js            # Custom error classes (HttpError, BadRequestError, etc.)
+    ├── otp.js               # OTP generation and verification utilities
+    └── validate.js          # Express-validator error handling
+```
+
+**Data Flow Pattern**:
+`Route → Controller → Service → Model → Database`
+- **Routes**: Define endpoints + validation rules
+- **Controllers**: Handle HTTP concerns, call services  
+- **Services**: Business logic, coordinate multiple models
+- **Models**: Database operations, data formatting
+- **Config**: Centralized settings, database connections
+
+### Frontend Project Structure  
+**SvelteKit 5 Architecture**: File-based routing with role-based access control
+
+**Directory Structure & Responsibilities**:
+```
+frontend/src/
+├── routes/                  # Page components (SvelteKit file-based routing)
+│   ├── +layout.svelte              # Global layout with conditional navigation
+│   ├── +page.svelte                # Root page (redirects to /login)
+│   ├── login/                      # Authentication pages
+│   ├── chat/+page.svelte           # Main chat interface (landing page)
+│   ├── admin/                      # Admin module pages
+│   │   ├── user-management/        # User CRUD, bulk operations, role assignments
+│   │   ├── ou-management/          # Organizational unit hierarchy management
+│   │   ├── chat-management/        # Chat permissions, message moderation
+│   │   ├── broadcast-management/   # System-wide messaging control
+│   │   ├── global-configuration/   # System settings, security policies
+│   │   └── admin-logs/             # Audit trail and activity monitoring
+│   └── profile/                    # User profile management
+├── lib/
+│   ├── components/                 # Reusable UI components
+│   │   ├── Navigation.svelte       # Main navigation with admin dropdown
+│   │   ├── ProfileAvatar.svelte    # User avatar display
+│   │   ├── GroupAvatar.svelte      # Group chat avatar
+│   │   └── ConfirmationModal.svelte # Delete/action confirmations
+│   ├── stores/                     # State management (Svelte 5 runes)
+│   │   ├── auth.svelte.ts          # Authentication state, role permissions
+│   │   ├── broadcast.svelte.ts     # Broadcast message management
+│   │   └── theme.svelte.ts         # UI theme and preferences
+│   └── utils/                      # Helper functions and utilities
+└── app.css                         # Global styles with predefined component classes
+```
+
+**Store Architecture Pattern**:
+- **Class-based stores** using Svelte 5 runes within class constructors
+- **Permission getters** for role-based UI conditional rendering
+- **Demo data initialization** for immediate frontend functionality without backend
 
 ### Svelte 5 Component Conventions
 ```svelte
@@ -151,7 +247,10 @@ get canManageUsers() { return ['admin', 'manager'].includes(this.user?.role || '
 ```
 
 ### Key Development Notes
-- **Mock Data**: All stores initialize with demo data for immediate functionality
+- **Mock Data**: All frontend stores initialize with demo data for immediate functionality
+- **Backend Integration**: Production-ready Express API available but frontend currently uses simulated data
+- **API Structure**: RESTful endpoints under `/api/auth/*` with JWT authentication and validation middleware
+- **Database Ready**: PostgreSQL user model with comprehensive field mapping and security features
 - **Role-based UI**: Check permissions before showing admin features or sensitive operations  
 - **Reactive Patterns**: Use `$derived()` for computed values, `$state()` for mutable state
 - **Icon System**: Consistent use of Lucide Svelte icons throughout the application
