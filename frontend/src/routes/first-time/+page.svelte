@@ -19,6 +19,11 @@
 
 	// Error handling
     let error = $state('');
+
+	// Security questions data
+    let firstTimeSecurityQuestions = $state<{ id: string; text: string }[]>([]);
+    const firstTimeSelectedQuestions = writable(['', '', '']);
+    const firstTimeAnswers = writable(['', '', '']);
 	
 	// Auto-focus reference
 	let firstTimeFirstAnswerInput: HTMLInputElement | undefined;
@@ -29,6 +34,29 @@
 			firstTimeFirstAnswerInput = element;
 		}
 	};
+
+	// Load security questions from backend - MOVED BEFORE onMount
+    const loadSecurityQuestions = async () => {
+        try {
+            const response = await apiClient.get<{
+                ok: boolean;
+                questions: { id: string; text: string; createdAt: string }[];
+            }>('/api/v1/security-questions/questions');
+
+            if (response.ok && response.questions) {
+                firstTimeSecurityQuestions = response.questions.map(q => ({
+                    id: q.id,
+                    text: q.text
+                }));
+                console.log('Loaded security questions:', firstTimeSecurityQuestions);
+            } else {
+                error = 'Failed to load security questions';
+            }
+        } catch (err: any) {
+            console.error('Error loading security questions:', err);
+            error = 'Failed to load security questions';
+        }
+    };
 	
 	onMount(() => {
 		// Get stored user data from OTP verification
@@ -47,7 +75,9 @@
             return;
         }
 
-
+		// Load available security questions from backend
+        loadSecurityQuestions();
+		
 		// Wait for terms modal to close, then focus first answer input
 		const unsubscribe = firstTimeShowTermsModal.subscribe(showModal => {
 			if (!showModal && firstTimeFirstAnswerInput) {
@@ -104,22 +134,7 @@
 		
 		target.value = filteredText;
 	};
-	
-	// Security questions
-	const firstTimeSecurityQuestions = [
-		"What was the name of your first pet?",
-		"What city were you born in?",
-		"What was your mother's maiden name?",
-		"What was the name of your elementary school?",
-		"What was your childhood nickname?",
-		"What is your favorite movie?",
-		"What was the make of your first car?",
-		"What street did you grow up on?"
-	];
-	
-	const firstTimeSelectedQuestions = writable(['', '', '']);
-	const firstTimeAnswers = writable(['', '', '']);
-	
+
 	const firstTimeAcceptTerms = () => {
 		firstTimeShowTermsModal.set(false);
 	};
@@ -138,7 +153,11 @@
 	};
 	
 	const firstTimeGetAvailableQuestions = (currentIndex: number) => {
-		return firstTimeSecurityQuestions.filter(question => !$firstTimeSelectedQuestions.includes(question) || currentIndex === $firstTimeSelectedQuestions.indexOf(question));
+		return firstTimeSecurityQuestions.filter(
+			question =>
+				!$firstTimeSelectedQuestions.includes(question.id) ||
+				$firstTimeSelectedQuestions[currentIndex] === question.id
+		);
 	};
 	
 	const firstTimeCanSubmit = () => {
@@ -156,49 +175,51 @@
         error = '';
         
         try {
-            // Prepare security questions data
-            const securityQuestions = $firstTimeSelectedQuestions.map((question, index) => ({
-                question,
+            // Prepare data in the format expected by the backend
+            const questionAnswers = $firstTimeSelectedQuestions.map((questionId, index) => ({
+                questionId,
                 answer: $firstTimeAnswers[index].trim()
             }));
             
             console.log('Submitting security questions for user:', userId);
+            console.log('Question answers:', questionAnswers);
             
-			// Submit security questions to backend
-			const response = await apiClient.post(
-				API_CONFIG.endpoints.auth.setupSecurityQuestions || '/api/v1/auth/security-questions',
-				{
-					userId,
-					securityQuestions
-				}
-			);
+            // Submit security questions to backend using the working endpoint
+            const response = await apiClient.post<{
+                ok: boolean;
+                success: boolean;
+                message: string;
+            }>('/api/v1/security-questions/user-answers', {
+                userId,
+                questionAnswers
+            });
 			
 			console.log('Security questions setup response:', response);
 
 			// Type guard for expected response shape
 			const res = response as { ok?: boolean; success?: boolean; message?: string };
 
-			if (res.ok || res.success) {
-				// Store data for password change step
-				localStorage.setItem('passwordChange_userId', userId);
-				localStorage.setItem('passwordChange_username', username);
-				localStorage.setItem('passwordChange_email', userEmail);
-				localStorage.setItem('passwordChange_role', userRole);
-				localStorage.setItem('passwordChange_name', userName);
-				
-				// Clear first-time data
-				localStorage.removeItem('firstTime_userId');
-				localStorage.removeItem('firstTime_username');
-				localStorage.removeItem('firstTime_email');
-				localStorage.removeItem('firstTime_role');
-				localStorage.removeItem('firstTime_name');
-				localStorage.removeItem('firstTime_tempPassword');
-				
-				// Redirect to password change
-				goto('/change-password?from=first-time');
-			} else {
-				error = res.message || 'Failed to save security questions';
-			}
+			if (response.ok || response.success) {
+                // Store data for password change step
+                localStorage.setItem('passwordChange_userId', userId);
+                localStorage.setItem('passwordChange_username', username);
+                localStorage.setItem('passwordChange_email', userEmail);
+                localStorage.setItem('passwordChange_role', userRole);
+                localStorage.setItem('passwordChange_name', userName);
+                
+                // Clear first-time data
+                localStorage.removeItem('firstTime_userId');
+                localStorage.removeItem('firstTime_username');
+                localStorage.removeItem('firstTime_email');
+                localStorage.removeItem('firstTime_role');
+                localStorage.removeItem('firstTime_name');
+                localStorage.removeItem('firstTime_tempPassword');
+                
+                // Redirect to password change
+                goto('/change-password?from=first-time');
+            } else {
+                error = response.message || 'Failed to save security questions';
+            }
         } catch (err: any) {
             console.error('Error submitting security questions:', err);
             error = err.message || 'Connection error. Please try again.';
@@ -241,7 +262,7 @@
 				<h2 class="firsttime-section-title">Security Setup</h2>
 				<p class="firsttime-section-subtitle">Choose 3 unique questions and provide answers for account recovery</p>
 				
-				{#each Array(3) as _, index}
+				{#each [0, 1, 2] as index (index)}
 					<div class="firsttime-question-group">
 						<label class="firsttime-label" for={`question-${index + 1}`}>Question {index + 1}</label>
 						<select
@@ -252,10 +273,10 @@
 						>
 							<option value="">Select a question...</option>
 							{#each firstTimeGetAvailableQuestions(index) as question}
-								<option value={question}>{question}</option>
+								<option value={question.id}>{question.text}</option>
 							{/each}
 						</select>
-						
+					
 						<label class="firsttime-label" for={`answer-${index + 1}`}>Your answer</label>
 						<input
 							use:firstTimeBindFirstInput={index}
