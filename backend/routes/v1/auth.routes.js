@@ -78,6 +78,16 @@ router.post(
   authController.resetPassword
 );
 
+// Add this route after the reset-password route
+router.post(
+  '/validate-reset-token',
+  [
+    body('token').isString().notEmpty().withMessage('Reset token is required')
+  ],
+  validate,
+  authController.validateResetToken
+);
+
 // Send Reset Password Link
 router.post(
   '/send-reset-link',

@@ -235,6 +235,21 @@ async function logout(req, res, next) {
   }
 }
 
+// Add this function to validate reset tokens
+async function validateResetToken(req, res, next) {
+  try {
+    const { token } = req.body;
+    console.log(`Validating reset token: ${token?.substring(0, 8)}...`);
+    
+    const result = await authService.validateResetToken({ token });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('Error in validateResetToken controller:', err);
+    next(err);
+  }
+}
+
+// Update the module.exports to include validateResetToken
 module.exports = {
   login,
   verifyOtp,
@@ -245,6 +260,7 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
-  resetPassword, // Add this
+  resetPassword,
+  validateResetToken, // Add this
   logout
 };

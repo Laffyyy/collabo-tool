@@ -491,6 +491,31 @@ async function answerSecurityQuestions({ username, answers }) {
   return { token };
 }
 
+// Add this function to validate reset tokens and get user info
+async function validateResetToken({ token }) {
+  try {
+    // Hash the provided token to compare with stored hash
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    
+    // Find valid reset token
+    const resetRecord = await passwordResetModel.findValidToken(tokenHash);
+    
+    if (!resetRecord) {
+      throw new BadRequestError('Invalid or expired reset token');
+    }
+
+    return { 
+      ok: true, 
+      userId: resetRecord.duserid,
+      message: 'Valid reset token' 
+    };
+  } catch (error) {
+    console.error('Reset token validation error:', error);
+    throw new BadRequestError(error.message || 'Invalid reset token');
+  }
+}
+
+// Update the module.exports to include validateResetToken
 module.exports = {
   login,
   verifyOtp,
@@ -502,5 +527,6 @@ module.exports = {
   sendResetLink,
   answerSecurityQuestions,
   resetPassword,
+  validateResetToken, // Add this
 };
 
