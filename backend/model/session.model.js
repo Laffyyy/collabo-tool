@@ -82,7 +82,7 @@ class SessionModel {
     return rows.map(this.formatSession);
   }
 
-/**
+  /**
    * Invalidate a session (mark as inactive)
    * @param {string} sessionId - Session ID
    * @returns {Promise<boolean>} Success status
@@ -90,7 +90,7 @@ class SessionModel {
   async invalidate(sessionId) {
     const query = `
       UPDATE tblusersessions 
-      SET disactive = false, tupdatedat = NOW()
+      SET disactive = false
       WHERE did = $1
     `;
     
@@ -106,7 +106,7 @@ class SessionModel {
   async invalidateAllForUser(userId) {
     const query = `
       UPDATE tblusersessions 
-      SET disactive = false, tupdatedat = NOW()
+      SET disactive = false
       WHERE duserid = $1
     `;
     
@@ -150,7 +150,6 @@ class SessionModel {
       userAgent: session.duseragent,
       isActive: session.disactive,
       createdAt: session.tcreatedat,
-      updatedAt: session.tupdatedat
     };
   }
 }

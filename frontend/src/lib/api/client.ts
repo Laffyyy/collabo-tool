@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.svelte';
 import { API_CONFIG } from './config';
+import { goto } from '$app/navigation';
 
 class ApiClient {
   private baseUrl: string;
@@ -22,19 +23,37 @@ class ApiClient {
     return headers;
   }
 
+  // New helper method to handle authentication errors
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (response.status === 401) {
+      // User is not authenticated
+      get(authStore).logout();
+      goto('/login');
+      throw new Error('Authentication required');
+    }
+    
+    if (response.status === 403) {
+      // User is authenticated but not authorized for this resource
+      goto('/unauthorized');
+      throw new Error('Not authorized');
+    }
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'An error occurred' }));
+      throw new Error(error.message || 'An error occurred');
+    }
+
+    return response.json();
+  }
+
   async get<T>(endpoint: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'GET',
       headers: this.getAuthHeaders(),
       credentials: 'include'
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'An error occurred');
-    }
-
-    return response.json();
+    
+    return this.handleResponse<T>(response);
   }
 
   async post<T>(endpoint: string, data: any): Promise<T> {
@@ -44,13 +63,8 @@ class ApiClient {
       body: JSON.stringify(data),
       credentials: 'include'
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'An error occurred');
-    }
-
-    return response.json();
+    
+    return this.handleResponse<T>(response);
   }
 
   async put<T>(endpoint: string, data: any): Promise<T> {
@@ -60,13 +74,8 @@ class ApiClient {
       body: JSON.stringify(data),
       credentials: 'include'
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'An error occurred');
-    }
-
-    return response.json();
+    
+    return this.handleResponse<T>(response);
   }
 
   async delete<T>(endpoint: string): Promise<T> {
@@ -75,13 +84,8 @@ class ApiClient {
       headers: this.getAuthHeaders(),
       credentials: 'include'
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'An error occurred');
-    }
-
-    return response.json();
+    
+    return this.handleResponse<T>(response);
   }
 
   // Specialized logout function that handles both frontend and backend logout
@@ -98,6 +102,24 @@ class ApiClient {
     } finally {
       // Always logout on frontend even if backend logout fails
       get(authStore).logout();
+      goto('/login');
+    }
+  }
+
+  async validateSession(): Promise<boolean> {
+    try {
+      // Check if we have a session token in localStorage
+      const sessionToken = localStorage.getItem('auth_session');
+      if (!sessionToken) {
+        return false;
+      }
+      
+      // Call an endpoint to validate the session token
+      const response = await this.get('/api/auth/validate-session');
+      return response.valid === true;
+    } catch (error) {
+      console.error('Session validation error:', error);
+      return false;
     }
   }
 }

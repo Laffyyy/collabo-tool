@@ -70,8 +70,16 @@
 
 	// Add logout function
 	const handleLogout = async () => {
-		await apiClient.logout();
-		goto('/login');
+		try {
+			await apiClient.logout();
+			showProfile = false;
+		} catch (error) {
+			console.error('Logout error:', error);
+		} finally {
+			// Always logout on frontend side regardless of API success/failure
+			$authStore.logout();
+			goto('/login');
+		}
 	};
 </script>
 
