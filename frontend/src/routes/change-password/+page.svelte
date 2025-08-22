@@ -116,20 +116,11 @@
 		}
 	};
 	
-	const changePasswordHandlePaste = (event: ClipboardEvent) => {
-		event.preventDefault();
-		const pastedText = event.clipboardData?.getData('text') || '';
-		const target = event.target as HTMLInputElement;
-		const filteredText = changePasswordValidateInput(pastedText);
-		
-		if (target.id === 'new-password') {
-			changePasswordNew = filteredText;
-			target.value = filteredText;
-		} else if (target.id === 'confirm-password') {
-			changePasswordConfirm = filteredText;
-			target.value = filteredText;
-		}
-	};
+	// Disable pasting for password fields
+    const changePasswordHandlePaste = (event: ClipboardEvent) => {
+        event.preventDefault();
+        // Don't allow any pasted content for password fields
+    };
 	
 	$effect(() => {
 		changePasswordValidatePassword();
