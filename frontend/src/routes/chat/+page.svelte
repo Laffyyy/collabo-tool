@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { createConversation, getConversations } from '$lib/services/chatServices';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
@@ -13,7 +14,6 @@
 		Pin, PinOff, Share2, Download, Image, FileText, Link, Filter,
 		Forward, Trash2, Flag, Check, User, ArrowUp
 	} from 'lucide-svelte';
-
 	// Type definitions
 	interface User {
 		id: string;
@@ -262,208 +262,16 @@
 		}
 	];
 
-	onMount(() => {
-		// Initialize conversations
-		conversations = [
-			{
-				id: '1',
-				name: 'John Doe',
-				department: 'Engineering',
-				role: 'Manager',
-				type: 'direct',
-				lastMessage: 'Hey, how are you doing?',
-				lastMessageTime: '2 min ago',
-				unreadCount: 2,
-				isRead: false,
-				avatar: '/placeholder.svg',
-				isOnline: true,
-				messages: [
-					{
-						id: '1',
-						senderId: '2',
-						senderName: 'John Doe',
-						senderDepartment: 'Engineering',
-						senderRole: 'Manager',
-						content: 'Hey, how are you doing?',
-						timestamp: new Date(Date.now() - 120000),
-						type: 'text',
-						forwardingEnabled: true,
-						reactions: [],
-						seenBy: [
-							{
-								userId: '1',
-								userName: 'You',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 60000)
-							}
-						]
-					}
-				],
-				members: [
-					{ 
-						id: '1', 
-						name: 'You', 
-						firstName: 'Current',
-						lastName: 'User',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'IT',
-						role: 'Manager'
-					},
-					{ 
-						id: '2', 
-						name: 'John Doe', 
-						firstName: 'John',
-						lastName: 'Doe',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'Engineering',
-						role: 'Manager'
-					}
-				],
-				settings: {
-					allowEmojis: true,
-					allowAttachments: true,
-					allowForwarding: true,
-					allowPinning: false,
-					isArchived: false
-				}
-			}
-		];
-
-		groupChats = [
-			{
-				id: '2',
-				name: 'Project Team',
-				type: 'group',
-				lastMessage: 'Alice: The deadline has been moved to next week',
-				lastMessageTime: '1 hour ago',
-				unreadCount: 0,
-				isRead: true,
-				avatar: '/placeholder.svg',
-				isOnline: false,
-				pinnedMessages: [],
-				mediaHistory: {
-					files: [],
-					media: [],
-					links: []
-				},
-				messages: [
-					{
-						id: '1',
-						senderId: '3',
-						senderName: 'Alice Johnson',
-						senderDepartment: 'Marketing',
-						senderRole: 'Supervisor',
-						content: 'The deadline has been moved to next week',
-						timestamp: new Date(Date.now() - 3600000),
-						type: 'text',
-						isPinned: false,
-						pinningEnabled: true,
-						forwardingEnabled: true,
-						reactions: [
-							{ emoji: '👍', users: ['1', '4'], count: 2, timestamp: new Date(Date.now() - 3550000) },
-							{ emoji: '😊', users: ['5'], count: 1, timestamp: new Date(Date.now() - 3540000) }
-						]
-					},
-					{
-						id: '2',
-						senderId: '1',
-						senderName: 'You',
-						senderDepartment: 'IT',
-						senderRole: 'Manager',
-						content: 'Thanks for the update! I\'ll adjust the schedule accordingly.',
-						timestamp: new Date(Date.now() - 3500000),
-						type: 'text',
-						isPinned: false,
-						pinningEnabled: true,
-						forwardingEnabled: true,
-						reactions: [
-							{ emoji: '👍', users: ['3', '4'], count: 2, timestamp: new Date(Date.now() - 3200000) }
-						],
-						seenBy: [
-							{
-								userId: '3',
-								userName: 'Alice Johnson',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 3400000)
-							},
-							{
-								userId: '4',
-								userName: 'Bob Smith',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 3300000)
-							},
-							{
-								userId: '5',
-								userName: 'Carol White',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 3200000)
-							}
-						]
-					}
-				],
-				members: [
-					{ 
-						id: '1', 
-						name: 'You', 
-						firstName: 'Current',
-						lastName: 'User',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'IT',
-						role: 'Manager'
-					},
-					{ 
-						id: '3', 
-						name: 'Alice Johnson', 
-						firstName: 'Alice',
-						lastName: 'Johnson',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'Marketing',
-						role: 'Supervisor'
-					},
-					{ 
-						id: '4', 
-						name: 'Bob Smith', 
-						firstName: 'Bob',
-						lastName: 'Smith',
-						avatar: '/placeholder.svg', 
-						isOnline: false, 
-						isMuted: false,
-						department: 'Sales',
-						role: 'Frontline'
-					},
-					{ 
-						id: '5', 
-						name: 'Carol White', 
-						firstName: 'Carol',
-						lastName: 'White',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: true,
-						department: 'Support',
-						role: 'Support'
-					}
-				],
-				settings: {
-					allowEmojis: true,
-					allowAttachments: true,
-					allowForwarding: false,
-					allowPinning: true,
-					isArchived: false
-				}
-			}
-		];
-
-		// Don't auto-select a conversation to prevent layout jumping
-		// currentConversation = groupChats[0];
-	});
+	onMount(async () => {
+  try {
+    // Fetch conversations from backend
+    conversations = await getConversations();
+    // Optionally, filter group chats
+    groupChats = conversations.filter((c: any) => c.type === 'group');
+  } catch (e) {
+    console.error('Failed to fetch conversations:', e);
+  }
+});
 
 	// Available emojis for picker
 	const emojiGroups = {
@@ -875,47 +683,23 @@
 		}
 	};
 
-	const createGroup = () => {
-		if (!groupName.trim() || selectedUsers.length === 0) return;
-
-		const newGroup: Conversation = {
-			id: Date.now().toString(),
-			name: groupName,
-			type: 'group',
-			lastMessage: 'Group created',
-			lastMessageTime: 'now',
-			unreadCount: 0,
-			avatar: '/placeholder.svg?height=40&width=40',
-			isOnline: false,
-			messages: [],
-			members: [
-				{ 
-					id: '1', 
-					name: 'You', 
-					firstName: 'Current',
-					lastName: 'User',
-					avatar: '/placeholder.svg?height=32&width=32', 
-					isOnline: true, 
-					isMuted: false,
-					department: 'IT',
-					role: 'Manager'
-				},
-				...selectedUsers.map(user => ({ ...user, isOnline: false, isMuted: false } as User))
-			],
-			settings: {
-				allowEmojis: false,
-				allowAttachments: false,
-				allowForwarding: false,
-				allowPinning: false,
-				isArchived: false
-			}
-		};
-
-		groupChats = [...groupChats, newGroup];
-		showCreateGroup = false;
-		groupName = '';
-		selectedUsers = [];
-	};
+const createGroup = async () => {
+  if (!groupName.trim() || selectedUsers.length === 0) return;
+  try {
+    // Use the current user's UUID for dcreatedBy
+    const dcreatedBy = currentUser.id; // <-- Make sure this is set
+    const dname = groupName;
+    const dtype = "group";
+    // Call your backend
+    const newGroup = await createConversation({ dname, dtype, dcreatedBy });
+    groupChats = [...groupChats, newGroup];
+    showCreateGroup = false;
+    groupName = '';
+    selectedUsers = [];
+  } catch (e: any) {
+    alert('Failed to create group: ' + (e.message || e));
+  }
+};
 
 	const toggleUser = (user: User) => {
 		const index = selectedUsers.findIndex(u => u.id === user.id);
