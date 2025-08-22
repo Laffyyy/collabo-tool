@@ -135,36 +135,51 @@
 	};
 	
 	const changePasswordHandleSubmit = async () => {
-        if (!changePasswordCanSubmit()) return;
+    if (!changePasswordCanSubmit()) return;
 
-        changePasswordIsLoading = true;
-        changePasswordError = '';
-        
-        try {
-            if (changePasswordFromFirstTime) {
-                console.log('Submitting password change for first-time user:', {
-                    userId,
-                    hasSecurityAnswers: savedSecurityAnswers.length
-                });
+    changePasswordIsLoading = true;
+    changePasswordError = '';
+    
+    try {
+        if (changePasswordFromFirstTime) {
+            console.log('Submitting password change for first-time user:', {
+                userId,
+                hasSecurityAnswers: savedSecurityAnswers.length
+            });
 
-                // Use the working password change API endpoint
-                const response = await apiClient.post<{
+            // First, change the password
+            const passwordResponse = await apiClient.post<{
+                ok: boolean;
+                message: string;
+                data?: {
+                    userId: string;
+                    username: string;
+                    mustChangePassword: boolean;
+                };
+            }>(API_CONFIG.endpoints.passwordChange.changePassword, {
+                userId,
+                newPassword: changePasswordNew,
+                // Don't include securityAnswers for verification since they're not in DB yet
+            });
+
+            console.log('Password change response:', passwordResponse);
+
+            if (passwordResponse.ok) {
+                // Now save the security questions to the database
+                console.log('Password changed successfully, now saving security questions...');
+                
+                const securityResponse = await apiClient.post<{
                     ok: boolean;
+                    success: boolean;
                     message: string;
-                    data?: {
-                        userId: string;
-                        username: string;
-                        mustChangePassword: boolean;
-                    };
-                }>(API_CONFIG.endpoints.passwordChange.changePassword, {
+                }>(API_CONFIG.endpoints.securityQuestions.saveAnswers, {
                     userId,
-                    newPassword: changePasswordNew,
-                    securityAnswers: savedSecurityAnswers
+                    questionAnswers: savedSecurityAnswers
                 });
 
-                console.log('Password change response:', response);
+                console.log('Security questions save response:', securityResponse);
 
-                if (response.ok) {
+                if (securityResponse.ok || securityResponse.success) {
                     // Clear all stored data
                     localStorage.removeItem('passwordChange_userId');
                     localStorage.removeItem('passwordChange_username');
@@ -174,28 +189,31 @@
                     localStorage.removeItem('passwordChange_securityAnswers');
 
                     // Show success message and redirect to login
-                    alert('Password changed successfully! Please log in with your new password.');
+                    alert('Account setup completed successfully! Please log in with your new password.');
                     goto('/login');
                 } else {
-                    throw new Error(response.message || 'Failed to change password');
+                    throw new Error(securityResponse.message || 'Failed to save security questions');
                 }
             } else {
-                // Handle other flows (existing demo behavior)
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                if (changePasswordFromForgotPassword) {
-                    goto('/login');
-                } else {
-                    goto('/chat');
-                }
+                throw new Error(passwordResponse.message || 'Failed to change password');
             }
-        } catch (error: any) {
-            console.error('Password change error:', error);
-            changePasswordError = error.message || 'Failed to change password. Please try again.';
-        } finally {
-            changePasswordIsLoading = false;
+        } else {
+            // Handle other flows (existing demo behavior)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            if (changePasswordFromForgotPassword) {
+                goto('/login');
+            } else {
+                goto('/chat');
+            }
         }
-    };
+    } catch (error: any) {
+        console.error('Setup error:', error);
+        changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
+    } finally {
+        changePasswordIsLoading = false;
+    }
+};
 	
 	const changePasswordHandleCancel = () => {
         if (changePasswordFromFirstTime) {

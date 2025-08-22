@@ -166,70 +166,52 @@
 	};
 	
 	const firstTimeHandleSubmit = async () => {
-        if (!firstTimeCanSubmit()) {
-            error = 'Please complete all security questions';
-            return;
-        }
+    if (!firstTimeCanSubmit()) {
+        error = 'Please complete all security questions';
+        return;
+    }
+    
+    firstTimeIsLoading.set(true);
+    error = '';
+    
+    try {
+        // Prepare data in the format expected by the backend
+        const questionAnswers = $firstTimeSelectedQuestions.map((questionId, index) => ({
+            questionId,
+            answer: $firstTimeAnswers[index].trim()
+        }));
         
-        firstTimeIsLoading.set(true);
-        error = '';
+        console.log('Storing security questions locally for user:', userId);
+        console.log('Question answers:', questionAnswers);
         
-        try {
-            // Prepare data in the format expected by the backend
-            const questionAnswers = $firstTimeSelectedQuestions.map((questionId, index) => ({
-                questionId,
-                answer: $firstTimeAnswers[index].trim()
-            }));
-            
-            console.log('Submitting security questions for user:', userId);
-            console.log('Question answers:', questionAnswers);
-            
-            // Submit security questions to backend using the working endpoint
-            const response = await apiClient.post<{
-                ok: boolean;
-                success: boolean;
-                message: string;
-            }>(API_CONFIG.endpoints.securityQuestions.saveAnswers, {
-                userId,
-                questionAnswers
-            });
-			
-			console.log('Security questions setup response:', response);
-
-			// Type guard for expected response shape
-			const res = response as { ok?: boolean; success?: boolean; message?: string };
-
-			if (response.ok || response.success) {
-                // Store data for password change step
-                localStorage.setItem('passwordChange_userId', userId);
-                localStorage.setItem('passwordChange_username', username);
-                localStorage.setItem('passwordChange_email', userEmail);
-                localStorage.setItem('passwordChange_role', userRole);
-                localStorage.setItem('passwordChange_name', userName);
-
-				// Store security answers for password change verification
-                localStorage.setItem('passwordChange_securityAnswers', JSON.stringify(questionAnswers));
-                
-                // Clear first-time data
-                localStorage.removeItem('firstTime_userId');
-                localStorage.removeItem('firstTime_username');
-                localStorage.removeItem('firstTime_email');
-                localStorage.removeItem('firstTime_role');
-                localStorage.removeItem('firstTime_name');
-                localStorage.removeItem('firstTime_tempPassword');
-                
-                // Redirect to password change
-                goto('/change-password?from=first-time');
-            } else {
-                error = response.message || 'Failed to save security questions';
-            }
-        } catch (err: any) {
-            console.error('Error submitting security questions:', err);
-            error = err.message || 'Connection error. Please try again.';
-        } finally {
-            firstTimeIsLoading.set(false);
-        }
-    };
+        // Store data for password change step (NO API call yet)
+        localStorage.setItem('passwordChange_userId', userId);
+        localStorage.setItem('passwordChange_username', username);
+        localStorage.setItem('passwordChange_email', userEmail);
+        localStorage.setItem('passwordChange_role', userRole);
+        localStorage.setItem('passwordChange_name', userName);
+        
+        // Store security answers for password change verification
+        localStorage.setItem('passwordChange_securityAnswers', JSON.stringify(questionAnswers));
+        
+        // Clear first-time data
+        localStorage.removeItem('firstTime_userId');
+        localStorage.removeItem('firstTime_username');
+        localStorage.removeItem('firstTime_email');
+        localStorage.removeItem('firstTime_role');
+        localStorage.removeItem('firstTime_name');
+        localStorage.removeItem('firstTime_tempPassword');
+        
+        // Redirect to password change immediately
+        goto('/change-password?from=first-time');
+        
+    } catch (err: any) {
+        console.error('Error preparing security questions:', err);
+        error = err.message || 'Failed to prepare security questions.';
+    } finally {
+        firstTimeIsLoading.set(false);
+    }
+};
 	
 	const firstTimeHandleCancel = () => {
 		firstTimeShowCancelModal.set(true);

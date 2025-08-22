@@ -32,6 +32,21 @@ class PasswordChangeService {
   }
 
   /**
+   * Check if user has existing security answers
+   * @param {string} userId - User UUID
+   * @returns {Promise<boolean>} Whether user has security answers
+   */
+  static async hasExistingSecurityAnswers(userId) {
+    const result = await sql`
+      SELECT COUNT(*) as count
+      FROM tblusersecurityanswers
+      WHERE duserid = ${userId}
+    `;
+    
+    return parseInt(result[0].count) > 0;
+  }
+
+  /**
    * Verify security answers for a user
    * @param {string} userId - User UUID
    * @param {Array} securityAnswers - Array of {questionId, answer}
@@ -111,19 +126,26 @@ class PasswordChangeService {
    * Complete password change workflow
    * @param {string} userId - User UUID
    * @param {string} newPassword - New plain text password
-   * @param {Array} securityAnswers - Security answers for verification
+   * @param {Array} securityAnswers - Security answers for verification (optional for first-time)
    * @returns {Promise<Object>} Result with user data
    */
   static async changePassword(userId, newPassword, securityAnswers = []) {
     // 1. Validate user
     const user = await this.validateUserForPasswordChange(userId);
 
-    // 2. Verify security answers if provided
+    // 2. Verify security answers only if provided and user has existing answers
     if (securityAnswers.length > 0) {
-      const verificationResult = await this.verifySecurityAnswers(userId, securityAnswers);
-      if (!verificationResult.isValid) {
-        throw new Error(verificationResult.message);
+      // Check if user has existing security answers
+      const hasExistingAnswers = await this.hasExistingSecurityAnswers(userId);
+
+      if (hasExistingAnswers) {
+        // User has existing answers, verify them
+        const verificationResult = await this.verifySecurityAnswers(userId, securityAnswers);
+        if (!verificationResult.isValid) {
+          throw new Error(verificationResult.message);
+        }
       }
+      // If user has no existing answers, skip verification (first-time setup)
     }
 
     // 3. Hash password
