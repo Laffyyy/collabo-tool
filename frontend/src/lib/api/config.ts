@@ -10,10 +10,18 @@ export const API_CONFIG = {
       resendOtp: '/api/v1/auth/resend-otp', 
       logout: '/api/v1/auth/logout',      
       forgotPassword: '/api/v1/auth/forgot-password',
-      resetPassword: '/api/v1/auth/reset-password',
-      setupSecurityQuestions: '/api/v1/auth/security-questions',
-      securityQuestions: '/api/v1/auth/security-questions',
-      answerSecurityQuestions: '/api/v1/auth/answer-security-questions'
+      resetPassword: '/api/v1/auth/reset-password'
+    },
+    securityQuestions: {
+      getAll: '/api/v1/security-questions/questions',
+      saveAnswers: '/api/v1/security-questions/user-answers',
+      getUserQuestions: '/api/v1/security-questions/user-questions',
+      verifyAnswers: '/api/v1/security-questions/verify-answers',
+      checkUserStatus: '/api/v1/security-questions/user-status'
+    },
+    passwordChange: {
+      changePassword: '/api/v1/password-change/change-password',
+      checkRequired: '/api/v1/password-change/check-required'
     },
     user: {
       profile: '/api/v1/user/profile',

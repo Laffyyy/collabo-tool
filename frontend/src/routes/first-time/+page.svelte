@@ -41,7 +41,7 @@
             const response = await apiClient.get<{
                 ok: boolean;
                 questions: { id: string; text: string; createdAt: string }[];
-            }>('/api/v1/security-questions/questions');
+            }>(API_CONFIG.endpoints.securityQuestions.getAll);
 
             if (response.ok && response.questions) {
                 firstTimeSecurityQuestions = response.questions.map(q => ({
@@ -189,7 +189,7 @@
                 ok: boolean;
                 success: boolean;
                 message: string;
-            }>('/api/v1/security-questions/user-answers', {
+            }>(API_CONFIG.endpoints.securityQuestions.saveAnswers, {
                 userId,
                 questionAnswers
             });
@@ -206,6 +206,9 @@
                 localStorage.setItem('passwordChange_email', userEmail);
                 localStorage.setItem('passwordChange_role', userRole);
                 localStorage.setItem('passwordChange_name', userName);
+
+				// Store security answers for password change verification
+                localStorage.setItem('passwordChange_securityAnswers', JSON.stringify(questionAnswers));
                 
                 // Clear first-time data
                 localStorage.removeItem('firstTime_userId');
