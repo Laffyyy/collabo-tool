@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { Eye, EyeOff } from 'lucide-svelte';
+	import { apiClient } from '$lib/api/client';
+	import { API_CONFIG } from '$lib/api/config';
 	
 	let changePasswordNew = $state('');
 	let changePasswordConfirm = $state('');
@@ -11,20 +13,52 @@
 	let changePasswordIsLoading = $state(false);
 	let changePasswordShowCancelModal = $state(false);
 	let changePasswordFromForgotPassword = $state(false);
+	let changePasswordFromFirstTime = $state(false);
 	let changePasswordShowNew = $state(false);
 	let changePasswordShowConfirm = $state(false);
 	let changePasswordNewInput: HTMLInputElement;
+	let changePasswordError = $state('');
+
+	 // User data for first-time password change
+    let userId = $state('');
+    let username = $state('');
+    let userEmail = $state('');
+    let savedSecurityAnswers: Array<{ questionId: string; answer: string }> = $state([]);
 	
 	onMount(() => {
-		// Check if coming from forgot password flow
-		const urlParams = new URLSearchParams(window.location.search);
-		changePasswordFromForgotPassword = urlParams.get('from') === 'forgot-password';
-		
-		// Auto-focus the first input
-		if (changePasswordNewInput) {
-			changePasswordNewInput.focus();
-		}
-	});
+        // Check if coming from different flows
+        const urlParams = new URLSearchParams(window.location.search);
+        changePasswordFromForgotPassword = urlParams.get('from') === 'forgot-password';
+        changePasswordFromFirstTime = urlParams.get('from') === 'first-time'; // Add this
+        
+        // Get user data for first-time password change
+        if (changePasswordFromFirstTime) {
+            userId = localStorage.getItem('passwordChange_userId') || '';
+            username = localStorage.getItem('passwordChange_username') || '';
+            userEmail = localStorage.getItem('passwordChange_email') || '';
+            
+            // Get saved security answers from localStorage
+            const savedAnswers = localStorage.getItem('passwordChange_securityAnswers');
+            if (savedAnswers) {
+                savedSecurityAnswers = JSON.parse(savedAnswers);
+            }
+
+            if (!userId || savedSecurityAnswers.length === 0) {
+                console.log('No user data or security answers found for password change, redirecting to login');
+                goto('/login');
+                return;
+            }
+
+            console.log('Password change page loaded with:', { userId, username, savedSecurityAnswers });
+        }
+        
+        // Auto-focus the first input
+        setTimeout(() => {
+            if (changePasswordNewInput) {
+                changePasswordNewInput.focus();
+            }
+        }, 100);
+    });
 	
 	const changePasswordValidateInput = (value: string): string => {
 		// Only allow alphanumeric characters and specified symbols: ! @ - _ .
@@ -32,16 +66,45 @@
 		// Strictly limit to 20 characters max
 		return filteredValue.slice(0, 20);
 	};
+
+	// Update validation to match backend requirements
+    const changePasswordValidatePassword = () => {
+        const errors: string[] = [];
+        
+        if (changePasswordNew.length > 0) {
+            if (changePasswordNew.length < 8) { // Backend expects 8-128
+                errors.push("Password must be at least 8 characters long");
+            }
+            
+            if (changePasswordNew.length > 128) { // Match backend validation
+                errors.push("Password must not exceed 128 characters");
+            }
+            
+            if (!/[A-Z]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 uppercase letter");
+            }
+            
+            if (!/[a-z]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 lowercase letter");
+            }
+            
+            if (!/[0-9]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 number");
+            }
+            
+            if (!/[@$!%*?&]/.test(changePasswordNew)) { // Match backend special chars
+                errors.push("Password must contain at least 1 special character (@$!%*?&)");
+            }
+        }
+        
+        changePasswordErrors = errors;
+        changePasswordValid = errors.length === 0 && changePasswordNew.length >= 8;
+    };
 	
 	const changePasswordHandleNewInput = (event: Event) => {
-		const target = event.target as HTMLInputElement;
-		const filteredValue = changePasswordValidateInput(target.value);
-		changePasswordNew = filteredValue;
-		// Update the input value if it was filtered
-		if (target.value !== filteredValue) {
-			target.value = filteredValue;
-		}
-	};
+        const target = event.target as HTMLInputElement;
+        changePasswordNew = target.value;
+    };
 	
 	const changePasswordHandleConfirmInput = (event: Event) => {
 		const target = event.target as HTMLInputElement;
@@ -53,58 +116,11 @@
 		}
 	};
 	
-	const changePasswordHandlePaste = (event: ClipboardEvent) => {
-		event.preventDefault();
-		const pastedText = event.clipboardData?.getData('text') || '';
-		const target = event.target as HTMLInputElement;
-		const filteredText = changePasswordValidateInput(pastedText);
-		
-		if (target.id === 'new-password') {
-			changePasswordNew = filteredText;
-			target.value = filteredText;
-		} else if (target.id === 'confirm-password') {
-			changePasswordConfirm = filteredText;
-			target.value = filteredText;
-		}
-	};
-	
-	const changePasswordValidatePassword = () => {
-		const errors: string[] = [];
-		
-		if (changePasswordNew.length > 0) {
-			if (changePasswordNew.length < 15) {
-				errors.push("Password must be at least 15 characters long");
-			}
-			
-			if (changePasswordNew.length > 20) {
-				errors.push("Password must not exceed 20 characters");
-			}
-			
-			if (!/[A-Z]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 uppercase letter");
-			}
-			
-			if (!/[a-z]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 lowercase letter");
-			}
-			
-			if (!/[0-9]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 number");
-			}
-			
-			if (!/[!@_.-]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 symbol (!, @, -, _, .)");
-			}
-			
-			const allowedPattern = /^[a-zA-Z0-9!@_.-]*$/;
-			if (!allowedPattern.test(changePasswordNew)) {
-				errors.push("Password can only contain letters, numbers, and these symbols: ! @ - _ .");
-			}
-		}
-		
-		changePasswordErrors = errors;
-		changePasswordValid = errors.length === 0 && changePasswordNew.length > 0;
-	};
+	// Disable pasting for password fields
+    const changePasswordHandlePaste = (event: ClipboardEvent) => {
+        event.preventDefault();
+        // Don't allow any pasted content for password fields
+    };
 	
 	$effect(() => {
 		changePasswordValidatePassword();
@@ -119,28 +135,106 @@
 	};
 	
 	const changePasswordHandleSubmit = async () => {
-		if (changePasswordCanSubmit()) {
-			changePasswordIsLoading = true;
-			
-			// Simulate API call
-			await new Promise(resolve => setTimeout(resolve, 2000));
-			
-			// Navigate based on source
-			if (changePasswordFromForgotPassword) {
-				goto('/login');
-			} else {
-				goto('/chat');
-			}
-		}
-	};
+    if (!changePasswordCanSubmit()) return;
+
+    changePasswordIsLoading = true;
+    changePasswordError = '';
+    
+    try {
+        if (changePasswordFromFirstTime) {
+            console.log('Submitting password change for first-time user:', {
+                userId,
+                hasSecurityAnswers: savedSecurityAnswers.length
+            });
+
+            // First, change the password
+            const passwordResponse = await apiClient.post<{
+                ok: boolean;
+                message: string;
+                data?: {
+                    userId: string;
+                    username: string;
+                    mustChangePassword: boolean;
+                };
+            }>(API_CONFIG.endpoints.passwordChange.changePassword, {
+                userId,
+                newPassword: changePasswordNew,
+                // Don't include securityAnswers for verification since they're not in DB yet
+            });
+
+            console.log('Password change response:', passwordResponse);
+
+            if (passwordResponse.ok) {
+                // Now save the security questions to the database
+                console.log('Password changed successfully, now saving security questions...');
+                
+                const securityResponse = await apiClient.post<{
+                    ok: boolean;
+                    success: boolean;
+                    message: string;
+                }>(API_CONFIG.endpoints.securityQuestions.saveAnswers, {
+                    userId,
+                    questionAnswers: savedSecurityAnswers
+                });
+
+                console.log('Security questions save response:', securityResponse);
+
+                if (securityResponse.ok || securityResponse.success) {
+                    // Clear all stored data
+                    localStorage.removeItem('passwordChange_userId');
+                    localStorage.removeItem('passwordChange_username');
+                    localStorage.removeItem('passwordChange_email');
+                    localStorage.removeItem('passwordChange_role');
+                    localStorage.removeItem('passwordChange_name');
+                    localStorage.removeItem('passwordChange_securityAnswers');
+
+                    // Show success message and redirect to login
+                    alert('Account setup completed successfully! Please log in with your new password.');
+                    goto('/login');
+                } else {
+                    throw new Error(securityResponse.message || 'Failed to save security questions');
+                }
+            } else {
+                throw new Error(passwordResponse.message || 'Failed to change password');
+            }
+        } else {
+            // Handle other flows (existing demo behavior)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            if (changePasswordFromForgotPassword) {
+                goto('/login');
+            } else {
+                goto('/chat');
+            }
+        }
+    } catch (error: any) {
+        console.error('Setup error:', error);
+        changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
+    } finally {
+        changePasswordIsLoading = false;
+    }
+};
 	
 	const changePasswordHandleCancel = () => {
-		changePasswordShowCancelModal = true;
-	};
+        if (changePasswordFromFirstTime) {
+            changePasswordShowCancelModal = true;
+        } else {
+            changePasswordShowCancelModal = true;
+        }
+    };
 	
 	const changePasswordConfirmCancel = () => {
-		goto('/login');
-	};
+        // Clear stored data if coming from first-time flow
+        if (changePasswordFromFirstTime) {
+            localStorage.removeItem('passwordChange_userId');
+            localStorage.removeItem('passwordChange_username');
+            localStorage.removeItem('passwordChange_email');
+            localStorage.removeItem('passwordChange_role');
+            localStorage.removeItem('passwordChange_name');
+            localStorage.removeItem('passwordChange_securityAnswers');
+        }
+        goto('/login');
+    };
 	
 	const changePasswordHandleKeydown = (event: KeyboardEvent) => {
 		if (event.key === 'Enter') {

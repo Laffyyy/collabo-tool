@@ -94,5 +94,12 @@ router.post(
   authController.answerSecurityQuestions
 );
 
+// Logout
+router.post(
+  '/logout',
+  requireAuth,
+  authController.logout
+);
+
 module.exports = router;
 

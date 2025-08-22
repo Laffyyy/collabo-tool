@@ -6,6 +6,10 @@ const cookieParser = require('cookie-parser');
 const routes = require('./routes');
 const { env } = require('./config');
 
+//Import route modules
+const securityQuestionsRoutes = require('./routes/v1/securityQuestions.routes');
+const passwordChangeRoutes = require('./routes/v1/passwordChange.routes');
+
 const app = express();
 
 // Core Middlewares
@@ -36,6 +40,10 @@ app.get('/health', (_req, res) => {
 
 // API Routes
 app.use('/api', routes);
+
+// V1 API Routes
+app.use('/api/v1/security-questions', securityQuestionsRoutes);
+app.use('/api/v1/password-change', passwordChangeRoutes);
 
 // 404 handler
 app.use((req, res, _next) => {

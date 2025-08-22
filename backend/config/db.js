@@ -1,7 +1,9 @@
 const { Pool } = require('pg');
+const postgres = require('postgres');
 
 // Database pool for connection reuse
 let pool = null;
+let sql = null;
 
 /**
  * Get PostgreSQL connection pool
@@ -16,6 +18,18 @@ function getPool() {
 }
 
 /**
+ * Get postgres SQL function for template literals
+ * @returns {Function} Postgres SQL function
+ */
+function getSql() {
+  if (!sql) {
+    const connectionString = process.env.DATABASE_URL;
+    sql = postgres(connectionString);
+  }
+  return sql;
+}
+
+/**
  * Close all database connections
  */
 function closePool() {
@@ -23,9 +37,19 @@ function closePool() {
     pool.end();
     pool = null;
   }
+  if (sql) {
+    sql.end();
+    sql = null;
+  }
 }
+
+// Export sql for models that use template literals
+const sqlInstance = getSql();
 
 module.exports = {
   getPool,
-  closePool
+  closePool,
+  get sql() {
+    return getSql();
+  }
 };
