@@ -335,7 +335,7 @@ async function forgotPassword({ username }) {
   }
 }
 
-// Update the sendPasswordResetEmail function (remove the require from inside)
+// Update the sendPasswordResetEmail function
 async function sendPasswordResetEmail(email, resetToken) {
   console.log(`=== EMAIL SENDING DEBUG ===`);
   console.log(`EMAIL_HOST: ${process.env.EMAIL_HOST}`);
@@ -353,8 +353,8 @@ async function sendPasswordResetEmail(email, resetToken) {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
     },
-    debug: true, // Enable debug output
-    logger: true // Log to console
+    debug: true,
+    logger: true
   });
 
   // Test the connection first
@@ -366,8 +366,8 @@ async function sendPasswordResetEmail(email, resetToken) {
     throw new Error('Email server connection failed');
   }
 
-  // Create reset link
-  const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+  // Create reset link pointing to security questions with token
+  const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/security-question?from=forgot-password&token=${resetToken}`;
   console.log(`Reset link: ${resetLink}`);
 
   const mailOptions = {

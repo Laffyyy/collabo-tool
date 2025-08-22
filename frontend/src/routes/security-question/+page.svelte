@@ -1,22 +1,35 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	
-	let securityQuestionText = $state("What was the name of your first pet?"); // This would come from API
-	let securityQuestionAnswer = $state('');
-	let securityQuestionIsLoading = $state(false);
-	let securityQuestionError = $state('');
-	let securityQuestionShowCancelModal = $state(false);
-	let securityQuestionAttempts = $state(0);
-	let securityQuestionMaxAttempts = $state(3);
-	let securityQuestionInput: HTMLInputElement | undefined;
-	
-	onMount(() => {
-		// Auto-focus the answer input
-		if (securityQuestionInput) {
-			securityQuestionInput.focus();
-		}
-	});
+    import { goto } from '$app/navigation';
+    import { onMount } from 'svelte';
+    
+    let securityQuestionText = $state("What was the name of your first pet?"); // This would come from API
+    let securityQuestionAnswer = $state('');
+    let securityQuestionIsLoading = $state(false);
+    let securityQuestionError = $state('');
+    let securityQuestionShowCancelModal = $state(false);
+    let securityQuestionAttempts = $state(0);
+    let securityQuestionMaxAttempts = $state(3);
+    let securityQuestionInput: HTMLInputElement | undefined;
+    let fromForgotPassword = $state(false);
+    let resetToken = $state('');
+    
+    onMount(() => {
+        // Check if coming from forgot password flow via URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        fromForgotPassword = urlParams.get('from') === 'forgot-password';
+        const tokenParam = urlParams.get('token');
+        
+        if (fromForgotPassword && tokenParam) {
+            resetToken = tokenParam;
+            // Store the token for the password change flow
+            localStorage.setItem('auth_resetToken', tokenParam);
+        }
+        
+        // Auto-focus the answer input
+        if (securityQuestionInput) {
+            securityQuestionInput.focus();
+        }
+    });
 	
 	const securityQuestionValidateInput = (value: string): string => {
 		// Only allow alphanumeric characters, specified symbols (! @ _ - .), and spaces
@@ -50,34 +63,39 @@
 		target.value = filteredText;
 	};
 	
-	const securityQuestionHandleSubmit = async () => {
-		if (!securityQuestionAnswer.trim()) {
-			securityQuestionError = 'Please provide an answer';
-			return;
-		}
-		
-		securityQuestionIsLoading = true;
-		securityQuestionError = '';
-		
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-		
-		// Simulate validation (in real app, this would be server-side)
-		const isCorrect = Math.random() > 0.3; // 70% success rate for demo
-		
-		if (isCorrect) {
-			goto('/change-password?from=forgot-password');
-		} else {
-			securityQuestionAttempts++;
-			if (securityQuestionAttempts >= securityQuestionMaxAttempts) {
-				securityQuestionError = 'Maximum attempts exceeded. Please contact support.';
-			} else {
-				securityQuestionError = `Incorrect answer. ${securityQuestionMaxAttempts - securityQuestionAttempts} attempts remaining.`;
-			}
-		}
-		
-		securityQuestionIsLoading = false;
-	};
+    const securityQuestionHandleSubmit = async () => {
+        if (!securityQuestionAnswer.trim()) {
+            securityQuestionError = 'Please provide an answer';
+            return;
+        }
+        
+        securityQuestionIsLoading = true;
+        securityQuestionError = '';
+        
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Simulate validation (in real app, this would be server-side)
+        const isCorrect = Math.random() > 0.3; // 70% success rate for demo
+        
+        if (isCorrect) {
+            if (fromForgotPassword) {
+                // Pass the token to the change password page
+                goto(`/change-password?from=forgot-password&token=${resetToken}`);
+            } else {
+                goto('/change-password?from=security-question');
+            }
+        } else {
+            securityQuestionAttempts++;
+            if (securityQuestionAttempts >= securityQuestionMaxAttempts) {
+                securityQuestionError = 'Maximum attempts exceeded. Please contact support.';
+            } else {
+                securityQuestionError = `Incorrect answer. ${securityQuestionMaxAttempts - securityQuestionAttempts} attempts remaining.`;
+            }
+        }
+        
+        securityQuestionIsLoading = false;
+    };
 	
 	const securityQuestionHandleCancel = () => {
 		securityQuestionShowCancelModal = true;

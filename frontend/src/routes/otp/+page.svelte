@@ -161,9 +161,17 @@
                     localStorage.removeItem('auth_username');
                     localStorage.removeItem('auth_tempPassword');
                     
+                    // Replace the existing redirect logic (around line 164-169)
                     // Redirect based on flow
                     if (otpFromForgotPassword) {
-                        goto('/reset-password');
+                        // Check if we have a reset token from the email link
+                        const resetToken = localStorage.getItem('auth_resetToken');
+                        if (resetToken) {
+                            // Store the token for the security question page
+                            localStorage.setItem('auth_activeResetToken', resetToken);
+                            localStorage.removeItem('auth_resetToken');
+                        }
+                        goto('/security-question');
                     } else {
                         goto('/chat');
                     }
