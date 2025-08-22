@@ -1,0 +1,136 @@
+// OU Management Service
+// This service handles all OU (Organizational Unit) related operations
+
+/**
+ * Get active OUs with pagination and sorting
+ * @param {number} howmany - Number of records per page
+ * @param {number} page - Page number
+ * @param {string} sort - Sort field and direction
+ * @returns {Object} - Paginated OU data
+ */
+async function getOU(howmany, page, sort) {
+    try {
+        // TODO: Implement database query to fetch active OUs
+        // This is a placeholder implementation
+        return {
+            data: [],
+            total: 0,
+            page: parseInt(page),
+            limit: parseInt(howmany),
+            totalPages: 0
+        };
+    } catch (error) {
+        throw new Error(`Failed to get OUs: ${error.message}`);
+    }
+}
+
+/**
+ * Get deactive OUs with pagination and sorting
+ * @param {number} howmany - Number of records per page
+ * @param {number} page - Page number
+ * @param {string} sort - Sort field and direction
+ * @returns {Object} - Paginated deactive OU data
+ */
+async function getDeactiveOU(howmany, page, sort) {
+    try {
+        // TODO: Implement database query to fetch deactive OUs
+        // This is a placeholder implementation
+        return {
+            data: [],
+            total: 0,
+            page: parseInt(page),
+            limit: parseInt(howmany),
+            totalPages: 0
+        };
+    } catch (error) {
+        throw new Error(`Failed to get deactive OUs: ${error.message}`);
+    }
+}
+
+/**
+ * Create a new OU
+ * @param {string} name - OU name
+ * @param {string} description - OU description
+ * @param {string} parentouid - Parent OU ID (optional)
+ * @param {Array} OUsettings - OU settings array
+ * @returns {Object} - Created OU data
+ */
+async function createOU(name, description, parentouid, OUsettings) {
+    try {
+        // TODO: Implement database query to create new OU
+        // This is a placeholder implementation
+        const newOU = {
+            id: Date.now().toString(), // Temporary ID generation
+            name,
+            description,
+            parentouid: parentouid || null,
+            OUsettings,
+            active: true,
+            createdAt: new Date().toISOString()
+        };
+        
+        return {
+            message: 'OU created successfully',
+            data: newOU
+        };
+    } catch (error) {
+        throw new Error(`Failed to create OU: ${error.message}`);
+    }
+}
+
+/**
+ * Deactivate an OU
+ * @param {string} id - OU ID to deactivate
+ * @returns {Object} - Deactivation result
+ */
+async function deactiveOU(id) {
+    try {
+        // TODO: Implement database query to deactivate OU
+        // This is a placeholder implementation
+        return {
+            message: 'OU deactivated successfully',
+            data: { id, active: false, deactivatedAt: new Date().toISOString() }
+        };
+    } catch (error) {
+        throw new Error(`Failed to deactivate OU: ${error.message}`);
+    }
+}
+
+/**
+ * Update an existing OU
+ * @param {string} id - OU ID to update
+ * @param {string} name - Updated OU name
+ * @param {string} description - Updated OU description
+ * @param {string} parentouid - Updated parent OU ID
+ * @param {Array} OUsettings - Updated OU settings array
+ * @returns {Object} - Updated OU data
+ */
+async function updateOU(id, name, description, parentouid, OUsettings) {
+    try {
+        // TODO: Implement database query to update OU
+        // This is a placeholder implementation
+        const updatedOU = {
+            id,
+            name,
+            description,
+            parentouid: parentouid || null,
+            OUsettings,
+            updatedAt: new Date().toISOString()
+        };
+        
+        return {
+            message: 'OU updated successfully',
+            data: updatedOU
+        };
+    } catch (error) {
+        throw new Error(`Failed to update OU: ${error.message}`);
+    }
+}
+
+module.exports = {
+    getOU,
+    getDeactiveOU,
+    createOU,
+    deactiveOU,
+    updateOU
+};
