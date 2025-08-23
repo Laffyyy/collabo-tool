@@ -85,6 +85,8 @@ async function verifyOtp(req, res, next) {
         role: result.user.role,
         username: result.user.username
       },
+      token: result.token,
+      sessionToken: result.sessionToken,
       message: 'Authentication successful'
     });
   } catch (err) {

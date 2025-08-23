@@ -149,14 +149,21 @@ onMount(() => {
                     ok: boolean;
                     user: {
                         id: string;
-                        name: string;
-                        email: string;
-                        role: string;
                         username: string;
+                        email: string;
+                        firstName: string;
+                        lastName: string;
+                        role: string;
                         mustChangePassword?: boolean;
+                        profilePhotoUrl?: string;
+                        organizationUnit?: string;
+                        onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
                     };
+                    token: string;
+                    sessionToken: string;
+                    refreshToken: string;
+                    expiresAt: string;
                     message: string;
-                    token?: string;
                 }>(
                     API_CONFIG.endpoints.auth.otp,
                     {
@@ -177,7 +184,7 @@ onMount(() => {
                             localStorage.setItem('firstTime_username', data.user.username);
                             localStorage.setItem('firstTime_email', data.user.email);
                             localStorage.setItem('firstTime_role', data.user.role);
-                            localStorage.setItem('firstTime_name', data.user.name);
+                            localStorage.setItem('firstTime_name', `${data.user.firstName} ${data.user.lastName}`);
                             
                             // Keep the temporary password if it exists (from registration)
                             const tempPassword = localStorage.getItem('auth_tempPassword');
@@ -197,13 +204,24 @@ onMount(() => {
                             return;
                         }
                         
-                        // For returning users, login normally
-                        // If your API returns a token/sessionToken, extract them here; otherwise, just pass the user
-                        // Assuming your login method expects (user, token, expiresAt)
+                        // For returning users, format user data correctly for the auth store
+                        const formattedUser = {
+                            id: data.user.id,
+                            username: data.user.username,
+                            email: data.user.email,
+                            role: data.user.role,
+                            firstName: data.user.firstName,
+                            lastName: data.user.lastName,
+                            organizationUnit: data.user.organizationUnit,
+                            onlineStatus: data.user.onlineStatus || 'online',
+                            profilePhoto: data.user.profilePhotoUrl
+                        };
+                        
+                        // Login with the properly formatted user data
                         $authStore.login(
-                            data.user,
-                            data.token || '', // Use the token from API response or empty string if not present
-                            (Date.now() + 60 * 60 * 1000).toString() // Example: 1 hour expiry, adjust as needed
+                            formattedUser,
+                            data.token,
+                            data.sessionToken
                         );
                         
                         // Clear OTP-related localStorage
@@ -216,9 +234,10 @@ onMount(() => {
                         // Wait a tick to ensure auth store is updated before navigation
                         await new Promise(resolve => setTimeout(resolve, 0));
                         
-                        // Redirect based on user role for returning users
-                        if (data.user?.role.toLowerCase() === 'admin') {
-                            goto('/admin');
+                        // Redirect based on user role
+                        console.log('Redirecting user with role:', data.user.role);
+                        if (data.user.role.toLowerCase() === 'admin') {
+                            goto('/admin/user-management');
                         } else {
                             goto('/chat');
                         }

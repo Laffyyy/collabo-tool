@@ -12,7 +12,7 @@
 <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-sm" 
      role="alert" 
      aria-live="polite">
-  {#if currentToast}
+  {#if currentToast && currentToast.id}
     <Toast 
       id={currentToast.id} 
       type={currentToast.type} 

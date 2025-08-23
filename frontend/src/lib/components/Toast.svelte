@@ -24,7 +24,7 @@
   onMount(() => {
     // Set a single timer for the dismissal
     timer = setTimeout(() => {
-      if (onDismiss) onDismiss(id);
+      if (onDismiss && id) onDismiss(id);
     }, duration);
   });
   
@@ -34,7 +34,7 @@
   
   function handleDismiss() {
     if (timer) clearTimeout(timer);
-    if (onDismiss) onDismiss(id);
+    if (onDismiss && id) onDismiss(id);
   }
   
   // Simple helper functions for styling

@@ -2,7 +2,7 @@
  * API configuration for different environments
  */
 export const API_CONFIG = {
-  baseUrl: 'http://localhost:5000',
+  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:5000',
   endpoints: {
     auth: {
       login: '/api/v1/auth/login', 
@@ -18,6 +18,13 @@ export const API_CONFIG = {
       profile: '/api/v1/user/profile',
       settings: '/api/v1/user/settings',
       presence: '/api/v1/user/presence'
+    },
+    admin: {
+      dashboard: '/api/v1/admin/dashboard',
+      users: '/api/v1/admin/users',
+      organizations: '/api/v1/admin/organizations',
+      config: '/api/v1/admin/config',
+      logs: '/api/v1/admin/logs'
     }
   }
 };

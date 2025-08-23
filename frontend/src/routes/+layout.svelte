@@ -4,8 +4,14 @@
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.svelte';
   	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import { onMount } from 'svelte';
 	
 	let { children } = $props();
+	
+	// Try to restore session on app load
+	onMount(() => {
+		$authStore.restoreSession();
+	});
 	
 	// Pages that should not show navigation
 	const noNavPages = ['/login', '/forgot-password', '/otp', '/security-question', '/change-password', '/first-time', '/chat'];

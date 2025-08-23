@@ -74,10 +74,12 @@ class AuthStore {
     this.token = token;
     this.sessionToken = sessionToken;
 
-    // Store tokens in cookies (handled by backend) and localStorage for app use
+    // Store tokens in localStorage for app use
     localStorage.setItem('auth_user', JSON.stringify(userData));
     localStorage.setItem('auth_token', token);
     localStorage.setItem('auth_session', sessionToken);
+    
+    console.log('User logged in with role:', userData.role);
   }
 
   logout() {
@@ -114,6 +116,7 @@ class AuthStore {
         this.isAuthenticated = true;
         this.token = token;
         this.sessionToken = sessionToken;
+        console.log('Session restored for user:', user.username, 'role:', user.role);
         return true;
       }
     } catch (error) {
