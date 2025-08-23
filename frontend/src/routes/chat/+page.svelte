@@ -1578,6 +1578,7 @@
 									{#if conversation.type === 'group'}
 										<GroupAvatar 
 											members={conversation.members || []} 
+											groupName={conversation.name}
 											size="sm" 
 											showOnlineStatus={false}
 										/>
@@ -1658,6 +1659,7 @@
 									{#if conversation.type === 'group'}
 										<GroupAvatar 
 											members={conversation.members || []} 
+											groupName={conversation.name}
 											size="sm" 
 											showOnlineStatus={false}
 										/>
@@ -1744,6 +1746,7 @@
 						{#if currentConversation.type === 'group'}
 							<GroupAvatar 
 								members={currentConversation.members || []} 
+								groupName={currentConversation.name}
 								size="sm" 
 								showOnlineStatus={false}
 							/>
@@ -1770,11 +1773,11 @@
 								}}
 								class="hover:scale-105 transition-transform duration-200 rounded-full"
 							>
-								<img
-									src={currentConversation.avatar || "/placeholder.svg"}
-									alt={currentConversation.name}
-									class="w-8 h-8 rounded-full"
-								/>
+								{#if currentConversation?.type !== 'direct'}
+									<GroupAvatar members={currentConversation?.members || []} groupName={currentConversation?.name || ''} size="sm" />
+								{:else}
+									<ProfileAvatar user={{ name: currentConversation?.name || 'User' }} size="sm" showOnlineStatus={false} />
+								{/if}
 							</button>
 						{/if}
 						<div 
@@ -2083,12 +2086,7 @@
 												</div>
 												
 												{#if message.senderId === '1'}
-													<img
-														src="/placeholder.svg"
-														alt=""
-														class="w-6 h-6 rounded-full mt-1"
-														loading="eager"
-													/>
+													<ProfileAvatar user={{ name: 'Current User' }} size="sm" showOnlineStatus={false} />
 												{/if}
 											</div>
 										</div>
@@ -2565,15 +2563,12 @@
 							{#if currentConversation?.type === 'group'}
 								<GroupAvatar 
 									members={currentConversation.members || []} 
+									groupName={currentConversation.name}
 									size="xl" 
 									showOnlineStatus={false}
 								/>
 							{:else}
-								<img
-									src={currentConversation?.avatar || "/placeholder.svg"}
-									alt="Group avatar"
-									class="w-16 h-16 rounded-full object-cover"
-								/>
+								<GroupAvatar members={currentConversation?.members || []} groupName={currentConversation?.name || ''} size="xl" />
 							{/if}
 							<button 
 								class="absolute -bottom-1 -right-1 w-8 h-8 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm hover:bg-[#00a085] transition-colors shadow-lg"
@@ -3124,9 +3119,11 @@
 		aria-labelledby="reaction-modal-title"
 		tabindex="-1"
 	>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div 
 			class="bg-white rounded-lg shadow-xl w-96 max-h-96 overflow-hidden" 
-			role="document"
+			role="dialog"
+			tabindex="0"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
@@ -3218,9 +3215,11 @@
 		aria-labelledby="forward-modal-title"
 		tabindex="-1"
 	>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div 
 			class="bg-white rounded-lg shadow-xl w-96 max-h-96 overflow-hidden" 
-			role="document"
+			role="dialog"
+			tabindex="0"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
@@ -3252,6 +3251,7 @@
 								{#if conversation.type === 'group'}
 									<GroupAvatar 
 										members={conversation.members || []} 
+										groupName={conversation.name}
 										size="sm" 
 										showOnlineStatus={false}
 									/>
@@ -3324,9 +3324,11 @@
 		aria-labelledby="file-permission-modal-title"
 		tabindex="-1"
 	>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div 
 			class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden" 
-			role="document"
+			role="dialog"
+			tabindex="0"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
