@@ -11,7 +11,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 // Create conversation
-router.post('/conversations', validateCreateConversation, chatController.createConversation);
+router.post('/conversations', validateCreateConversation, chatController.createConversation, chatController.getUSerConversations);
 
 // Add message
 router.post('/messages', validateAddMessage, chatController.addMessage);

@@ -26,3 +26,13 @@ exports.getMessagesByConversation = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getUserConversations = async (req, res, next) => {
+  try {
+    const userId = req.user.id; // or however you get the authenticated user's ID
+    const conversations = await chatService.getUserConversations(userId);
+    res.json(conversations);
+  } catch (err) {
+    next(err);
+  }
+};

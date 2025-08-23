@@ -683,14 +683,18 @@
 		}
 	};
 
+	let currentUserId: string | null = null;
+if (typeof window !== 'undefined') {
+  currentUserId = localStorage.getItem('auth_userId');
+}
+
 const createGroup = async () => {
-  if (!groupName.trim() || selectedUsers.length === 0) return;
+  console.log('Create Group clicked', { groupName, selectedUsers, currentUserId });
+  if (!groupName.trim() || selectedUsers.length === 0 || !currentUserId) return;
   try {
-    // Use the current user's UUID for dcreatedBy
-    const dcreatedBy = currentUser.id; // <-- Make sure this is set
+    const dcreatedBy = currentUserId;
     const dname = groupName;
     const dtype = "group";
-    // Call your backend
     const newGroup = await createConversation({ dname, dtype, dcreatedBy });
     groupChats = [...groupChats, newGroup];
     showCreateGroup = false;
