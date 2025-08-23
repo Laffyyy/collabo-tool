@@ -329,6 +329,394 @@ class UserModel {
 
     return formatted;
   }
+
+  /**
+   * Get all users with filtering and pagination for user management
+   * @param {Object} filters - Filter criteria
+   * @param {Object} pagination - Pagination options
+   * @returns {Promise<Object>} Users with pagination info
+   */
+  async getAllUsers(filters = {}, pagination = {}) {
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = 'dfirstname',
+      sortOrder = 'asc'
+    } = pagination;
+
+    const offset = (page - 1) * limit;
+    const whereConditions = [];
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Build WHERE conditions
+    if (filters.search) {
+      whereConditions.push(`(
+        dusername ILIKE $${paramIndex} OR 
+        dfirstname ILIKE $${paramIndex} OR 
+        dlastname ILIKE $${paramIndex} OR 
+        demail ILIKE $${paramIndex} OR
+        demployeeid ILIKE $${paramIndex}
+      )`);
+      queryParams.push(`%${filters.search}%`);
+      paramIndex++;
+    }
+
+    if (filters.ou) {
+      whereConditions.push(`dou = $${paramIndex}`);
+      queryParams.push(filters.ou);
+      paramIndex++;
+    }
+
+    if (filters.role) {
+      whereConditions.push(`drole = $${paramIndex}`);
+      queryParams.push(filters.role);
+      paramIndex++;
+    }
+
+    if (filters.status) {
+      whereConditions.push(`daccountstatus = $${paramIndex}`);
+      queryParams.push(filters.status);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Validate sort column
+    const validSortColumns = ['demployeeid', 'dfirstname', 'dlastname', 'demail', 'dou', 'drole', 'daccountstatus'];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'dfirstname';
+    const sortDirection = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+
+    // Count query
+    const countQuery = `SELECT COUNT(*) as total FROM tblusers ${whereClause}`;
+    
+    // Data query
+    const dataQuery = `
+      SELECT * FROM tblusers 
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortDirection}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(limit, offset);
+
+    const [countResult, dataResult] = await Promise.all([
+      this.pool.query(countQuery, queryParams.slice(0, -2)),
+      this.pool.query(dataQuery, queryParams)
+    ]);
+
+    const totalUsers = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(totalUsers / limit);
+
+    return {
+      users: dataResult.rows.map(user => this.formatUser(user)),
+      currentPage: page,
+      totalPages,
+      totalUsers,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1
+    };
+  }
+
+  /**
+   * Get user by employee ID or email
+   * @param {string} employeeId - Employee ID
+   * @param {string} email - Email address
+   * @returns {Promise<Object|null>} User object or null
+   */
+  async getUserByEmployeeIdOrEmail(employeeId, email) {
+    const query = 'SELECT * FROM tblusers WHERE demployeeid = $1 OR demail = $2';
+    const result = await this.pool.query(query, [employeeId, email]);
+    
+    return result.rows.length > 0 ? this.formatUser(result.rows[0]) : null;
+  }
+
+  /**
+   * Create user for user management
+   * @param {Object} userData - User data
+   * @returns {Promise<Object>} Created user
+   */
+  async createUser(userData) {
+    const {
+      employeeId,
+      name,
+      email,
+      ou,
+      role,
+      supervisorId,
+      managerId,
+      passwordHash,
+      status,
+      type,
+      mustChangePassword
+    } = userData;
+
+    // Split name into first and last name
+    const nameParts = name.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    const query = `
+      INSERT INTO tblusers (
+        demployeeid, dusername, demail, dpasswordhash, dfirstname, dlastname,
+        dou, drole, dsupervisorid, dmanagerid, daccountstatus, dtype,
+        dmustchangepassword, tcreatedat, tupdatedat
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+      RETURNING *
+    `;
+
+    const values = [
+      employeeId,
+      email, // Use email as username for now
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      ou,
+      role,
+      supervisorId,
+      managerId,
+      status,
+      type,
+      mustChangePassword
+    ];
+
+    const result = await this.pool.query(query, values);
+    return this.formatUserForManagement(result.rows[0]);
+  }
+
+  /**
+   * Update user for user management
+   * @param {string} id - User ID
+   * @param {Object} updates - Update data
+   * @returns {Promise<Object>} Updated user
+   */
+  async updateUser(id, updates) {
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (updates.name) {
+      const nameParts = updates.name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      updateFields.push(`dfirstname = $${paramIndex++}`, `dlastname = $${paramIndex++}`);
+      values.push(firstName, lastName);
+    }
+
+    if (updates.email) {
+      updateFields.push(`demail = $${paramIndex++}`, `dusername = $${paramIndex++}`);
+      values.push(updates.email, updates.email);
+    }
+
+    if (updates.ou !== undefined) {
+      updateFields.push(`dou = $${paramIndex++}`);
+      values.push(updates.ou);
+    }
+
+    if (updates.role) {
+      updateFields.push(`drole = $${paramIndex++}`);
+      values.push(updates.role);
+    }
+
+    if (updates.supervisorId !== undefined) {
+      updateFields.push(`dsupervisorid = $${paramIndex++}`);
+      values.push(updates.supervisorId);
+    }
+
+    if (updates.managerId !== undefined) {
+      updateFields.push(`dmanagerid = $${paramIndex++}`);
+      values.push(updates.managerId);
+    }
+
+    if (updates.status) {
+      updateFields.push(`daccountstatus = $${paramIndex++}`);
+      values.push(updates.status);
+    }
+
+    if (updateFields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    updateFields.push(`tupdatedat = NOW()`);
+    values.push(id);
+
+    const query = `
+      UPDATE tblusers 
+      SET ${updateFields.join(', ')}
+      WHERE did = $${paramIndex}
+      RETURNING *
+    `;
+
+    const result = await this.pool.query(query, values);
+    return result.rows.length > 0 ? this.formatUserForManagement(result.rows[0]) : null;
+  }
+
+  /**
+   * Update user password for management
+   * @param {string} id - User ID
+   * @param {string} hashedPassword - Hashed password
+   * @param {boolean} requirePasswordChange - Require password change
+   * @returns {Promise<boolean>} Success status
+   */
+  async updatePassword(id, hashedPassword, requirePasswordChange = false) {
+    const query = `
+      UPDATE tblusers 
+      SET dpasswordhash = $1, dmustchangepassword = $2, tupdatedat = NOW()
+      WHERE did = $3
+    `;
+
+    const result = await this.pool.query(query, [hashedPassword, requirePasswordChange, id]);
+    return result.rowCount > 0;
+  }
+
+  /**
+   * Update user status
+   * @param {string} id - User ID
+   * @param {string} status - New status
+   * @returns {Promise<boolean>} Success status
+   */
+  async updateUserStatus(id, status) {
+    const query = `
+      UPDATE tblusers 
+      SET daccountstatus = $1, tupdatedat = NOW()
+      WHERE did = $2
+    `;
+
+    const result = await this.pool.query(query, [status, id]);
+    return result.rowCount > 0;
+  }
+
+  /**
+   * Bulk update user status
+   * @param {Array} userIds - Array of user IDs
+   * @param {string} status - New status
+   * @returns {Promise<Object>} Result with affected rows
+   */
+  async bulkUpdateStatus(userIds, status) {
+    if (!userIds || userIds.length === 0) {
+      return { affectedRows: 0 };
+    }
+
+    const placeholders = userIds.map((_, index) => `$${index + 2}`).join(',');
+    const query = `
+      UPDATE tblusers 
+      SET daccountstatus = $1, tupdatedat = NOW()
+      WHERE did IN (${placeholders})
+    `;
+
+    const result = await this.pool.query(query, [status, ...userIds]);
+    return { affectedRows: result.rowCount };
+  }
+
+  /**
+   * Get users by role
+   * @param {string} role - Role name
+   * @param {Object} filters - Additional filters
+   * @returns {Promise<Array>} Array of users
+   */
+  async getUsersByRole(role, filters = {}) {
+    const whereConditions = ['drole = $1', 'daccountstatus = $2'];
+    const queryParams = [role, 'Active'];
+    let paramIndex = 3;
+
+    if (filters.ou) {
+      whereConditions.push(`dou = $${paramIndex}`);
+      queryParams.push(filters.ou);
+      paramIndex++;
+    }
+
+    const query = `
+      SELECT * FROM tblusers 
+      WHERE ${whereConditions.join(' AND ')}
+      ORDER BY dfirstname, dlastname
+    `;
+
+    const result = await this.pool.query(query, queryParams);
+    return result.rows.map(user => this.formatUserForManagement(user));
+  }
+
+  /**
+   * Get manager's team
+   * @param {string} managerId - Manager ID
+   * @returns {Promise<Array>} Array of team members
+   */
+  async getManagerTeam(managerId) {
+    const query = `
+      SELECT * FROM tblusers 
+      WHERE dmanagerid = $1 AND daccountstatus = $2
+      ORDER BY drole DESC, dfirstname, dlastname
+    `;
+
+    const result = await this.pool.query(query, [managerId, 'Active']);
+    return result.rows.map(user => this.formatUserForManagement(user));
+  }
+
+  /**
+   * Get supervisor's team
+   * @param {string} supervisorId - Supervisor ID
+   * @returns {Promise<Array>} Array of team members
+   */
+  async getSupervisorTeam(supervisorId) {
+    const query = `
+      SELECT * FROM tblusers 
+      WHERE dsupervisorid = $1 AND daccountstatus = $2
+      ORDER BY drole, dfirstname, dlastname
+    `;
+
+    const result = await this.pool.query(query, [supervisorId, 'Active']);
+    return result.rows.map(user => this.formatUserForManagement(user));
+  }
+
+  /**
+   * Get user by ID for management
+   * @param {string} id - User ID
+   * @returns {Promise<Object|null>} User object or null
+   */
+  async getUserById(id) {
+    const query = 'SELECT * FROM tblusers WHERE did = $1';
+    const result = await this.pool.query(query, [id]);
+    
+    return result.rows.length > 0 ? this.formatUserForManagement(result.rows[0]) : null;
+  }
+
+  /**
+   * Get user by email for management
+   * @param {string} email - Email address
+   * @returns {Promise<Object|null>} User object or null
+   */
+  async getUserByEmail(email) {
+    const query = 'SELECT * FROM tblusers WHERE demail = $1';
+    const result = await this.pool.query(query, [email]);
+    
+    return result.rows.length > 0 ? this.formatUserForManagement(result.rows[0]) : null;
+  }
+
+  /**
+   * Format user for management interface
+   * @param {Object} user - Raw user object from database
+   * @returns {Object} Formatted user object for management
+   */
+  formatUserForManagement(user) {
+    if (!user) return null;
+
+    return {
+      id: user.did,
+      employeeId: user.demployeeid,
+      name: `${user.dfirstname} ${user.dlastname}`.trim(),
+      email: user.demail,
+      ou: user.dou,
+      role: user.drole,
+      status: user.daccountstatus,
+      type: user.dtype || (user.drole === 'Admin' ? 'admin' : 'user'),
+      supervisorId: user.dsupervisorid,
+      managerId: user.dmanagerid,
+      mustChangePassword: user.dmustchangepassword,
+      createdAt: user.tcreatedat,
+      updatedAt: user.tupdatedat
+    };
+  }
 }
 
 module.exports = UserModel;

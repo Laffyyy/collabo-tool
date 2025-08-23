@@ -4,6 +4,7 @@
     import { page } from '$app/stores';
     import { apiClient } from '$lib/api/client';
     import { API_CONFIG } from '$lib/api/config';
+    import { authStore } from '$lib/stores/auth.svelte';
     import type { OtpVerificationResponse, LoginResponse } from '$lib/api/types';
     
     let otpValues = $state(['', '', '', '', '', '']);
@@ -23,7 +24,7 @@
     let otpTimerInterval: ReturnType<typeof setInterval>;
     let otpResendTimerInterval: ReturnType<typeof setInterval>;
     
-    onMount(() => {
+onMount(() => {
         // Check if coming from forgot password
         const urlParams = new URLSearchParams(window.location.search);
         otpFromForgotPassword = urlParams.get('from') === 'forgot-password';
@@ -126,53 +127,136 @@
     };
     
         const otpHandleSubmit = async () => {
-            if (otpValues.every(val => val !== '') && !otpIsExpired) {
-                otpIsLoading = true;
-                otpError = '';
+        if (otpValues.every(val => val !== '') && !otpIsExpired) {
+            otpIsLoading = true;
+            otpError = '';
+            
+            const otpCode = otpValues.join('');
+            
+            try {
+                const username = localStorage.getItem('auth_username');
+                const userId = localStorage.getItem('auth_userId');
                 
-                const otpCode = otpValues.join('');
+                console.log('Submitting OTP with:', { username, userId, otpCode });
                 
-                try {
-                    // Get stored username and userId from localStorage 
-                    const username = localStorage.getItem('auth_username');
-                    const userId = localStorage.getItem('auth_userId');
-                    
-                    if (!username || !userId) {
-                        otpError = 'Session expired. Please log in again.';
-                        otpIsLoading = false;
-                        return;
-                    }
-                    
-                    // Use the API client instead of direct fetch
-                    const data = await apiClient.post<OtpVerificationResponse>(
+                if (!username || !userId) {
+                    otpError = 'Session expired. Please log in again.';
+                    otpIsLoading = false;
+                    return;
+                }
+
+                const data = await apiClient.post<{
+                    ok: boolean;
+                    user: {
+                        id: string;
+                        username: string;
+                        email: string;
+                        firstName: string;
+                        lastName: string;
+                        role: string;
+                        mustChangePassword?: boolean;
+                        profilePhotoUrl?: string;
+                        organizationUnit?: string;
+                        onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
+                    };
+                    token: string;
+                    sessionToken: string;
+                    refreshToken: string;
+                    expiresAt: string;
+                    message: string;
+                }>(
                     API_CONFIG.endpoints.auth.otp,
                     {
                         username,
                         userId,
                         otp: otpCode
                     }
-                    );
-                    
-                    // Handle success
-                    // Clear localStorage
-                    localStorage.removeItem('auth_userId');
-                    localStorage.removeItem('auth_userEmail');
-                    localStorage.removeItem('auth_otpExpiresAt');
-                    localStorage.removeItem('auth_username');
-                    localStorage.removeItem('auth_tempPassword');
-                    
-                    // Redirect based on flow
-                    if (otpFromForgotPassword) {
-                        goto('/reset-password');
+                );
+                
+                console.log('OTP verification response:', data);
+                
+                if (data.ok) {
+                    if (data.user) {
+                        // For first-time users (mustChangePassword = true), store data for security question setup
+                        if (data.user?.mustChangePassword) {
+                            // Store user data in localStorage for the first-time setup flow
+                            localStorage.setItem('firstTime_userId', data.user.id);
+                            localStorage.setItem('firstTime_username', data.user.username);
+                            localStorage.setItem('firstTime_email', data.user.email);
+                            localStorage.setItem('firstTime_role', data.user.role);
+                            localStorage.setItem('firstTime_name', `${data.user.firstName} ${data.user.lastName}`);
+                            
+                            // Keep the temporary password if it exists (from registration)
+                            const tempPassword = localStorage.getItem('auth_tempPassword');
+                            if (tempPassword) {
+                                localStorage.setItem('firstTime_tempPassword', tempPassword);
+                            }
+                            
+                            // Clear OTP-related localStorage
+                            localStorage.removeItem('auth_userId');
+                            localStorage.removeItem('auth_userEmail');
+                            localStorage.removeItem('auth_otpExpiresAt');
+                            localStorage.removeItem('auth_username');
+                            localStorage.removeItem('auth_tempPassword');
+                            
+                            // Redirect to first-time security question setup
+                            goto('/first-time');
+                            return;
+                        }
+                        
+                        // For returning users, format user data correctly for the auth store
+                        const formattedUser = {
+                            id: data.user.id,
+                            username: data.user.username,
+                            email: data.user.email,
+                            role: data.user.role,
+                            firstName: data.user.firstName,
+                            lastName: data.user.lastName,
+                            organizationUnit: data.user.organizationUnit,
+                            onlineStatus: data.user.onlineStatus || 'online',
+                            profilePhoto: data.user.profilePhotoUrl
+                        };
+                        
+                        // Login with the properly formatted user data
+                        $authStore.login(
+                            formattedUser,
+                            data.token,
+                            data.sessionToken
+                        );
+                        
+                        // Clear OTP-related localStorage
+                        localStorage.removeItem('auth_userId');
+                        localStorage.removeItem('auth_userEmail');
+                        localStorage.removeItem('auth_otpExpiresAt');
+                        localStorage.removeItem('auth_username');
+                        localStorage.removeItem('auth_tempPassword');
+                        
+                        // Wait a tick to ensure auth store is updated before navigation
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                        
+                        // Redirect based on user role
+                        console.log('Redirecting user with role:', data.user.role);
+                        if (data.user.role.toLowerCase() === 'admin') {
+                            goto('/admin/user-management');
+                        } else {
+                            goto('/chat');
+                        }
                     } else {
-                        goto('/chat');
+                        otpError = 'Invalid user data received. Please try again.';
+                        otpIsLoading = false;
+                        return;
                     }
-                } catch (error: any) {
-                    otpError = error.message || 'Invalid OTP';
+                } else {
+                    otpError = data.message || 'Invalid OTP';
                     otpIsLoading = false;
                 }
+            } catch (error: any) {
+                console.error('OTP verification error:', error);
+                otpError = error.message || 'Connection error. Please try again.';
+                otpIsLoading = false;
             }
-        };
+        }
+    };
     
         const otpHandleResend = async () => {
             // Only allow resend if resend timer has reached zero

@@ -83,4 +83,21 @@ router.post(
   authController.answerSecurityQuestions
 );
 
+// Logout
+router.post(
+  '/logout',
+  requireAuth,
+  authController.logout
+);
+
+// Validate Session
+router.get(
+  '/validate-session',
+  requireAuth,  // This middleware will check if the session is valid
+  (req, res) => {
+    // If requireAuth passes, session is valid
+    res.status(200).json({ valid: true });
+  }
+);
+
 module.exports = router;

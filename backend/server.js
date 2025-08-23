@@ -10,6 +10,7 @@ const server = http.createServer(app);
 
 server.listen(port, () => {
   console.log(`[backend] listening on http://localhost:${port}`);
+  console.log(`[backend] CORS origins:`, env.CORS_ORIGIN);
 });
 
 server.on('error', (error) => {
