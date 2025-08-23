@@ -12,8 +12,17 @@ async function getOU(req, res, next) {
 
 async function getDeactiveOU(req, res, next) {
     try {
+        const result = await oumanegamentService.getDeactiveOU();
+        res.status(200).json({ ok: true, ...result });
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function getDeactiveOUList(req, res, next) {
+    try {       
         const { howmany, page, sort } = req.query;
-        const result = await oumanegamentService.getDeactiveOU(howmany, page, sort);
+        const result = await oumanegamentService.getDeactiveOUList(howmany, page, sort);
         res.status(200).json({ ok: true, ...result });
     } catch (err) {
         next(err);
@@ -53,6 +62,7 @@ async function updateOU(req, res, next) {
 module.exports = {
     getOU,
     getDeactiveOU,
+    getDeactiveOUList,
     createOUmanager,
     deactiveOU,
     updateOU

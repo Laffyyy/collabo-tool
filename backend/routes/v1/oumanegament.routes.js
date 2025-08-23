@@ -1,28 +1,34 @@
 const { Router } = require('express');
 const OUmanagerController = require('../../controllers/oumanegament.controller');
 const { validate } = require('../../utils/validate');
-const { body, query } = require('express-validator');
+const { body } = require('express-validator');
 
 const router = Router();
 
 router.get(
     '/',
-    [query('howmany').isInt().notEmpty(),
-    query('page').isInt().notEmpty(),
-    query('sort').isString().notEmpty(),
+    [body('howmany').isInt().notEmpty(),
+    body('page').isInt().notEmpty(),
+    body('sort').isString().notEmpty(),
     ],
     validate,
     OUmanagerController.getOU
 )
-
 router.get(
     '/deactive',
-    [query('howmany').isInt().notEmpty(),
-    query('page').isInt().notEmpty(),
-    query('sort').isString().notEmpty(),
-    ],
+    [],
     validate,
     OUmanagerController.getDeactiveOU
+)
+
+router.get(
+    '/deactive/list',
+    [body('howmany').isInt().notEmpty(),
+    body('page').isInt().notEmpty(),
+    body('sort').isString().notEmpty(),
+    ],
+    validate,
+    OUmanagerController.getDeactiveOUList
 )
 
 router.post(
