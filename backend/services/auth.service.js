@@ -95,6 +95,7 @@ async function generateAndSendOtp(email) {
     // Send OTP via email
     await sendOtpEmail(email, otpData.code);
     console.log(`OTP sent to ${email}`);
+    console.log(`🔑 DEVELOPMENT MODE: OTP CODE: ${otpData.code}`);
   } catch (error) {
     console.error('Failed to send OTP email:', error);
     // Log but don't throw so authentication can still proceed
