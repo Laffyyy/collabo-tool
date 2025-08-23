@@ -4,7 +4,7 @@ const chatRoutes = require('./v1/chat.routes');
 
 const router = Router();
 
-router.use('/auth', authRoutes);
+router.use('/v1/auth', authRoutes);
 router.use('/chat', chatRoutes);
 
 module.exports = router;

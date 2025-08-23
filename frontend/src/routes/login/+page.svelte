@@ -4,10 +4,15 @@
 	import LoginBackground from './LoginBackground.svelte';
 	import LoginHeader from './LoginHeader.svelte';
 	import { onMount } from 'svelte';
+	import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
+    import type { LoginResponse } from '$lib/api/types';
 	
-	let loginUsername = $state('');
-	let loginPassword = $state('');
-	let loginShowPassword = $state(false);
+   	let loginUsername = $state('');
+    let loginPassword = $state('');
+    let loginShowPassword = $state(false);
+    let loginIsLoading = $state(false);
+    let loginError = $state('');
 	
 	// Forgot password modal state
 	let showForgotPasswordModal = $state(false);
@@ -17,11 +22,39 @@
 	let forgotPasswordSuccess = $state(false);
 	let forgotPasswordEmailInput: HTMLInputElement | undefined;
 	
-	const handleLoginSubmit = (event: Event) => {
-		event.preventDefault();
-		// Navigate to OTP page after successful login
-		goto('/otp');
-	};
+	const handleLoginSubmit = async (event: Event) => {
+        event.preventDefault();
+        loginIsLoading = true;
+        loginError = '';
+        
+        try {
+            // Use the API client instead of direct fetch
+            const data = await apiClient.post<LoginResponse>(
+                API_CONFIG.endpoints.auth.login,
+                {
+                    username: loginUsername,
+                    password: loginPassword
+                }
+            );
+            
+            // Store info needed for OTP verification
+            localStorage.setItem('auth_userId', data.userId);
+            localStorage.setItem('auth_userEmail', data.email);
+            localStorage.setItem('auth_username', data.username || loginUsername);
+            localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
+            
+            // Set OTP expiry time (5 minutes from now)
+            const expiryTime = Date.now() + (5 * 60 * 1000);
+            localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+            
+            // Navigate to OTP verification page
+            goto('/otp');
+        } catch (error: any) {
+            loginError = error.message || 'Invalid credentials';
+        } finally {
+            loginIsLoading = false;
+        }
+    };
 	
 	const toggleLoginPasswordVisibility = () => {
 		loginShowPassword = !loginShowPassword;
@@ -178,6 +211,8 @@
 				bind:loginUsername
 				bind:loginPassword
 				bind:loginShowPassword
+				isLoading={loginIsLoading}
+				error={loginError}
 				onSubmit={handleLoginSubmit}
 				onTogglePassword={toggleLoginPasswordVisibility}
 				onForgotPassword={openForgotPasswordModal}

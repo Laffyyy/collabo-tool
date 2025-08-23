@@ -3,7 +3,7 @@ const http = require('http');
 const app = require('./app');
 const { env } = require('./config');
 
-const port = Number(env.PORT || 4000);
+const port = Number(env.PORT || 5000);
 app.set('port', port);
 
 const server = http.createServer(app);
