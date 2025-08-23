@@ -10,8 +10,18 @@
     Download,
     FileText,
     Search,
-    Filter
+    Filter,
+    ChevronDown
   } from 'lucide-svelte';
+  import { onMount } from 'svelte';
+  import { apiClient } from '$lib/api/client';
+  import * as BroadcastAPI from '$lib/api/broadcast';
+  import type { 
+    OrganizationalUnit, 
+    Role, 
+    CreateBroadcastRequest 
+  } from '$lib/api/types';
+  import { API_CONFIG } from '$lib/api/config';
 
   // Type definitions
   interface Acknowledgment {
@@ -218,6 +228,13 @@
     choices: [''] as string[]
   });
 
+  let availableOUs = $state<OrganizationalUnit[]>([]);
+  let availableRoles = $state<Role[]>([]);
+  let isLoadingOUs = $state(false);
+  let isLoadingRoles = $state(false);
+  let isCreatingBroadcast = $state(false);
+  let apiError = $state('');
+
   const roles = ['admin', 'manager', 'supervisor', 'support', 'frontline'];
   const priorities = [
     { value: 'low', label: 'Low', color: 'text-green-600 bg-green-100' },
@@ -361,32 +378,84 @@
     }
   };
 
-  const createBroadcast = () => {
-    if (newBroadcast.title.trim() && newBroadcast.content.trim()) {
-      const broadcast: Broadcast = {
-        id: Date.now().toString(),
-        title: newBroadcast.title.trim(),
-        content: newBroadcast.content.trim(),
-        priority: newBroadcast.priority,
-        targetRoles: newBroadcast.targetRoles,
-        targetOUs: newBroadcast.targetOUs.length > 0 ? newBroadcast.targetOUs : [activeTab === 'My Broadcasts' ? 'HR' : activeTab],
-        createdBy: currentUser.id,
-        createdAt: new Date(),
-        scheduledFor: newBroadcast.scheduleType === 'pick' && newBroadcast.scheduledFor ? new Date(newBroadcast.scheduledFor) : undefined,
-        requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
-        responseType: newBroadcast.acknowledgmentType,
-        choices: newBroadcast.acknowledgmentType === 'choices' ? newBroadcast.choices.filter(choice => choice.trim()) : undefined,
-        eventDate: newBroadcast.scheduleType === 'pick' && newBroadcast.eventDate ? new Date(newBroadcast.eventDate) : undefined,
-        endDate: newBroadcast.endDate ? new Date(newBroadcast.endDate) : undefined,
-        acknowledgments: [],
-        isActive: true
-      };
+  // Load OUs and roles when the component is mounted
+  onMount(async () => {
+    try {
+      isLoadingOUs = true;
+      isLoadingRoles = true;
+      
+      const [ousResponse, rolesResponse] = await Promise.all([
+        BroadcastAPI.getOrganizationalUnits(),
+        BroadcastAPI.getRoles()
+      ]);
+      
+      availableOUs = ousResponse.organizationalUnits || [];
+      availableRoles = rolesResponse.roles || [];
+      
+      console.log('Loaded OUs:', availableOUs);
+      console.log('Loaded Roles:', availableRoles);
+    } catch (error) {
+      console.error('Failed to load broadcast targeting options:', error);
+      apiError = 'Failed to load organizational units and roles. Please refresh the page.';
+    } finally {
+      isLoadingOUs = false;
+      isLoadingRoles = false;
+    }
+  });
 
-      broadcasts = [broadcast, ...broadcasts];
-      
-      closeCreateModal();
-      
-      alert('Broadcast created successfully!');
+  const createBroadcast = async () => {
+    if (newBroadcast.title.trim() && newBroadcast.content.trim()) {
+      try {
+        isCreatingBroadcast = true;
+        apiError = '';
+        
+        const broadcastData: CreateBroadcastRequest = {
+          title: newBroadcast.title.trim(),
+          content: newBroadcast.content.trim(),
+          priority: newBroadcast.priority,
+          targetRoles: newBroadcast.targetRoles,
+          targetOUs: newBroadcast.targetOUs,
+          responseType: newBroadcast.acknowledgmentType,
+          requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none'
+        };
+        
+        console.log('Sending broadcast data to API:', broadcastData);
+        
+        const response = await BroadcastAPI.createBroadcast(broadcastData);
+        
+        if (response.ok) {
+          // Add the new broadcast to the local state
+          const createdBroadcast = response.broadcast;
+          broadcasts = [
+            {
+              id: createdBroadcast.id,
+              title: createdBroadcast.title,
+              content: createdBroadcast.content,
+              priority: createdBroadcast.priority as 'low' | 'medium' | 'high',
+              targetRoles: newBroadcast.targetRoles,
+              targetOUs: newBroadcast.targetOUs,
+              createdBy: currentUser.id,
+              createdAt: new Date(),
+              requiresAcknowledgment: createdBroadcast.requiresAcknowledgment,
+              responseType: createdBroadcast.responseType as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
+              choices: createdBroadcast.choices,
+              acknowledgments: [],
+              isActive: true
+            },
+            ...broadcasts
+          ];
+          
+          closeCreateModal();
+          alert('Broadcast created successfully!');
+        } else {
+          throw new Error(response.message || 'Failed to create broadcast');
+        }
+      } catch (error: any) {
+        console.error('Error creating broadcast:', error);
+        apiError = error.message || 'An error occurred while creating the broadcast';
+      } finally {
+        isCreatingBroadcast = false;
+      }
     }
   };
 
@@ -692,97 +761,95 @@
                 <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">2</span>
                 Target Audience
               </h3>
-              
-              <div class="space-y-4">
-                <div>
-                  <label for="ou-selector" class="block text-sm font-medium text-gray-700 mb-2">Organizational Units *</label>
-                  <div class="relative">
-                    <button
-                      type="button"
-                      id="ou-selector"
-                      onclick={() => showOUDropdown = !showOUDropdown}
-                      class="input-field w-full text-left flex items-center justify-between"
-                    >
-                      <span class="truncate">
-                        {#if newBroadcast.targetOUs.length === 0}
-                          <span class="text-gray-400">Select organizational units...</span>
-                        {:else if newBroadcast.targetOUs.length === 1}
-                          {newBroadcast.targetOUs[0]}
-                        {:else}
-                          {newBroadcast.targetOUs.length} units selected
-                        {/if}
-                      </span>
-                      <svg class="w-4 h-4 text-gray-400 transform transition-transform {showOUDropdown ? 'rotate-180' : ''}" 
-                           fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                      </svg>
-                    </button>
-                    
-                    {#if showOUDropdown}
-                      <div class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {#each targetOUs as ou}
-                          <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer {newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou) ? 'opacity-50 cursor-not-allowed' : ''}">
-                            <input
-                              type="checkbox"
-                              bind:group={newBroadcast.targetOUs}
-                              value={ou}
-                              disabled={newBroadcast.targetOUs.length >= 3 && !newBroadcast.targetOUs.includes(ou)}
-                              class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4] mr-3"
-                            />
-                            <span class="text-sm">{ou}</span>
-                          </label>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                  {#if newBroadcast.targetOUs.length === 0}
-                    <p class="text-xs text-red-500 mt-2">Please select at least one organizational unit</p>
-                  {:else if newBroadcast.targetOUs.length >= 3}
-                    <p class="text-xs text-orange-500 mt-2">Maximum of 3 organizational units allowed</p>
-                  {:else}
-                    <p class="text-xs text-gray-500 mt-2">You can select up to 3 organizational units ({3 - newBroadcast.targetOUs.length} remaining)</p>
-                  {/if}
-                </div>
 
-                <div>
-                  <span class="block text-sm font-medium text-gray-700 mb-3">Target Roles *</span>
-                  <div class="mb-3 p-3 bg-white rounded border border-gray-200">
-                    <label class="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={newBroadcast.targetRoles.length === roles.length}
-                        onchange={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          if (target.checked) {
-                            newBroadcast.targetRoles = [...roles];
-                          } else {
-                            newBroadcast.targetRoles = [];
-                          }
-                        }}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                      />
-                      <span class="text-sm font-medium text-gray-700">Select All Roles</span>
-                    </label>
-                  </div>
-                  <div class="grid grid-cols-2 gap-3">
-                    {#each roles as role}
-                      <label class="flex items-center space-x-2 p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
-                        <input
-                          type="checkbox"
-                          bind:group={newBroadcast.targetRoles}
-                          value={role}
-                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                        />
-                        <span class="text-sm capitalize font-medium">{role}</span>
-                      </label>
-                    {/each}
-                  </div>
-                  {#if newBroadcast.targetRoles.length === 0}
-                    <p class="text-xs text-red-500 mt-2">Please select at least one role</p>
+              <!-- Organizational Unit Selector -->
+              <div class="space-y-4">
+              <div>
+                <label for="ou-selector" class="block text-sm font-medium text-gray-700 mb-2">Organizational Units *</label>
+                <div class="relative">
+                  <button
+                    id="ou-selector"
+                    type="button"
+                    onclick={() => showOUDropdown = !showOUDropdown}
+                    class="input-field w-full text-left flex items-center justify-between"
+                  >
+                    {#if newBroadcast.targetOUs.length === 0}
+                      <span class="text-gray-400">Select Organizational Units</span>
+                    {:else}
+                      <span>
+                        {newBroadcast.targetOUs.length} unit{newBroadcast.targetOUs.length !== 1 ? 's' : ''} selected
+                      </span>
+                    {/if}
+                    <ChevronDown class="w-4 h-4 text-gray-400" />
+                  </button>
+                  
+                  {#if showOUDropdown}
+                    <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto">
+                      {#if isLoadingOUs}
+                        <div class="p-3 text-center text-gray-500">Loading organizational units...</div>
+                      {:else if availableOUs.length === 0}
+                        <div class="p-3 text-center text-gray-500">No organizational units found</div>
+                      {:else}
+                        {#each availableOUs as ou}
+                          <div class="p-2 hover:bg-gray-100">
+                            <label class="flex items-center space-x-2 cursor-pointer w-full">
+                              <input
+                                type="checkbox"
+                                checked={newBroadcast.targetOUs.includes(ou.id)}
+                                onclick={() => {
+                                  const index = newBroadcast.targetOUs.indexOf(ou.id);
+                                  if (index === -1) {
+                                    if (newBroadcast.targetOUs.length < 3) {
+                                      newBroadcast.targetOUs = [...newBroadcast.targetOUs, ou.id];
+                                    }
+                                  } else {
+                                    newBroadcast.targetOUs = newBroadcast.targetOUs.filter(id => id !== ou.id);
+                                  }
+                                }}
+                                class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                              />
+                              <span>{ou.name}</span>
+                            </label>
+                          </div>
+                        {/each}
+                      {/if}
+                    </div>
                   {/if}
                 </div>
               </div>
-            </div>
+
+                <!-- Target Roles selection -->
+                <div>
+                  <span class="block text-sm font-medium text-gray-700 mb-3">Target Roles *</span>
+                  <div class="grid grid-cols-2 gap-3">
+                    {#if isLoadingRoles}
+                      <div class="col-span-2 p-3 text-center text-gray-500">Loading roles...</div>
+                    {:else}
+                      {#each availableRoles as role}
+                        <div class="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="role-{role.id}"
+                            checked={newBroadcast.targetRoles.includes(role.id)}
+                            onclick={() => {
+                              const index = newBroadcast.targetRoles.indexOf(role.id);
+                              if (index === -1) {
+                                newBroadcast.targetRoles = [...newBroadcast.targetRoles, role.id];
+                              } else {
+                                newBroadcast.targetRoles = newBroadcast.targetRoles.filter(id => id !== role.id);
+                              }
+                            }}
+                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                          />
+                          <label for="role-{role.id}" class="text-sm text-gray-700 cursor-pointer">
+                            {role.name}
+                          </label>
+                        </div>
+                      {/each}
+                    {/if}
+                  </div>
+                </div>
+              </div>
 
             <!-- Section 3: Response Settings -->
             <div class="bg-gray-50 rounded-lg p-5">
@@ -939,6 +1006,14 @@
               </div>
             </div>
 
+            <!-- Show API error if any -->
+            {#if apiError}
+              <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <strong class="font-bold">Error:</strong>
+                <span class="block sm:inline">{apiError}</span>
+              </div>
+            {/if}
+
             <!-- Actions -->
             <div class="flex justify-between pt-6 border-t border-gray-200">
               <button
@@ -951,9 +1026,14 @@
               <button 
                 type="submit" 
                 class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim() || newBroadcast.targetRoles.length === 0 || newBroadcast.targetOUs.length === 0}
+                disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim() || newBroadcast.targetRoles.length === 0 || newBroadcast.targetOUs.length === 0 || isCreatingBroadcast}
               >
-                {newBroadcast.scheduleType === 'now' ? 'Send Broadcast' : 'Schedule Broadcast'}
+                {#if isCreatingBroadcast}
+                  <span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                  {newBroadcast.scheduleType === 'now' ? 'Sending...' : 'Scheduling...'}
+                {:else}
+                  {newBroadcast.scheduleType === 'now' ? 'Send Broadcast' : 'Schedule Broadcast'}
+                {/if}
               </button>
             </div>
           </form>

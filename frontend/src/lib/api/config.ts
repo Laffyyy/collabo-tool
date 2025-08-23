@@ -25,6 +25,11 @@ export const API_CONFIG = {
       organizations: '/api/v1/admin/organizations',
       config: '/api/v1/admin/config',
       logs: '/api/v1/admin/logs'
+    },
+    broadcast: {
+      create: '/api/v1/broadcast',
+      getOUs: '/api/v1/broadcast/ou',
+      getRoles: '/api/v1/broadcast/roles'
     }
   }
 };
