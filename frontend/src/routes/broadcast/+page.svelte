@@ -22,6 +22,8 @@
     CreateBroadcastRequest 
   } from '$lib/api/types';
   import { API_CONFIG } from '$lib/api/config';
+  import { toastStore } from '$lib/stores/toast.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
 
   // Type definitions
   interface Acknowledgment {
@@ -199,6 +201,18 @@
     }
   ]);
 
+  // Define mock organizational units data
+  const mockOrganizationalUnits: OrganizationalUnit[] = [
+    { id: '1', name: 'Human Resources' },
+    { id: '2', name: 'Information Technology' },
+    { id: '3', name: 'Operations' },
+    { id: '4', name: 'Finance' },
+    { id: '5', name: 'Marketing' },
+    { id: '6', name: 'Customer Service' },
+    { id: '7', name: 'Quality Assurance' },
+    { id: '8', name: 'Security' }
+  ];
+
   let showCreateBroadcast = $state(false);
   let selectedBroadcast = $state<Broadcast | null>(null);
   let isAcknowledged = $state(false);
@@ -374,7 +388,8 @@
       templates = [template, ...templates];
       templateName = '';
       showSaveTemplate = false;
-      alert('Template saved successfully!');
+      // Replace alert with toast notification
+      $toastStore.success('Template saved successfully!');
     }
   };
 
@@ -389,14 +404,22 @@
         BroadcastAPI.getRoles()
       ]);
       
-      availableOUs = ousResponse.organizationalUnits || [];
+      // Use the API data if available, otherwise fall back to mock data
+      availableOUs = ousResponse.organizationalUnits?.length > 0 
+        ? ousResponse.organizationalUnits 
+        : mockOrganizationalUnits;
+      
       availableRoles = rolesResponse.roles || [];
       
       console.log('Loaded OUs:', availableOUs);
       console.log('Loaded Roles:', availableRoles);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load broadcast targeting options:', error);
-      apiError = 'Failed to load organizational units and roles. Please refresh the page.';
+      
+      // Use mock data when API fails
+      availableOUs = mockOrganizationalUnits;
+      
+      apiError = 'Failed to load organizational units and roles. Using default values.';
     } finally {
       isLoadingOUs = false;
       isLoadingRoles = false;
@@ -404,60 +427,60 @@
   });
 
   const createBroadcast = async () => {
-    if (newBroadcast.title.trim() && newBroadcast.content.trim()) {
-      try {
-        isCreatingBroadcast = true;
-        apiError = '';
+  if (newBroadcast.title.trim() && newBroadcast.content.trim()) {
+    try {
+      isCreatingBroadcast = true;
+      apiError = '';
+      
+      const broadcastData: CreateBroadcastRequest = {
+        title: newBroadcast.title.trim(),
+        content: newBroadcast.content.trim(),
+        priority: newBroadcast.priority,
+        targetRoles: newBroadcast.targetRoles,
+        targetOUs: newBroadcast.targetOUs,
+        responseType: newBroadcast.acknowledgmentType,
+        requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none'
+      };
+      
+      console.log('Sending broadcast data to API:', broadcastData);
+      
+      const response = await BroadcastAPI.createBroadcast(broadcastData);
+      
+      if (response.ok) {
+        // Add the new broadcast to the local state
+        const createdBroadcast = response.broadcast;
+        broadcasts = [
+          {
+            id: response.broadcast?.id || Date.now().toString(),
+            title: newBroadcast.title.trim(),
+            content: newBroadcast.content.trim(),
+            priority: newBroadcast.priority,
+            targetRoles: newBroadcast.targetRoles,
+            targetOUs: newBroadcast.targetOUs,
+            createdBy: currentUser.id,
+            createdAt: new Date(),
+            requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
+            responseType: newBroadcast.acknowledgmentType,
+            acknowledgments: [],
+            isActive: true
+          },
+          ...broadcasts
+        ];
         
-        const broadcastData: CreateBroadcastRequest = {
-          title: newBroadcast.title.trim(),
-          content: newBroadcast.content.trim(),
-          priority: newBroadcast.priority,
-          targetRoles: newBroadcast.targetRoles,
-          targetOUs: newBroadcast.targetOUs,
-          responseType: newBroadcast.acknowledgmentType,
-          requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none'
-        };
-        
-        console.log('Sending broadcast data to API:', broadcastData);
-        
-        const response = await BroadcastAPI.createBroadcast(broadcastData);
-        
-        if (response.ok) {
-          // Add the new broadcast to the local state
-          const createdBroadcast = response.broadcast;
-          broadcasts = [
-            {
-              id: createdBroadcast.id,
-              title: createdBroadcast.title,
-              content: createdBroadcast.content,
-              priority: createdBroadcast.priority as 'low' | 'medium' | 'high',
-              targetRoles: newBroadcast.targetRoles,
-              targetOUs: newBroadcast.targetOUs,
-              createdBy: currentUser.id,
-              createdAt: new Date(),
-              requiresAcknowledgment: createdBroadcast.requiresAcknowledgment,
-              responseType: createdBroadcast.responseType as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
-              choices: createdBroadcast.choices,
-              acknowledgments: [],
-              isActive: true
-            },
-            ...broadcasts
-          ];
-          
-          closeCreateModal();
-          alert('Broadcast created successfully!');
-        } else {
-          throw new Error(response.message || 'Failed to create broadcast');
-        }
-      } catch (error: any) {
-        console.error('Error creating broadcast:', error);
-        apiError = error.message || 'An error occurred while creating the broadcast';
-      } finally {
-        isCreatingBroadcast = false;
+        closeCreateModal();
+        $toastStore.success('Broadcast created successfully!');
+      } else {
+        throw new Error(response.message || 'Failed to create broadcast');
       }
+    } catch (error: any) {
+      console.error('Error creating broadcast:', error);
+      apiError = error.message || 'An error occurred while creating the broadcast';
+      $toastStore.error(apiError);
+    } finally {
+      isCreatingBroadcast = false;
     }
-  };
+  }
+};
 
   const acknowledgeBroadcast = (broadcastId: string, attending?: boolean) => {
     const broadcast = broadcasts.find(b => b.id === broadcastId);
@@ -471,7 +494,8 @@
         };
         broadcast.acknowledgments.push(acknowledgment);
         broadcasts = [...broadcasts]; // Trigger reactivity
-        alert('Broadcast acknowledged!');
+        // Replace alert with toast notification
+        $toastStore.success('Broadcast acknowledged!');
       }
     }
   };
@@ -499,12 +523,12 @@
     alert('View detailed report functionality would be implemented here.');
   };
 
-  const markAsDone = (broadcastId: string) => {
+const markAsDone = (broadcastId: string) => {
     broadcasts = broadcasts.map(b => 
       b.id === broadcastId ? { ...b, isActive: false } : b
     );
     closeBroadcastDetails();
-    alert('Broadcast marked as done!');
+    $toastStore.success('Broadcast marked as done!');
   };
 
   const openBroadcastDetails = (broadcast: Broadcast) => {
@@ -532,30 +556,31 @@
       const existingAck = selectedBroadcast.acknowledgments.find(a => a.userId === currentUser.id);
       if (!existingAck) {
         let canSubmit = false;
-        let alertMessage = '';
+        let toastMessage = '';
 
         switch (selectedBroadcast.responseType) {
           case 'required':
             canSubmit = isAcknowledged;
-            alertMessage = 'Broadcast acknowledged!';
+            toastMessage = 'Broadcast acknowledged!';
             break;
           case 'preferred-date':
             canSubmit = preferredDate.trim() !== '';
-            alertMessage = `Preferred date selected: ${preferredDate}`;
+            toastMessage = `Preferred date selected: ${preferredDate}`;
             break;
           case 'choices':
             canSubmit = selectedChoice.trim() !== '';
-            alertMessage = `Response submitted: ${selectedChoice}`;
+            toastMessage = `Response submitted: ${selectedChoice}`;
             break;
           case 'textbox':
             canSubmit = textResponse.trim() !== '';
-            alertMessage = 'Response submitted successfully!';
+            toastMessage = 'Response submitted successfully!';
             break;
         }
 
         if (canSubmit) {
           acknowledgeBroadcast(selectedBroadcast.id);
-          alert(alertMessage);
+          // Replace alert with toast notification
+          $toastStore.success(toastMessage);
         }
       }
     }
@@ -584,6 +609,8 @@
     showSaveTemplate = false;
   };
 </script>
+
+<ToastContainer />
 
 <svelte:head>
   <title>Broadcast - CollabHub</title>

@@ -9,7 +9,7 @@ const router = Router();
 router.use('/v1/auth', authRoutes);
 router.use('/v1/admin', adminRoutes);
 router.use('/v1/users', userManagementRoutes);
-router.use('/api/v1/broadcast', broadcastRoutes);
+router.use('/v1/broadcast', broadcastRoutes);
 
 module.exports = router;
 
