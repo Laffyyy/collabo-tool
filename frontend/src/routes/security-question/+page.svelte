@@ -18,6 +18,16 @@
     let userId = $state('');
     let isLoading = $state(true);
     
+    // Computed property for current question text - Svelte 5 way
+    let currentQuestionText = $derived(
+        securityQuestions.length > 0 && currentQuestionIndex < securityQuestions.length 
+            ? securityQuestions[currentQuestionIndex].questionText 
+            : ''
+    );
+
+    // Computed property for remaining attempts
+    let remainingAttempts = $derived(securityQuestionMaxAttempts - securityQuestionAttempts);
+    
     onMount(async () => {
         // Check if coming from forgot password flow via URL params
         const urlParams = new URLSearchParams(window.location.search);
@@ -175,14 +185,24 @@
                     goto('/change-password?from=security-question');
                 }
             } else {
-                // Wrong answer
+                // Wrong answer - increment attempts and show warning
                 securityQuestionAttempts++;
                 securityQuestionAnswer = ''; // Clear the input
                 
                 if (securityQuestionAttempts >= securityQuestionMaxAttempts) {
-                    securityQuestionError = 'Maximum attempts exceeded. Please contact support.';
+                    securityQuestionError = 'Maximum attempts exceeded. Please contact support or try requesting a new password reset link.';
                 } else {
-                    securityQuestionError = `Incorrect answer. ${securityQuestionMaxAttempts - securityQuestionAttempts} attempts remaining.`;
+                    const remaining = securityQuestionMaxAttempts - securityQuestionAttempts;
+                    securityQuestionError = `Incorrect answer. You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`;
+                }
+                
+                // Auto-focus back to input for retry (unless max attempts reached)
+                if (securityQuestionAttempts < securityQuestionMaxAttempts) {
+                    setTimeout(() => {
+                        if (securityQuestionInput) {
+                            securityQuestionInput.focus();
+                        }
+                    }, 100);
                 }
             }
         } catch (error: any) {
@@ -191,9 +211,19 @@
             securityQuestionAnswer = ''; // Clear the input
             
             if (securityQuestionAttempts >= securityQuestionMaxAttempts) {
-                securityQuestionError = 'Maximum attempts exceeded. Please contact support.';
+                securityQuestionError = 'Maximum attempts exceeded. Please contact support or try requesting a new password reset link.';
             } else {
-                securityQuestionError = error.message || 'Verification failed. Please try again.';
+                const remaining = securityQuestionMaxAttempts - securityQuestionAttempts;
+                securityQuestionError = `Verification failed. You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining. Please try again.`;
+            }
+            
+            // Auto-focus back to input for retry (unless max attempts reached)
+            if (securityQuestionAttempts < securityQuestionMaxAttempts) {
+                setTimeout(() => {
+                    if (securityQuestionInput) {
+                        securityQuestionInput.focus();
+                    }
+                }, 100);
             }
         } finally {
             securityQuestionIsLoading = false;
@@ -219,14 +249,6 @@
             securityQuestionHandleCancel();
         }
     };
-
-    
-    // Computed property for current question text - Svelte 5 way
-    let currentQuestionText = $derived(
-        securityQuestions.length > 0 && currentQuestionIndex < securityQuestions.length 
-            ? securityQuestions[currentQuestionIndex].questionText 
-            : ''
-    );
 </script>
 
 <svelte:head>
@@ -248,11 +270,25 @@
                     <div class="spinner"></div>
                     <p>Loading your security question...</p>
                 </div>
-            {:else if securityQuestionError}
+            {:else if securityQuestionAttempts >= securityQuestionMaxAttempts}
                 <div class="securityquestion-error">
                     {securityQuestionError}
+                    <div class="securityquestion-max-attempts-actions">
+                        <button 
+                            onclick={() => goto('/login')} 
+                            class="securityquestion-back-to-login-btn"
+                        >
+                            Back to Login
+                        </button>
+                    </div>
                 </div>
             {:else if currentQuestionText}
+                {#if securityQuestionError}
+                    <div class="securityquestion-error">
+                        {securityQuestionError}
+                    </div>
+                {/if}
+                
                 <div class="securityquestion-question">
                     <label class="securityquestion-label" for="securityQuestionInput">Question:</label>
                     <div class="securityquestion-question-text">
@@ -272,12 +308,15 @@
                         id="securityQuestionInput"
                         placeholder="Enter your answer"
                         maxlength="30"
-                        disabled={securityQuestionIsLoading || securityQuestionAttempts >= securityQuestionMaxAttempts}
+                        disabled={securityQuestionIsLoading}
                     />
                 </div>
                 
-                <div class="securityquestion-attempts">
+                <div class="securityquestion-attempts {securityQuestionAttempts > 0 ? 'securityquestion-attempts-warning' : ''}">
                     Attempts: {securityQuestionAttempts} / {securityQuestionMaxAttempts}
+                    {#if securityQuestionAttempts > 0 && remainingAttempts > 0}
+                        <span class="securityquestion-remaining">({remainingAttempts} remaining)</span>
+                    {/if}
                 </div>
                 
                 <div class="securityquestion-actions">
@@ -291,7 +330,7 @@
                     
                     <button
                         onclick={securityQuestionHandleSubmit}
-                        disabled={securityQuestionIsLoading || !securityQuestionAnswer.trim() || securityQuestionAttempts >= securityQuestionMaxAttempts}
+                        disabled={securityQuestionIsLoading || !securityQuestionAnswer.trim()}
                         class="securityquestion-submit-btn"
                     >
                         {securityQuestionIsLoading ? 'Verifying...' : 'Submit Answer'}
@@ -387,6 +426,26 @@
         margin-bottom: 1rem;
     }
     
+    .securityquestion-max-attempts-actions {
+        margin-top: 1rem;
+        text-align: center;
+    }
+    
+    .securityquestion-back-to-login-btn {
+        background-color: #dc2626;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .securityquestion-back-to-login-btn:hover {
+        background-color: #b91c1c;
+    }
+    
     .securityquestion-question {
         margin-bottom: 1.5rem;
     }
@@ -435,6 +494,17 @@
         line-height: 1.25rem;
         color: #4b5563;
         margin-bottom: 1.5rem;
+        transition: color 0.2s;
+    }
+    
+    .securityquestion-attempts-warning {
+        color: #dc2626;
+        font-weight: 500;
+    }
+    
+    .securityquestion-remaining {
+        color: #dc2626;
+        font-weight: 500;
     }
     
     .securityquestion-actions {
