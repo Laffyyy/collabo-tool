@@ -15,7 +15,10 @@ async function createBroadcast(req, res, next) {
       targetRoles, 
       targetOUs, 
       responseType = 'none',
-      requiresAcknowledgment = false
+      requiresAcknowledgment = false,
+      scheduledFor = null,
+      endDate = null,
+      choices = null  // Add choices parameter
     } = req.body;
     
     // Get user ID from authenticated session
@@ -23,7 +26,11 @@ async function createBroadcast(req, res, next) {
     
     console.log(`[Broadcast Controller] Creating broadcast: "${title}" for targets:`, {
       roles: targetRoles,
-      ous: targetOUs
+      ous: targetOUs,
+      scheduledFor,
+      endDate,
+      responseType,
+      choices: responseType === 'choices' ? choices : undefined
     });
     
     const broadcast = await broadcastService.createBroadcast({
@@ -34,7 +41,10 @@ async function createBroadcast(req, res, next) {
       targetRoles,
       targetOUs,
       responseType,
-      requiresAcknowledgment
+      requiresAcknowledgment,
+      scheduledFor,
+      endDate,
+      choices // Pass choices to the service
     });
     
     res.status(201).json({

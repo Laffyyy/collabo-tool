@@ -59,7 +59,38 @@ router.post(
       .withMessage('At least one target role is required'),
     body('targetOUs')
       .isArray({ min: 1 })
-      .withMessage('At least one organizational unit is required')
+      .withMessage('At least one organizational unit is required'),
+    body('scheduledFor')
+      .optional({ nullable: true })
+      .isISO8601()
+      .withMessage('Scheduled date must be a valid date'),
+    body('endDate')
+      .optional({ nullable: true })
+      .isISO8601()
+      .withMessage('End date must be a valid date'),
+    body('responseType')
+      .optional()
+      .isIn(['none', 'required', 'preferred-date', 'choices', 'textbox'])
+      .withMessage('Invalid response type'),
+    body('choices')
+      .optional()
+      .custom((value, { req }) => {
+        if (req.body.responseType === 'choices') {
+          if (!Array.isArray(value) || value.length === 0) {
+            throw new Error('Options are required for multiple choice response type');
+          }
+          if (value.length > 8) {
+            throw new Error('Maximum of 8 options allowed for multiple choice');
+          }
+          // Ensure all choices are strings and not empty
+          for (const choice of value) {
+            if (typeof choice !== 'string' || choice.trim() === '') {
+              throw new Error('All options must be non-empty strings');
+            }
+          }
+        }
+        return true;
+      })
   ],
   validate,
   broadcastController.createBroadcast

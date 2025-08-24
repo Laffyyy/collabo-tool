@@ -15,8 +15,16 @@ class UploadBroadcastModel {
     createdBy,
     responseType = 'none',
     requiresAcknowledgment = false,
-    status = 'sent'
+    status = 'sent',
+    scheduledFor = null,
+    endDate = null,
+    choices = null // Add this parameter
   }) {
+    // Determine sent date based on schedule type
+    const now = new Date();
+    // If sending immediately, set sentAt to now. If scheduled, set to scheduledFor
+    const sentAt = status === 'sent' ? now : scheduledFor;
+    
     const query = `
       INSERT INTO tblbroadcasts (
         dtitle, 
@@ -25,9 +33,14 @@ class UploadBroadcastModel {
         dcreatedby, 
         dstatus, 
         drequiresacknowledgment, 
-        dresponsetype
+        dresponsetype,
+        tscheduledfor,
+        tsentat,
+        teventdate,
+        tenddate,
+        dchoices
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
 
@@ -38,7 +51,12 @@ class UploadBroadcastModel {
       createdBy,
       status,
       requiresAcknowledgment,
-      responseType
+      responseType,
+      scheduledFor,    // tscheduledfor - null if immediate, date if scheduled
+      sentAt,          // tsentat - NOW() if immediate, scheduledFor if scheduled
+      sentAt,          // teventdate - follows same rules as tsentat
+      endDate,         // tenddate - optional end date
+      choices ? JSON.stringify(choices) : null  // Convert choices array to JSON string
     ];
 
     const result = await this.pool.query(query, values);

@@ -201,18 +201,6 @@
     }
   ]);
 
-  // Define mock organizational units data
-  const mockOrganizationalUnits: OrganizationalUnit[] = [
-    { id: '1', name: 'Human Resources' },
-    { id: '2', name: 'Information Technology' },
-    { id: '3', name: 'Operations' },
-    { id: '4', name: 'Finance' },
-    { id: '5', name: 'Marketing' },
-    { id: '6', name: 'Customer Service' },
-    { id: '7', name: 'Quality Assurance' },
-    { id: '8', name: 'Security' }
-  ];
-
   let showCreateBroadcast = $state(false);
   let selectedBroadcast = $state<Broadcast | null>(null);
   let isAcknowledged = $state(false);
@@ -404,11 +392,8 @@
         BroadcastAPI.getRoles()
       ]);
       
-      // Use the API data if available, otherwise fall back to mock data
-      availableOUs = ousResponse.organizationalUnits?.length > 0 
-        ? ousResponse.organizationalUnits 
-        : mockOrganizationalUnits;
-      
+      // Use only the API data
+      availableOUs = ousResponse.organizationalUnits || [];
       availableRoles = rolesResponse.roles || [];
       
       console.log('Loaded OUs:', availableOUs);
@@ -416,10 +401,11 @@
     } catch (error: any) {
       console.error('Failed to load broadcast targeting options:', error);
       
-      // Use mock data when API fails
-      availableOUs = mockOrganizationalUnits;
+      // Don't use mock data, set to empty arrays instead
+      availableOUs = [];
+      availableRoles = [];
       
-      apiError = 'Failed to load organizational units and roles. Using default values.';
+      apiError = 'Failed to load organizational units and roles. Please try again later.';
     } finally {
       isLoadingOUs = false;
       isLoadingRoles = false;
@@ -439,7 +425,14 @@
         targetRoles: newBroadcast.targetRoles,
         targetOUs: newBroadcast.targetOUs,
         responseType: newBroadcast.acknowledgmentType,
-        requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none'
+        requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
+        // Add scheduling parameters
+        scheduledFor: newBroadcast.scheduleType === 'pick' ? newBroadcast.scheduledFor : null,
+        endDate: newBroadcast.endDate || null,
+        // Add choices if response type is 'choices'
+        choices: newBroadcast.acknowledgmentType === 'choices' 
+          ? newBroadcast.choices.filter(choice => choice.trim() !== '')
+          : null
       };
       
       console.log('Sending broadcast data to API:', broadcastData);
@@ -447,7 +440,7 @@
       const response = await BroadcastAPI.createBroadcast(broadcastData);
       
       if (response.ok) {
-        // Add the new broadcast to the local state
+        // Add the new broadcast to the local state with scheduling info
         const createdBroadcast = response.broadcast;
         broadcasts = [
           {
@@ -459,10 +452,12 @@
             targetOUs: newBroadcast.targetOUs,
             createdBy: currentUser.id,
             createdAt: new Date(),
+            scheduledFor: newBroadcast.scheduleType === 'pick' ? new Date(newBroadcast.scheduledFor) : undefined,
             requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
             responseType: newBroadcast.acknowledgmentType,
             acknowledgments: [],
-            isActive: true
+            isActive: true,
+            endDate: newBroadcast.endDate ? new Date(newBroadcast.endDate) : undefined
           },
           ...broadcasts
         ];

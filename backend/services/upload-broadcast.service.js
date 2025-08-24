@@ -19,7 +19,10 @@ async function createBroadcast({
   targetRoles = [],
   targetOUs = [],
   responseType = 'none',
-  requiresAcknowledgment = false
+  requiresAcknowledgment = false,
+  scheduledFor = null,
+  endDate = null,
+  choices = null  // Add choices parameter
 }) {
   try {
     console.log(`[Broadcast Service] Creating new broadcast: "${title}" by user ${createdBy}`);
@@ -30,6 +33,22 @@ async function createBroadcast({
       throw new BadRequestError('Missing required fields');
     }
     
+    // Validate choices for 'choices' response type
+    if (responseType === 'choices' && (!choices || !Array.isArray(choices) || choices.length === 0)) {
+      console.log('[Broadcast Service] Choices required for multiple choice response type');
+      throw new BadRequestError('Options are required for multiple choice response type');
+    }
+    
+    // Limit choices to maximum 8 options
+    if (responseType === 'choices' && choices.length > 8) {
+      console.log('[Broadcast Service] Too many choices provided');
+      throw new BadRequestError('Maximum of 8 options allowed for multiple choice');
+    }
+    
+    // Determine if this is a scheduled broadcast
+    const isScheduled = scheduledFor && new Date(scheduledFor) > new Date();
+    const status = isScheduled ? 'scheduled' : 'sent';
+    
     // Create the broadcast
     const broadcast = await uploadBroadcastModel.createBroadcast({
       title,
@@ -38,12 +57,15 @@ async function createBroadcast({
       createdBy,
       responseType,
       requiresAcknowledgment,
-      status: 'sent'
+      status,
+      scheduledFor,
+      endDate,
+      choices: responseType === 'choices' ? choices : null // Only send choices if response type is 'choices'
     });
     
     console.log(`[Broadcast Service] Broadcast created with ID: ${broadcast.id}`);
     
-    // Prepare targets array
+    // Add targets to the broadcast (existing code)
     const targets = [];
     
     // Add role targets

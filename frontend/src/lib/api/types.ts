@@ -76,6 +76,9 @@ export interface CreateBroadcastRequest {
   targetOUs: string[];
   responseType?: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
   requiresAcknowledgment?: boolean;
+  scheduledFor?: string | null;
+  endDate?: string | null;
+  choices?: string[] | null; // Add this property
 }
 
 export interface CreateBroadcastResponse {
