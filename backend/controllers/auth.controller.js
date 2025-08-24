@@ -84,7 +84,8 @@ async function verifyOtp(req, res, next) {
         email: result.user.email,
         role: result.user.role,
         username: result.user.username,
-        mustChangePassword: result.user.mustChangePassword
+        mustChangePassword: result.user.mustChangePassword,
+        accountStatus: result.user.accountStatus
       },
       message: 'Authentication successful'
     });

@@ -154,6 +154,7 @@ onMount(() => {
                     role: string;
                     username: string;
                     mustChangePassword?: boolean;
+                    accountStatus?: string;
                 };
                 message: string;
                 token?: string;
@@ -170,8 +171,12 @@ onMount(() => {
             
             if (data.ok) {
                 if (data.user) {
-                    // For first-time users (mustChangePassword = true), store data for security question setup
-                    if (data.user?.mustChangePassword) {
+                    // Check if user needs first-time setup (both mustChangePassword AND accountStatus must be "first-time")
+                    const isFirstTimeUser = data.user?.mustChangePassword && data.user?.accountStatus === 'first-time';
+
+                    if (isFirstTimeUser) {
+                        console.log('First-time user detected, redirecting to setup');
+
                         // Store user data in localStorage for the first-time setup flow
                         localStorage.setItem('firstTime_userId', data.user.id);
                         localStorage.setItem('firstTime_username', data.user.username);

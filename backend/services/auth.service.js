@@ -147,6 +147,9 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
     
     // Update last login timestamp
     await userModel.updateLastLogin(userId);
+
+    // Check if this is a first-time user (both conditions must be true)
+    const isFirstTimeUser = user.mustChangePassword && user.accountStatus === 'first-time';
     
     // Generate JWT token with user info and role
     const token = signToken({ 
@@ -180,7 +183,8 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       user: {
         ...user,
         role,
-        mustChangePassword: user.mustChangePassword
+        mustChangePassword: user.mustChangePassword,
+        accountStatus: user.accountStatus
       }
     };
   } catch (error) {

@@ -20,15 +20,22 @@ class PasswordChangeService {
 
     const user = userResult[0];
 
-    if (user.daccountstatus !== 'active') {
+    if (user.daccountstatus !== 'active' && user.daccountstatus !== 'first-time') {
       throw new Error('Account is not active');
     }
 
-    if (!user.dmustchangepassword) {
+    // Check both conditions for first-time password change requirement
+    const isFirstTimeUser = user.dmustchangepassword && user.daccountstatus === 'first-time';
+    const requiresPasswordChange = user.dmustchangepassword;
+
+    if (!requiresPasswordChange) {
       throw new Error('Password change not required for this user');
     }
 
-    return user;
+    return {
+      ...user,
+      isFirstTimeUser
+    };
   }
 
   /**
@@ -109,14 +116,25 @@ class PasswordChangeService {
    * @returns {Promise<Object>} Updated user data
    */
   static async updateUserPassword(userId, hashedPassword) {
+    // First check if this is a first-time user
+    const userCheck = await sql`
+      SELECT dmustchangepassword, daccountstatus
+      FROM tblusers
+      WHERE did = ${userId}
+    `;
+
+    const isFirstTimeUser = userCheck[0]?.dmustchangepassword && userCheck[0]?.daccountstatus === 'first-time';
+
+    // Update password and account status
     const result = await sql`
       UPDATE tblusers 
       SET 
         dpasswordhash = ${hashedPassword},
         dmustchangepassword = false,
+        daccountstatus = ${isFirstTimeUser ? 'active' : userCheck[0]?.daccountstatus},
         tupdatedat = NOW()
       WHERE did = ${userId}
-      RETURNING did, dusername, dmustchangepassword
+      RETURNING did, dusername, dmustchangepassword, daccountstatus
     `;
 
     return result[0];
