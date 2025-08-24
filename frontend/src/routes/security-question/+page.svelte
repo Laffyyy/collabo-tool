@@ -17,6 +17,7 @@
     let resetToken = $state('');
     let userId = $state('');
     let isLoading = $state(true);
+    let isExpired = $state(false);
     
     // Computed property for current question text - Svelte 5 way
     let currentQuestionText = $derived(
@@ -44,7 +45,17 @@
                 await loadUserFromResetToken(tokenParam);
             } catch (error) {
                 console.error('Failed to load user from reset token:', error);
-                securityQuestionError = 'Invalid or expired reset link. Please request a new one.';
+                
+                // Check if it's an expiration error
+                if (error instanceof Error && (
+                    error.message.includes('expired') || 
+                    error.message.includes('Invalid or expired') ||
+                    error.message.includes('token has expired')
+                )) {
+                    isExpired = true;
+                } else {
+                    securityQuestionError = 'Invalid reset link. Please request a new one.';
+                }
                 isLoading = false;
                 return;
             }
@@ -240,6 +251,13 @@
         localStorage.removeItem('auth_resetUserId');
         goto('/login');
     };
+
+    const handleExpiredGoBack = () => {
+        // Clear any stored reset data
+        localStorage.removeItem('auth_resetToken');
+        localStorage.removeItem('auth_resetUserId');
+        goto('/login');
+    };
     
     const securityQuestionHandleKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Enter') {
@@ -260,8 +278,15 @@
 <div class="securityquestion-container">
     <div class="securityquestion-card">
         <div class="securityquestion-header">
-            <h1 class="securityquestion-title">Security Question</h1>
-            <p class="securityquestion-subtitle">Verify your identity to proceed with password recovery</p>
+            <h1 class="securityquestion-title">
+                {isExpired ? 'Link Expired' : 'Security Question'}
+            </h1>
+            <p class="securityquestion-subtitle">
+                {isExpired 
+                    ? 'Your password reset link has expired' 
+                    : 'Verify your identity to proceed with password recovery'
+                }
+            </p>
         </div>
         
         <div class="securityquestion-form">
@@ -269,6 +294,24 @@
                 <div class="securityquestion-loading">
                     <div class="spinner"></div>
                     <p>Loading your security question...</p>
+                </div>
+            {:else if isExpired}
+                <div class="securityquestion-expired">
+                    <div class="securityquestion-expired-icon">⏰</div>
+                    <p class="securityquestion-expired-message">
+                        The password reset link you clicked has expired. Password reset links are only valid for a limited time for security reasons.
+                    </p>
+                    <p class="securityquestion-expired-instruction">
+                        Please request a new password reset link from the login page.
+                    </p>
+                    <div class="securityquestion-expired-actions">
+                        <button 
+                            onclick={handleExpiredGoBack}
+                            class="securityquestion-expired-btn"
+                        >
+                            Go Back to Login Page
+                        </button>
+                    </div>
                 </div>
             {:else if securityQuestionAttempts >= securityQuestionMaxAttempts}
                 <div class="securityquestion-error">
@@ -413,6 +456,51 @@
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
+    }
+
+    .securityquestion-expired {
+        text-align: center;
+        padding: 1.5rem 0;
+    }
+
+    .securityquestion-expired-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.7;
+    }
+
+    .securityquestion-expired-message {
+        color: #374151;
+        font-size: 0.875rem;
+        line-height: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .securityquestion-expired-instruction {
+        color: #6b7280;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        margin-bottom: 2rem;
+    }
+
+    .securityquestion-expired-actions {
+        margin-top: 1.5rem;
+    }
+
+    .securityquestion-expired-btn {
+        background-color: #01c0a4;
+        color: white;
+        padding: 0.875rem 2rem;
+        border-radius: 0.75rem;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-size: 0.875rem;
+    }
+
+    .securityquestion-expired-btn:hover {
+        background-color: #00a085;
     }
     
     .securityquestion-error {
