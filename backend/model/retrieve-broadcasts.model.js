@@ -170,6 +170,16 @@ class RetrieveBroadcastModel {
   formatBroadcast(broadcast) {
     if (!broadcast) return null;
 
+    // Only broadcasts with dstatus === 'done' should be considered completed.
+    // Deleted and archived should not be shown in completed.
+    const isActive =
+      broadcast.dstatus !== 'done' &&
+      broadcast.dstatus !== 'deleted' &&
+      broadcast.dstatus !== 'archived';
+
+    const isCompleted =
+      broadcast.dstatus === 'done';
+
     return {
       id: broadcast.did,
       title: broadcast.dtitle,
@@ -188,12 +198,13 @@ class RetrieveBroadcastModel {
       reportReason: broadcast.dreportreason,
       reportedBy: broadcast.dreportedby,
       reportedAt: broadcast.treportedat,
-      
+
       // Frontend compatibility fields (using defaults since not in current schema)
-      targetRoles: ['admin', 'manager', 'supervisor'], // Default roles
-      targetOUs: ['All'], // Default organizational units
-      acknowledgments: [], // Empty array since not tracked in current schema
-      isActive: broadcast.dstatus !== 'deleted' && broadcast.dstatus !== 'archived'
+      targetRoles: ['admin', 'manager', 'supervisor'],
+      targetOUs: ['All'],
+      acknowledgments: [],
+      isActive,
+      isCompleted // <-- Add this field for frontend to easily filter completed broadcasts
     };
   }
 
@@ -248,6 +259,36 @@ class RetrieveBroadcastModel {
       throw new Error(`Failed to create broadcast: ${error.message}`);
     }
   }
+
+  /**
+   * Update the status of a broadcast
+   * @param {string} broadcastId
+   * @param {string} userId
+   * @param {string} status
+   * @returns {Promise<Object>} Updated broadcast
+   */
+  async updateBroadcastStatus(broadcastId, userId, status) {
+    try {
+      const query = `
+        UPDATE tblbroadcasts
+        SET dstatus = $1
+        WHERE did = $2 AND dcreatedby = $3
+        RETURNING *
+      `;
+      const values = [status, broadcastId, userId];
+      const result = await this.pool.query(query, values);
+
+      if (result.rows.length === 0) {
+        throw new Error('Broadcast not found or not authorized');
+      }
+
+      return this.formatBroadcast(result.rows[0]);
+    } catch (error) {
+      console.error('Database error in updateBroadcastStatus:', error);
+      throw new Error(`Failed to update broadcast status: ${error.message}`);
+    }
+  }
+
 }
 
 module.exports = RetrieveBroadcastModel;

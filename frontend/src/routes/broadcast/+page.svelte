@@ -272,6 +272,34 @@
     selectedBroadcast = null;
   };
 
+  // Update the markBroadcastAsDone function
+  const markBroadcastAsDone = async (broadcastId: string) => {
+    try {
+      // Call the API to update the backend
+      const response = await broadcastAPI.markBroadcastAsDone(broadcastId);
+      
+      if (response.success) {
+        // Update the local state
+        const broadcastIndex = broadcasts.findIndex(b => b.id === broadcastId);
+        if (broadcastIndex !== -1) {
+          broadcasts[broadcastIndex].isActive = false;
+          broadcasts[broadcastIndex].status = 'done';
+          broadcasts = [...broadcasts]; // Trigger reactivity
+        }
+        
+        // Close the modal
+        selectedBroadcast = null;
+        
+        // Optional: Show success message
+        console.log('✅ Broadcast marked as done successfully');
+      }
+    } catch (err) {
+      console.error('❌ Error marking broadcast as done:', err);
+      error = err instanceof Error ? err.message : 'Failed to mark broadcast as done';
+      // Handle error - could show a toast notification
+    }
+  };
+
   // Keep all existing functions (createBroadcast, acknowledgeBroadcast, etc.)...
 </script>
 
@@ -582,12 +610,24 @@
           </div>
 
           <div class="flex justify-end pt-4 border-t border-gray-200">
-            <button
-              onclick={closeBroadcastDetails}
-              class="secondary-button"
-            >
-              Close
-            </button>
+            {#if selectedBroadcast.isActive}
+              <div class="flex space-x-3">
+                <button
+                  onclick={() => selectedBroadcast && markBroadcastAsDone(selectedBroadcast.id)}
+                  class="primary-button flex items-center space-x-2"
+                >
+                  <CheckCircle class="w-4 h-4" />
+                  <span>Mark as Done</span>
+                </button>
+              </div>
+            {:else}
+              <button
+                onclick={closeBroadcastDetails}
+                class="secondary-button"
+              >
+                Close
+              </button>
+            {/if}
           </div>
         </div>
       </div>

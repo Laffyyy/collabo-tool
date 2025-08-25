@@ -102,6 +102,25 @@ class RetrieveBroadcastController {
       next(error);
     }
   }
+
+  async markBroadcastAsDone(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { id: broadcastId } = req.params;
+
+      const updatedBroadcast = await RetrieveBroadcastService.markBroadcastAsDone(broadcastId, userId);
+
+      res.status(200).json({
+        success: true,
+        broadcast: updatedBroadcast,
+        message: 'Broadcast marked as done'
+      });
+    } catch (error) {
+      console.error('Controller error in markBroadcastAsDone:', error);
+      next(error);
+    }
+  }
+  
 }
 
 module.exports = new RetrieveBroadcastController();

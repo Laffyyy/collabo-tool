@@ -121,6 +121,22 @@ class RetrieveBroadcastService {
       throw new Error(`Failed to create broadcast: ${error.message}`);
     }
   }
+
+  /**
+   * Mark a broadcast as done
+   * @param {string} broadcastId
+   * @param {string} userId
+   * @returns {Promise<Object>} Updated broadcast
+   */
+  async markBroadcastAsDone(broadcastId, userId) {
+    try {
+      return await this.broadcastModel.updateBroadcastStatus(broadcastId, userId, 'done');
+    } catch (error) {
+      console.error('Service error in markBroadcastAsDone:', error);
+      throw new Error(`Failed to mark broadcast as done: ${error.message}`);
+    }
+  }
+  
 }
 
 module.exports = new RetrieveBroadcastService();

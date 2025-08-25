@@ -124,6 +124,55 @@ class BroadcastAPI {
       throw error;
     }
   }
+
+  /**
+   * Update broadcast status
+   */
+  async updateBroadcastStatus(broadcastId: string, status: string): Promise<{ success: boolean; broadcast: any; message: string }> {
+    const url = `${this.baseUrl}/my-broadcasts/${broadcastId}/status`;
+    
+    try {
+      const response = await makeAuthenticatedRequest(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Error updating broadcast status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark broadcast as done
+   */
+  async markBroadcastAsDone(broadcastId: string): Promise<{ success: boolean; broadcast: any; message: string }> {
+    const url = `${this.baseUrl}/my-broadcasts/${broadcastId}/mark-done`;
+    
+    try {
+      const response = await makeAuthenticatedRequest(url, {
+        method: 'PUT'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Error marking broadcast as done:', error);
+      throw error;
+    }
+  }
+  
 }
 
 export const broadcastAPI = new BroadcastAPI();

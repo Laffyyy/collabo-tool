@@ -15,4 +15,7 @@ router.get('/my-broadcasts/stats', requireAuth, RetrieveBroadcastController.getM
 // Create new broadcast
 router.post('/', requireAuth, RetrieveBroadcastController.createBroadcast);
 
+// Mark broadcast as done
+router.put('/my-broadcasts/:id/mark-done', requireAuth, RetrieveBroadcastController.markBroadcastAsDone);
+
 module.exports = router;
