@@ -1,4 +1,5 @@
 const oumanegamentService = require('../services/OUmanagement.service');
+const { transformSettingsToOUSettings, validateSettings } = require('../utils/settingsTransformer');
 
 async function getOU(req, res, next) {
     try {
@@ -42,73 +43,28 @@ async function createOUmanager(req, res, next) {
             });
         }
 
-        // Prepare OUsettings array based on Settings object
-        let OUsettings = [];
+        // Validate Settings structure
         console.log('Settings received:', JSON.stringify(Settings, null, 2));
-        try {
-            if (Settings && Settings.Chat) {
-                const chat = Settings.Chat;
-                if (chat.Frontline) {
-                    OUsettings.push({
-                        settingstype: 'chat.frontline',
-                        init1v1: !!chat.Frontline.Init1v1,
-                        createGroup: !!chat.Frontline.CreateGroup,
-                        joinGroupChats: !!chat.Frontline.JoinGroupChats,
-                        shareFiles: !!chat.Frontline.ShareFiles,
-                        forwardMessage: !!chat.Frontline.ForwardMessage
-                    });
-                }
-                if (chat.support) {
-                    OUsettings.push({
-                        settingstype: 'chat.support',
-                        init1v1: !!chat.support.Init1v1,
-                        createGroup: !!chat.support.CreateGroup,
-                        joinGroupChats: !!chat.support.JoinGroupChats,
-                        shareFiles: !!chat.support.ShareFiles,
-                        forwardMessage: !!chat.support.ForwardMessage
-                    });
-                }
-                if (chat.supervisor) {
-                    OUsettings.push({
-                        settingstype: 'chat.supervisor',
-                        createGroup: !!chat.supervisor.CreateGroup,
-                        shareFiles: !!chat.supervisor.ShareFiles,
-                        forwardMessage: !!chat.supervisor.ForwardMessage
-                    });
-                }
-            }
-
-            if (Settings && Settings.broadcast) {
-                const broadcast = Settings.broadcast;
-                if (broadcast.Frontline) {
-                    OUsettings.push({
-                        settingstype: 'broadcast.frontline',
-                        createBroadcasts: !!broadcast.Frontline.CreateBroadcasts,
-                        replyToBroadcasts: !!broadcast.Frontline.ReplyToBroadcasts
-                    });
-                }
-                if (broadcast.support) {
-                    OUsettings.push({
-                        settingstype: 'broadcast.support',
-                        createBroadcasts: !!broadcast.support.CreateBroadcasts,
-                        replyToBroadcasts: !!broadcast.support.ReplyToBroadcasts
-                    });
-                }
-                if (broadcast.supervisor) {
-                    OUsettings.push({
-                        settingstype: 'broadcast.supervisor',
-                        createBroadcasts: !!broadcast.supervisor.CreateBroadcasts
-                    });
-                }
-            }
-        } catch (parseErr) {
+        const validation = validateSettings(Settings);
+        if (!validation.isValid) {
             return res.status(400).json({
                 ok: false,
-                error: 'Invalid Settings structure: ' + parseErr.message
+                error: 'Invalid Settings structure',
+                details: validation.errors
             });
         }
 
-        console.log('Final OUsettings array:', JSON.stringify(OUsettings, null, 2));
+        // Transform Settings to OUsettings array
+        let OUsettings = [];
+        try {
+            OUsettings = transformSettingsToOUSettings(Settings);
+            console.log('Transformed OUsettings array:', JSON.stringify(OUsettings, null, 2));
+        } catch (transformErr) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Failed to transform Settings: ' + transformErr.message
+            });
+        }
 
         // Call service with new structure
         let result;
