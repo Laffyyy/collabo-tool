@@ -96,4 +96,92 @@ router.post(
   broadcastController.createBroadcast
 );
 
+/**
+ * @route   POST /api/v1/broadcast/templates
+ * @desc    Save a broadcast template
+ * @access  Private (Admin/Manager only)
+ */
+router.post(
+  '/templates',
+  requireAuth,
+  canCreateBroadcast,
+  [
+    body('name')
+      .trim()
+      .notEmpty()
+      .withMessage('Template name is required')
+      .isLength({ max: 255 })
+      .withMessage('Template name cannot exceed 255 characters'),
+    body('title')
+      .trim()
+      .notEmpty()
+      .withMessage('Template title is required')
+      .isLength({ max: 255 })
+      .withMessage('Title cannot exceed 255 characters'),
+    body('content')
+      .trim()
+      .notEmpty()
+      .withMessage('Template content is required'),
+    body('priority')
+      .isIn(['low', 'medium', 'high'])
+      .withMessage('Priority must be low, medium, or high'),
+    body('targetOUs')
+      .optional()
+      .isArray()
+      .withMessage('Target OUs must be an array'),
+    body('targetRoles')
+      .optional()
+      .isArray()
+      .withMessage('Target roles must be an array'),
+    body('acknowledgmentType')
+      .optional()
+      .isIn(['none', 'required', 'preferred-date', 'choices', 'textbox'])
+      .withMessage('Invalid acknowledgment type'),
+    body('choices')
+      .optional()
+      .custom((value, { req }) => {
+        if (req.body.acknowledgmentType === 'choices') {
+          if (!Array.isArray(value) || value.length === 0) {
+            throw new Error('Options are required for multiple choice templates');
+          }
+          if (value.length > 8) {
+            throw new Error('Maximum of 8 options allowed for multiple choice');
+          }
+          // Ensure all choices are strings and not empty
+          for (const choice of value) {
+            if (typeof choice !== 'string' || choice.trim() === '') {
+              throw new Error('All options must be non-empty strings');
+            }
+          }
+        }
+        return true;
+      }),
+  ],
+  validate,
+  broadcastController.saveTemplate
+);
+
+/**
+ * @route   GET /api/v1/broadcast/templates
+ * @desc    Get broadcast templates
+ * @access  Private
+ */
+router.get(
+  '/templates',
+  requireAuth,
+  broadcastController.getTemplates
+);
+
+/**
+ * @route   DELETE /api/v1/broadcast/templates/:id
+ * @desc    Delete a broadcast template
+ * @access  Private (Admin/Manager only)
+ */
+router.delete(
+  '/templates/:id',
+  requireAuth,
+  canCreateBroadcast,
+  broadcastController.deleteTemplate
+);
+
 module.exports = router;

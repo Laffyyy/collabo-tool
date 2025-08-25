@@ -174,6 +174,215 @@ class UploadBroadcastModel {
       targetName: target.dtargetname
     };
   }
+
+  /**
+ * Save a broadcast template
+ * @param {Object} templateData - Template data
+ * @returns {Promise<Object>} Created template
+ */
+  async saveTemplate({
+    name,
+    title,
+    content,
+    priority,
+    createdBy,
+    acknowledgmentType = 'none',
+    choices = null,
+    targetOUs = [], // Add this parameter
+    targetRoles = [] // Add this parameter
+  }) {
+    // Ensure choices is properly JSON-stringified before database insertion
+    let processedChoices = null;
+    
+    if (acknowledgmentType === 'choices' && choices && Array.isArray(choices)) {
+      // Make sure we're working with a proper array of strings
+      const validChoices = choices.filter(choice => typeof choice === 'string' && choice.trim() !== '');
+      if (validChoices.length > 0) {
+        // Convert to JSON string with proper double quotes
+        processedChoices = JSON.stringify(validChoices);
+      }
+    }
+
+    // Process target OUs and roles (store names, not IDs)
+    let processedTargetOUs = null;
+    if (targetOUs && Array.isArray(targetOUs) && targetOUs.length > 0) {
+      // Ensure all values are strings and sanitize them
+      const validOUs = targetOUs.map(ou => String(ou).trim()).filter(ou => ou !== '');
+      if (validOUs.length > 0) {
+        processedTargetOUs = JSON.stringify(validOUs);
+      }
+    }
+      
+    let processedTargetRoles = null;
+    if (targetRoles && Array.isArray(targetRoles) && targetRoles.length > 0) {
+      // Ensure all values are strings and sanitize them
+      const validRoles = targetRoles.map(role => String(role).trim()).filter(role => role !== '');
+      if (validRoles.length > 0) {
+        processedTargetRoles = JSON.stringify(validRoles);
+      }
+    }
+
+    const query = `
+      INSERT INTO tblbroadcasttemplates (
+        dname,
+        dtitle,
+        dcontent,
+        dpriority,
+        dacknowledgmenttype,
+        dchoices,
+        dcreatedby,
+        dtargetou,
+        dtargetrole
+      ) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `;
+
+    const values = [
+      name,
+      title,
+      content,
+      priority,
+      acknowledgmentType,
+      processedChoices,
+      createdBy,
+      processedTargetOUs,
+      processedTargetRoles
+    ];
+
+    const result = await this.pool.query(query, values);
+    return this.formatTemplate(result.rows[0]);
+  }
+
+  /**
+   * Get templates for a user
+   * @param {string} userId - User ID (optional, if not provided returns all templates)
+   * @returns {Promise<Array>} Array of templates
+   */
+  async getTemplates(userId = null) {
+    let query = `
+      SELECT * FROM tblbroadcasttemplates
+    `;
+    
+    const values = [];
+    
+    // If userId is provided, filter by that user
+    if (userId) {
+      query += ` WHERE dcreatedby = $1`;
+      values.push(userId);
+    }
+    
+    query += ` ORDER BY tcreatedat DESC`;
+
+    const result = await this.pool.query(query, values);
+    return result.rows.map(row => this.formatTemplate(row));
+  }
+
+  /**
+   * Format a template from DB row
+   * @param {Object} template - Raw template from DB
+   * @returns {Object} Formatted template
+   */
+  formatTemplate(template) {
+  if (!template) return null;
+  
+  let choices = null;
+  let targetOUs = [];
+  let targetRoles = [];
+  
+  // Safely parse JSON with error handling
+  if (template.dchoices) {
+    try {
+      choices = JSON.parse(template.dchoices);
+    } catch (error) {
+      console.error('[Upload Broadcast Model] Error parsing choices JSON:', error);
+      choices = null;
+    }
+  }
+  
+  if (template.dtargetou) {
+    // Check if it's already an array
+    if (Array.isArray(template.dtargetou)) {
+      targetOUs = template.dtargetou;
+    } else if (typeof template.dtargetou === 'string') {
+      try {
+        // First try to parse as JSON
+        targetOUs = JSON.parse(template.dtargetou);
+      } catch (error) {
+        // If that fails, try to extract the values from the string representation
+        try {
+          // Handle PostgreSQL array format: [ 'value1', 'value2' ]
+          const cleanString = template.dtargetou.replace(/^\[|\]$/g, '').trim();
+          if (cleanString) {
+            targetOUs = cleanString.split(',').map(item => 
+              item.trim().replace(/^'|'$/g, '')
+            );
+          }
+        } catch (innerError) {
+          console.error('[Upload Broadcast Model] Failed to extract OU values:', innerError);
+          targetOUs = [];
+        }
+      }
+    }
+  }
+  
+  if (template.dtargetrole) {
+    // Check if it's already an array
+    if (Array.isArray(template.dtargetrole)) {
+      targetRoles = template.dtargetrole;
+    } else if (typeof template.dtargetrole === 'string') {
+      try {
+        // First try to parse as JSON
+        targetRoles = JSON.parse(template.dtargetrole);
+      } catch (error) {
+        // If that fails, try to extract the values from the string representation
+        try {
+          // Handle PostgreSQL array format: [ 'value1', 'value2' ]
+          const cleanString = template.dtargetrole.replace(/^\[|\]$/g, '').trim();
+          if (cleanString) {
+            targetRoles = cleanString.split(',').map(item => 
+              item.trim().replace(/^'|'$/g, '')
+            );
+          }
+        } catch (innerError) {
+          console.error('[Upload Broadcast Model] Failed to extract role values:', innerError);
+          targetRoles = [];
+        }
+      }
+    }
+  }
+  return {
+    id: template.did,
+    name: template.dname,
+    title: template.dtitle,
+    content: template.dcontent,
+    priority: template.dpriority,
+    acknowledgmentType: template.dacknowledgmenttype,
+    choices: choices,
+    targetOUs: targetOUs,
+    targetRoles: targetRoles,
+    createdBy: template.dcreatedby,
+    createdAt: template.tcreatedat
+  };
+}
+
+/**
+ * Delete a broadcast template
+ * @param {string} templateId - Template ID
+ * @returns {Promise<boolean>} Success status
+ */
+async deleteTemplate(templateId) {
+  if (!templateId) return false;
+  
+  const query = `
+    DELETE FROM tblbroadcasttemplates
+    WHERE did = $1
+    RETURNING did
+  `;
+  
+  const result = await this.pool.query(query, [templateId]);
+  return result.rowCount > 0;
+}
 }
 
 module.exports = UploadBroadcastModel;

@@ -19,9 +19,11 @@
   import type { 
     OrganizationalUnit, 
     Role, 
-    CreateBroadcastRequest 
+    CreateBroadcastRequest,
+    SaveTemplateRequest,
   } from '$lib/api/types';
   import { API_CONFIG } from '$lib/api/config';
+  import { authStore } from '$lib/stores/auth.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
 
@@ -58,149 +60,14 @@
     content: string;
     priority: 'low' | 'medium' | 'high';
     targetRoles: string[];
+    targetOUs: string[];
     acknowledgmentType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
     choices?: string[];
     createdBy: string;
     createdAt: Date;
   }
 
-  // Mock user data
-  const currentUser = {
-    id: '1',
-    name: 'Admin User',
-    role: 'admin',
-    email: 'admin@company.com'
-  };
-
-  // Mock broadcasts data
-  let broadcasts = $state<Broadcast[]>([
-    {
-      id: '1',
-      title: 'Quarterly Team Meeting',
-      content: 'Join us for our quarterly team meeting to discuss Q3 progress and Q4 planning. We\'ll cover project updates, team achievements, and upcoming initiatives.',
-      priority: 'high' as const,
-      targetRoles: ['admin', 'manager', 'supervisor'],
-      targetOUs: ['HR', 'Team Lead'],
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 86400000), // 1 day ago
-      requiresAcknowledgment: true,
-      responseType: 'preferred-date',
-      eventDate: new Date(Date.now() + 604800000), // 1 week from now
-      acknowledgments: [
-        { userId: '2', acknowledgedAt: new Date(Date.now() - 43200000), attending: true },
-        { userId: '3', acknowledgedAt: new Date(Date.now() - 21600000), attending: false }
-      ],
-      isActive: true
-    },
-    {
-      id: '2',
-      title: 'System Maintenance Notice',
-      content: 'Scheduled system maintenance will occur this weekend from 2 AM to 6 AM. All systems will be temporarily unavailable during this time.',
-      priority: 'medium' as const,
-      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      targetOUs: ['Team Lead'],
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 172800000), // 2 days ago
-      requiresAcknowledgment: false,
-      responseType: 'none',
-      acknowledgments: [],
-      isActive: true
-    },
-    {
-      id: '3',
-      title: 'New Policy Update',
-      content: 'Please review the updated remote work policy document. All team members must acknowledge receipt and understanding.',
-      priority: 'low' as const,
-      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      targetOUs: ['HR'],
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 259200000), // 3 days ago
-      requiresAcknowledgment: true,
-      responseType: 'required',
-      eventDate: undefined,
-      acknowledgments: [
-        { userId: '2', acknowledgedAt: new Date(Date.now() - 172800000), attending: undefined },
-        { userId: '3', acknowledgedAt: new Date(Date.now() - 86400000), attending: undefined },
-        { userId: '4', acknowledgedAt: new Date(Date.now() - 43200000), attending: undefined }
-      ],
-      isActive: true
-    },
-    {
-      id: '4',
-      title: 'Security Protocol Update',
-      content: 'New security measures are being implemented across all clusters. Please ensure compliance with the updated protocols.',
-      priority: 'high' as const,
-      targetRoles: ['admin', 'manager', 'supervisor'],
-      targetOUs: ['Cluster'],
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 345600000), // 4 days ago
-      requiresAcknowledgment: true,
-      responseType: 'choices',
-      choices: ['I understand and will comply', 'I need more information', 'I have concerns about implementation'],
-      eventDate: undefined,
-      acknowledgments: [
-        { userId: '2', acknowledgedAt: new Date(Date.now() - 172800000), attending: undefined }
-      ],
-      isActive: true
-    },
-    {
-      id: '5',
-      title: 'Site-Wide Emergency Drill',
-      content: 'Emergency evacuation drill scheduled for next Friday. All personnel must participate.',
-      priority: 'high' as const,
-      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      targetOUs: ['Site Broadcast', 'HR', 'Cluster'],
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 432000000), // 5 days ago
-      requiresAcknowledgment: true,
-      responseType: 'textbox',
-      eventDate: new Date(Date.now() + 432000000), // 5 days from now
-      acknowledgments: [
-        { userId: '2', acknowledgedAt: new Date(Date.now() - 172800000), attending: true },
-        { userId: '3', acknowledgedAt: new Date(Date.now() - 86400000), attending: true },
-        { userId: '4', acknowledgedAt: new Date(Date.now() - 43200000), attending: false }
-      ],
-      isActive: true
-    }
-  ]);
-
-  // Mock templates data
-  let templates = $state<BroadcastTemplate[]>([
-    {
-      id: '1',
-      name: 'Team Meeting',
-      title: 'Team Meeting - [Insert Date]',
-      content: 'Join us for our team meeting to discuss recent progress and upcoming initiatives. Please confirm your attendance.',
-      priority: 'medium',
-      targetRoles: ['admin', 'manager', 'supervisor'],
-      acknowledgmentType: 'preferred-date',
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 86400000)
-    },
-    {
-      id: '2',
-      name: 'System Maintenance',
-      title: 'Scheduled System Maintenance',
-      content: 'Scheduled system maintenance will occur this weekend. All systems will be temporarily unavailable during this time. Please plan accordingly.',
-      priority: 'high',
-      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      acknowledgmentType: 'required',
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 172800000)
-    },
-    {
-      id: '3',
-      name: 'Policy Update',
-      title: 'Important Policy Update',
-      content: 'Please review the updated policy document. All team members must acknowledge receipt and understanding of the new guidelines.',
-      priority: 'medium',
-      targetRoles: ['admin', 'manager', 'supervisor', 'support', 'frontline'],
-      acknowledgmentType: 'required',
-      createdBy: '1',
-      createdAt: new Date(Date.now() - 259200000)
-    }
-  ]);
-
+  let currentUser = $derived($authStore?.user || { id: '', role: '' });
   let showCreateBroadcast = $state(false);
   let selectedBroadcast = $state<Broadcast | null>(null);
   let isAcknowledged = $state(false);
@@ -236,6 +103,12 @@
   let isLoadingRoles = $state(false);
   let isCreatingBroadcast = $state(false);
   let apiError = $state('');
+
+  let isLoadingTemplates = $state(false);
+  let isSavingTemplate = $state(false);
+
+  let broadcasts = $state<Broadcast[]>([]);
+  let templates = $state<BroadcastTemplate[]>([]);
 
   const roles = ['admin', 'manager', 'supervisor', 'support', 'frontline'];
   const priorities = [
@@ -352,32 +225,118 @@
       newBroadcast.title = template.title;
       newBroadcast.content = template.content;
       newBroadcast.priority = template.priority;
-      newBroadcast.targetRoles = [...template.targetRoles];
+      
+      // Convert OU names to OU IDs by matching against available OUs
+      newBroadcast.targetOUs = template.targetOUs
+        .map(ouName => {
+          const foundOU = availableOUs.find(ou => ou.name === ouName);
+          return foundOU?.id;
+        })
+        .filter(id => id !== undefined) as string[];
+        
+      // Convert role names to role IDs by matching against available roles
+      newBroadcast.targetRoles = template.targetRoles
+        .map(roleName => {
+          const foundRole = availableRoles.find(role => role.name === roleName);
+          return foundRole?.id;
+        })
+        .filter(id => id !== undefined) as string[];
+      
       newBroadcast.acknowledgmentType = template.acknowledgmentType;
       newBroadcast.choices = template.choices ? [...template.choices] : [''];
+      
+      console.log('Template loaded with:', {
+        title: newBroadcast.title,
+        targetOUs: newBroadcast.targetOUs,
+        targetRoles: newBroadcast.targetRoles,
+        acknowledgmentType: newBroadcast.acknowledgmentType
+      });
     }
   };
 
-  const saveAsTemplate = () => {
+  const saveAsTemplate = async () => {
     if (templateName.trim() && newBroadcast.title.trim() && newBroadcast.content.trim()) {
-      const template: BroadcastTemplate = {
-        id: Date.now().toString(),
-        name: templateName.trim(),
-        title: newBroadcast.title.trim(),
-        content: newBroadcast.content.trim(),
-        priority: newBroadcast.priority,
-        targetRoles: [...newBroadcast.targetRoles],
-        acknowledgmentType: newBroadcast.acknowledgmentType,
-        choices: newBroadcast.acknowledgmentType === 'choices' ? newBroadcast.choices.filter(choice => choice.trim()) : undefined,
-        createdBy: currentUser.id,
-        createdAt: new Date()
-      };
+      try {
+        isSavingTemplate = true;
+        
+        // Properly filter and clean up choices
+        let processedChoices = null;
+        if (newBroadcast.acknowledgmentType === 'choices') {
+          processedChoices = newBroadcast.choices
+            .filter(choice => typeof choice === 'string' && choice.trim() !== '')
+            .map(choice => choice.trim());
+          
+          // Don't send an empty array
+          if (processedChoices.length === 0) {
+            processedChoices = null;
+          }
+        }
+        
+        const templateData: SaveTemplateRequest = {
+          name: templateName.trim(),
+          title: newBroadcast.title.trim(),
+          content: newBroadcast.content.trim(),
+          priority: newBroadcast.priority,
+          acknowledgmentType: newBroadcast.acknowledgmentType,
+          choices: processedChoices,
+          targetOUs: newBroadcast.targetOUs,  // Add these fields
+          targetRoles: newBroadcast.targetRoles
+        };
+        
+        console.log('Saving template with data:', templateData);
+        const response = await BroadcastAPI.saveTemplate(templateData);
+        
+        if (response.ok) {
+          templates = [response.template, ...templates];
+          templateName = '';
+          showSaveTemplate = false;
+          $toastStore.success('Template saved successfully!');
+        } else {
+          throw new Error(response.message || 'Failed to save template');
+        }
+      } catch (error: any) {
+        console.error('Error saving template:', error);
+        $toastStore.error(error.message || 'An error occurred while saving the template');
+      } finally {
+        isSavingTemplate = false;
+      }
+    }
+  };
 
-      templates = [template, ...templates];
-      templateName = '';
-      showSaveTemplate = false;
-      // Replace alert with toast notification
-      $toastStore.success('Template saved successfully!');
+  const deleteTemplate = async () => {
+    if (!selectedTemplate) return;
+    
+    if (confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
+      try {
+        const response = await BroadcastAPI.deleteTemplate(selectedTemplate);
+        
+        if (response.ok) {
+          // Remove template from local state
+          templates = templates.filter(t => t.id !== selectedTemplate);
+          // Clear selection
+          selectedTemplate = '';
+          // Reset form
+          newBroadcast = {
+            title: '',
+            content: '',
+            priority: 'medium',
+            targetRoles: [],
+            targetOUs: [],
+            acknowledgmentType: 'none',
+            scheduleType: 'now',
+            eventDate: '',
+            scheduledFor: '',
+            endDate: '',
+            choices: ['']
+          };
+          $toastStore.success('Template deleted successfully!');
+        } else {
+          throw new Error(response.message || 'Failed to delete template');
+        }
+      } catch (error: any) {
+        console.error('Error deleting template:', error);
+        $toastStore.error(error.message || 'An error occurred while deleting the template');
+      }
     }
   };
 
@@ -386,29 +345,38 @@
     try {
       isLoadingOUs = true;
       isLoadingRoles = true;
+      isLoadingTemplates = true;
       
-      const [ousResponse, rolesResponse] = await Promise.all([
+      // Remove the getBroadcasts() call for now as it will be implemented later
+      const [ousResponse, rolesResponse, templatesResponse] = await Promise.all([
         BroadcastAPI.getOrganizationalUnits(),
-        BroadcastAPI.getRoles()
+        BroadcastAPI.getRoles(),
+        BroadcastAPI.getTemplates()
       ]);
       
       // Use only the API data
       availableOUs = ousResponse.organizationalUnits || [];
       availableRoles = rolesResponse.roles || [];
+      templates = templatesResponse.templates || [];
+      
+      // Initialize broadcasts as an empty array for now
+      broadcasts = [];
       
       console.log('Loaded OUs:', availableOUs);
       console.log('Loaded Roles:', availableRoles);
+      console.log('Loaded Templates:', templates);
     } catch (error: any) {
-      console.error('Failed to load broadcast targeting options:', error);
+      console.error('Failed to load broadcast data:', error);
       
-      // Don't use mock data, set to empty arrays instead
       availableOUs = [];
       availableRoles = [];
+      templates = [];
       
-      apiError = 'Failed to load organizational units and roles. Please try again later.';
+      apiError = 'Failed to load data. Please try again later.';
     } finally {
       isLoadingOUs = false;
       isLoadingRoles = false;
+      isLoadingTemplates = false;
     }
   });
 
@@ -662,30 +630,52 @@ const markAsDone = (broadcastId: string) => {
               <div class="flex flex-col sm:flex-row gap-4">
                 <div class="flex-1">
                   <label for="templateSelect" class="block text-sm font-medium text-gray-700 mb-2">Load from Template</label>
-                  <div class="flex space-x-3">
-                    <select 
-                      id="templateSelect" 
-                      bind:value={selectedTemplate}
-                      onchange={() => {
-                        if (selectedTemplate) {
-                          loadTemplate(selectedTemplate);
-                        }
-                      }}
-                      class="input-field flex-1"
-                    >
-                      <option value="">Select a template...</option>
-                      {#each templates as template}
-                        <option value={template.id}>{template.name}</option>
-                      {/each}
-                    </select>
-                    {#if selectedTemplate}
-                      <button
-                        type="button"
-                        onclick={() => { selectedTemplate = ''; }}
-                        class="secondary-button whitespace-nowrap"
+                    <div class="flex space-x-3">
+                      {#if isLoadingTemplates}
+                      <div class="input-field flex-1 flex items-center justify-center">
+                        <span class="text-gray-500">Loading templates...</span>
+                      </div>
+                    {:else}
+                      <select 
+                        id="templateSelect" 
+                        bind:value={selectedTemplate}
+                        onchange={() => {
+                          if (selectedTemplate) {
+                            loadTemplate(selectedTemplate);
+                          }
+                        }}
+                        class="input-field flex-1"
                       >
-                        Clear
-                      </button>
+                        <option value="">No Template</option>
+                        {#each templates as template}
+                          <option value={template.id}>{template.name}</option>
+                        {/each}
+                      </select>
+                      {#if selectedTemplate}
+                        <button
+                          type="button"
+                          onclick={() => { 
+                            selectedTemplate = ''; 
+                            // Reset the form to default values
+                            newBroadcast = {
+                              title: '',
+                              content: '',
+                              priority: 'medium',
+                              targetRoles: [],
+                              targetOUs: [],
+                              acknowledgmentType: 'none',
+                              scheduleType: 'now',
+                              eventDate: '',
+                              scheduledFor: '',
+                              endDate: '',
+                              choices: ['']
+                            };
+                          }}
+                          class="secondary-button whitespace-nowrap"
+                        >
+                          Clear
+                        </button>
+                      {/if}
                     {/if}
                   </div>
                 </div>
@@ -693,13 +683,14 @@ const markAsDone = (broadcastId: string) => {
                 <div class="sm:border-l sm:border-gray-300 sm:pl-4">
                   <span class="block text-sm font-medium text-gray-700 mb-2">Save Current as Template</span>
                   {#if !showSaveTemplate}
+                    <!-- This button SHOWS the template name input -->
                     <button
                       type="button"
                       onclick={() => showSaveTemplate = true}
-                      class="secondary-button whitespace-nowrap"
                       disabled={!newBroadcast.title.trim() || !newBroadcast.content.trim()}
+                      class="primary-button whitespace-nowrap text-sm px-3 py-2 disabled:opacity-50"
                     >
-                      Save Template
+                      Save as Template
                     </button>
                   {:else}
                     <div class="flex space-x-2">
@@ -709,13 +700,14 @@ const markAsDone = (broadcastId: string) => {
                         placeholder="Template name..."
                         class="input-field flex-1 min-w-32"
                       />
+                      <!-- This button PERFORMS the save operation -->
                       <button
                         type="button"
                         onclick={saveAsTemplate}
-                        disabled={!templateName.trim()}
+                        disabled={!templateName.trim() || isSavingTemplate}
                         class="primary-button whitespace-nowrap text-sm px-3 py-2 disabled:opacity-50"
                       >
-                        Save
+                        {isSavingTemplate ? 'Saving...' : 'Save'}
                       </button>
                       <button
                         type="button"
@@ -723,6 +715,24 @@ const markAsDone = (broadcastId: string) => {
                         class="secondary-button text-sm px-3 py-2"
                       >
                         Cancel
+                      </button>
+                    </div>
+                  {/if}
+                  {#if selectedTemplate}
+                    <div class="mt-2">
+                      <button
+                        type="button"
+                        onclick={deleteTemplate}
+                        class="text-red-600 hover:text-red-700 text-sm flex items-center space-x-1"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2">
+                          <path d="M3 6h18"></path>
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                          <line x1="10" x2="10" y1="11" y2="17"></line>
+                          <line x1="14" x2="14" y1="11" y2="17"></line>
+                        </svg>
+                        <span>Delete Template</span>
                       </button>
                     </div>
                   {/if}

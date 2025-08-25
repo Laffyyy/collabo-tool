@@ -21,8 +21,6 @@
 	let showNavigation = $derived(!noNavPages.includes($page.url.pathname) && !isProfilePage && !isSettingsPage);
 </script>
 
-<ToastContainer />
-
 {#if showNavigation}
 	<Navigation />
 {/if}

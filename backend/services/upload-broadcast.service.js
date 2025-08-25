@@ -138,8 +138,130 @@ async function getRoles() {
   }
 }
 
+/**
+ * Save a broadcast template
+ * @param {Object} templateData - Template data
+ * @returns {Promise<Object>} Created template
+ */
+async function saveTemplate({
+  name,
+  title,
+  content,
+  priority,
+  createdBy,
+  acknowledgmentType = 'none',
+  choices = null,
+  targetOUs = [],
+  targetRoles = []
+}) {
+  try {
+    console.log(`[Broadcast Service] Saving template: "${name}" by user ${createdBy}`);
+    
+    // Validate inputs
+    if (!name || !title || !content || !priority || !createdBy) {
+      console.log('[Broadcast Service] Missing required template fields');
+      throw new BadRequestError('Template name, title, content, priority, and user ID are required');
+    }
+    
+    // Validate choices for 'choices' response type
+    if (acknowledgmentType === 'choices' && (!choices || !Array.isArray(choices) || choices.length === 0)) {
+      console.log('[Broadcast Service] Choices required for multiple choice template');
+      throw new BadRequestError('Options are required for multiple choice template');
+    }
+    
+    // Limit choices to maximum 8 options
+    if (acknowledgmentType === 'choices' && choices.length > 8) {
+      console.log('[Broadcast Service] Too many choices provided for template');
+      throw new BadRequestError('Maximum of 8 options allowed for multiple choice template');
+    }
+    
+    // Get OU and role names if IDs are provided
+    let ouNames = [];
+    let roleNames = [];
+    
+    if (targetOUs.length > 0) {
+      const allOUs = await uploadBroadcastModel.getOrganizationalUnits();
+      ouNames = targetOUs.map(ouId => {
+        const ou = allOUs.find(o => o.id === ouId);
+        return ou ? ou.name : null;
+      }).filter(name => name !== null);
+    }
+    
+    if (targetRoles.length > 0) {
+      const allRoles = await uploadBroadcastModel.getRoles();
+      roleNames = targetRoles.map(roleId => {
+        const role = allRoles.find(r => r.id === roleId);
+        return role ? role.name : null;
+      }).filter(name => name !== null);
+    }
+    
+    const template = await uploadBroadcastModel.saveTemplate({
+      name,
+      title,
+      content,
+      priority,
+      createdBy,
+      acknowledgmentType,
+      choices: acknowledgmentType === 'choices' ? choices : null,
+      targetOUs: ouNames,
+      targetRoles: roleNames
+    });
+    
+    console.log(`[Broadcast Service] Template saved with ID: ${template.id}`);
+    
+    return template;
+  } catch (error) {
+    console.error('[Broadcast Service] Error saving template:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get broadcast templates for a user
+ * @param {string} userId - User ID (optional)
+ * @returns {Promise<Array>} Array of templates
+ */
+async function getTemplates(userId = null) {
+  try {
+    return await uploadBroadcastModel.getTemplates(userId);
+  } catch (error) {
+    console.error('[Broadcast Service] Error getting templates:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a broadcast template
+ * @param {string} templateId - Template ID
+ * @param {string} userId - User ID (for permission checking)
+ * @returns {Promise<boolean>} Success status
+ */
+async function deleteTemplate(templateId, userId) {
+  try {
+    if (!templateId || !userId) {
+      throw new BadRequestError('Template ID and user ID are required');
+    }
+    
+    // First check if template exists and belongs to the user
+    const templates = await uploadBroadcastModel.getTemplates(userId);
+    const template = templates.find(t => t.id === templateId);
+    
+    if (!template) {
+      throw new BadRequestError('Template not found or you do not have permission to delete it');
+    }
+    
+    // Delete the template
+    return await uploadBroadcastModel.deleteTemplate(templateId);
+  } catch (error) {
+    console.error('[Broadcast Service] Error deleting template:', error);
+    throw error;
+  }
+}
 module.exports = {
   createBroadcast,
   getOrganizationalUnits,
-  getRoles
+  getRoles,
+  saveTemplate,
+  getTemplates,
+  deleteTemplate
 };

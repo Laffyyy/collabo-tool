@@ -2,14 +2,16 @@
   import { toastStore } from '$lib/stores/toast.svelte';
   import Toast from '$lib/components/Toast.svelte';
   
-  let currentToast = $derived($toastStore.currentToast);
+  let currentToast = $derived($toastStore?.currentToast);
   
   function handleDismiss(id: string) {
-    $toastStore.dismiss(id);
+    if ($toastStore) {
+      $toastStore.dismiss(id);
+    }
   }
 </script>
 
-<div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-sm" 
+<div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100]" 
      role="alert" 
      aria-live="polite">
   {#if currentToast && currentToast.id}

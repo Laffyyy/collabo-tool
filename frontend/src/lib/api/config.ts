@@ -29,7 +29,8 @@ export const API_CONFIG = {
     broadcast: {
       create: '/api/v1/broadcast',
       getOUs: '/api/v1/broadcast/ou',
-      getRoles: '/api/v1/broadcast/roles'
+      getRoles: '/api/v1/broadcast/roles',
+      templates: '/api/v1/broadcast/templates'
     }
   }
 };

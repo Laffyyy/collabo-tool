@@ -96,3 +96,39 @@ export interface GetRolesResponse {
   ok: boolean;
   roles: Role[];
 }
+
+export interface BroadcastTemplate {
+  id: string;
+  name: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  targetRoles: string[];
+  targetOUs: string[];
+  acknowledgmentType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  choices?: string[];
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface SaveTemplateRequest {
+  name: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  acknowledgmentType?: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  choices?: string[] | null;
+  targetOUs?: string[]; // Add these fields
+  targetRoles?: string[];
+}
+
+export interface SaveTemplateResponse {
+  ok: boolean;
+  message: string;
+  template: BroadcastTemplate;
+}
+
+export interface GetTemplatesResponse {
+  ok: boolean;
+  templates: BroadcastTemplate[];
+}

@@ -4,7 +4,10 @@ import type {
   CreateBroadcastRequest, 
   CreateBroadcastResponse,
   GetOrganizationalUnitsResponse,
-  GetRolesResponse
+  GetRolesResponse,
+  SaveTemplateRequest,
+  SaveTemplateResponse,
+  GetTemplatesResponse
 } from './types';
 
 /**
@@ -39,5 +42,48 @@ export async function getOrganizationalUnits(): Promise<GetOrganizationalUnitsRe
 export async function getRoles(): Promise<GetRolesResponse> {
   return await apiClient.get<GetRolesResponse>(
     API_CONFIG.endpoints.broadcast.getRoles
+  );
+}
+
+/**
+ * Save a broadcast template
+ * @param templateData - The template data to save
+ * @returns Response with the saved template
+ */
+export async function saveTemplate(
+  templateData: SaveTemplateRequest
+): Promise<SaveTemplateResponse> {
+  return await apiClient.post<SaveTemplateResponse>(
+    API_CONFIG.endpoints.broadcast.templates,  // Use templates instead of saveTemplate
+    templateData
+  );
+}
+
+/**
+ * Get broadcast templates
+ * @returns Response with templates
+ */
+export async function getTemplates(): Promise<GetTemplatesResponse> {
+  return await apiClient.get<GetTemplatesResponse>(
+    API_CONFIG.endpoints.broadcast.templates  // Use templates instead of getTemplates
+  );
+}
+
+/**
+ * Delete a broadcast template
+ * @param templateId - The ID of the template to delete
+ * @returns Response confirming deletion
+ */
+export async function deleteTemplate(
+  templateId: string
+): Promise<{ ok: boolean; message: string }> {
+  return await apiClient.delete<{ ok: boolean; message: string }>(
+    `${API_CONFIG.endpoints.broadcast.templates}/${templateId}`
+  );
+}
+
+export async function getBroadcasts(): Promise<GetBroadcastsResponse> {
+  return await apiClient.get<GetBroadcastsResponse>(
+    API_CONFIG.endpoints.broadcast.getBroadcasts
   );
 }
