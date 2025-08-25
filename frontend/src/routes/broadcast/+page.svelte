@@ -92,7 +92,8 @@
           eventDate: broadcast.eventDate ? new Date(broadcast.eventDate) : undefined,
           endDate: broadcast.endDate ? new Date(broadcast.endDate) : undefined,
           acknowledgments: broadcast.acknowledgments || [],
-          isActive: broadcast.isActive !== false
+          isActive: broadcast.isActive !== false,
+          status: broadcast.status 
         };
       });
 
@@ -201,36 +202,34 @@
 
   // Computed values
   let sortedBroadcasts = $derived(
-    isLoading ? [] : [...broadcasts]
-      .filter(b => {
-        // Apply search filter
-        if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase();
-          const matchesTitle = b.title.toLowerCase().includes(query);
-          const matchesContent = b.content.toLowerCase().includes(query);
-          if (!matchesTitle && !matchesContent) return false;
-        }
-        
-        // Apply priority filter
-        if (priorityFilter !== 'all' && b.priority !== priorityFilter) return false;
-        
-        return true;
-      })
-      .sort((a, b) => {
-        // Sort by active status first
-        if (a.isActive !== b.isActive) {
-          return a.isActive ? -1 : 1;
-        }
-        
-        // Then by priority
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
-        const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
-        if (priorityDiff !== 0) return priorityDiff;
-        
-        // Finally by creation date
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      })
-  );
+  isLoading ? [] : [...broadcasts]
+    .filter(b => {
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesTitle = b.title.toLowerCase().includes(query);
+        const matchesContent = b.content.toLowerCase().includes(query);
+        if (!matchesTitle && !matchesContent) return false;
+      }
+      // Apply priority filter
+      if (priorityFilter !== 'all' && b.priority !== priorityFilter) return false;
+      // Only show completed if status is exactly 'done'
+      if (!b.isActive && b.status !== 'done') return false;
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by active status first
+      if (a.isActive !== b.isActive) {
+        return a.isActive ? -1 : 1;
+      }
+      // Then by priority
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      // Finally by creation date
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
+);
 
   let tabCounts = $derived((): { [key: string]: number } => {
     if (activeTab === 'My Broadcasts') {
