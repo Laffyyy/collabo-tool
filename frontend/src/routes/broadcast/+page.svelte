@@ -46,17 +46,110 @@
   // Get current user from auth store
   const currentUser = $authStore.user;
 
-  // State for broadcasts - now loaded from API
+  // State for broadcasts - will be loaded from API for "My Broadcasts" tab
   let broadcasts = $state<Broadcast[]>([]);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
-  let statistics = $state({
-    total: 0,
-    active: 0,
-    acknowledged: 0,
-    byPriority: { high: 0, medium: 0, low: 0 },
-    byStatus: { sent: 0, scheduled: 0, draft: 0, archived: 0, deleted: 0 }
+
+  // FIXED: Load broadcasts on component mount AND when switching to "My Broadcasts"
+  const loadMyBroadcasts = async () => {
+    console.log('🔄 Loading user broadcasts from API...');
+    isLoading = true;
+    error = null;
+
+    try {
+      const searchFilters = {
+        search: searchQuery.trim() || undefined,
+        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        limit: 50,
+        page: 1,
+        includeDeleted: false
+      };
+
+      console.log('📤 API Request filters:', searchFilters);
+      const response = await broadcastAPI.getMyBroadcasts(searchFilters);
+      console.log('📥 API Response:', response);
+
+      if (!response.success) {
+        throw new Error('Failed to load broadcasts');
+      }
+
+      // Transform API response to match frontend format
+      broadcasts = response.broadcasts.map(broadcast => {
+        return {
+          id: broadcast.id,
+          title: broadcast.title,
+          content: broadcast.content,
+          priority: broadcast.priority as 'low' | 'medium' | 'high',
+          targetRoles: broadcast.targetRoles || ['admin'],
+          targetOUs: broadcast.targetOUs || ['HR'],
+          createdBy: broadcast.createdBy,
+          createdAt: new Date(broadcast.createdAt),
+          scheduledFor: broadcast.scheduledFor ? new Date(broadcast.scheduledFor) : undefined,
+          requiresAcknowledgment: broadcast.requiresAcknowledgment || false,
+          responseType: broadcast.responseType as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
+          choices: broadcast.choices,
+          eventDate: broadcast.eventDate ? new Date(broadcast.eventDate) : undefined,
+          endDate: broadcast.endDate ? new Date(broadcast.endDate) : undefined,
+          acknowledgments: broadcast.acknowledgments || [],
+          isActive: broadcast.isActive !== false
+        };
+      });
+
+      console.log('✅ Broadcasts loaded successfully:', broadcasts.length);
+
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load broadcasts';
+      console.error('❌ Error loading broadcasts:', err);
+      broadcasts = [];
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  // FIXED: Load data on component mount if already on "My Broadcasts"
+  onMount(() => {
+    console.log('🔄 Component mounted, activeTab:', activeTab);
+    if (activeTab === 'My Broadcasts') {
+      loadMyBroadcasts();
+    }
   });
+
+  // FIXED: Effect for tab switching (separate from mount)
+  $effect(() => {
+    console.log('🔄 Tab switched to:', activeTab);
+    // Only load if we switched TO "My Broadcasts" and don't have data yet
+    if (activeTab === 'My Broadcasts' && broadcasts.length === 0 && !isLoading) {
+      loadMyBroadcasts();
+    }
+  });
+
+  // FIXED: Effect for filter changes (only reload if we have data and filters change)
+  $effect(() => {
+    console.log('🔄 Filters changed - search:', searchQuery, 'priority:', priorityFilter);
+    // Only reload if we're on "My Broadcasts", have existing data, and filters changed
+    if (activeTab === 'My Broadcasts' && broadcasts.length > 0 && (searchQuery.trim() || priorityFilter !== 'all')) {
+      loadMyBroadcasts();
+    }
+  });
+
+  // ALTERNATIVE: Single effect approach (use this instead of the three effects above)
+  /*
+  $effect(() => {
+    console.log('🔄 Effect triggered - activeTab:', activeTab, 'searchQuery:', searchQuery, 'priorityFilter:', priorityFilter);
+    
+    if (activeTab === 'My Broadcasts') {
+      // Load broadcasts if:
+      // 1. We don't have any data yet, OR
+      // 2. Filters have changed (search or priority)
+      const shouldLoad = broadcasts.length === 0 || searchQuery.trim() || priorityFilter !== 'all';
+      
+      if (shouldLoad && !isLoading) {
+        loadMyBroadcasts();
+      }
+    }
+  });
+  */
 
   // Keep existing state variables...
   let showCreateBroadcast = $state(false);
@@ -98,85 +191,11 @@
     { id: 'Site Broadcast', label: 'Site Broadcast' }
   ];
 
-  // Load broadcasts from API
-  const loadBroadcasts = async (filters = {}) => {
-    if (activeTab !== 'My Broadcasts') {
-      return; // Only load for My Broadcasts tab
-    }
-
-    console.log('🔄 Loading user broadcasts from API...');
-    isLoading = true;
-    error = null;
-
-    try {
-      const searchFilters = {
-        ...filters,
-        search: searchQuery.trim() || undefined,
-        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
-        limit: 50,
-        page: 1,
-        includeDeleted: false // Only show active broadcasts
-      };
-
-      console.log('📤 API Request filters:', searchFilters);
-      const response = await broadcastAPI.getMyBroadcasts(searchFilters);
-      console.log('📥 API Response:', response);
-
-      if (!response.success) {
-        throw new Error('Failed to load broadcasts');
-      }
-
-      // Transform API response to match frontend format
-      broadcasts = response.broadcasts.map(broadcast => {
-        console.log('🔄 Processing broadcast:', broadcast);
-        return {
-          id: broadcast.id,
-          title: broadcast.title,
-          content: broadcast.content,
-          priority: broadcast.priority as 'low' | 'medium' | 'high',
-          targetRoles: broadcast.targetRoles || ['admin'],
-          targetOUs: broadcast.targetOUs || ['HR'],
-          createdBy: broadcast.createdBy,
-          createdAt: new Date(broadcast.createdAt),
-          scheduledFor: broadcast.scheduledFor ? new Date(broadcast.scheduledFor) : undefined,
-          requiresAcknowledgment: broadcast.requiresAcknowledgment || false,
-          responseType: broadcast.responseType as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
-          choices: broadcast.choices,
-          eventDate: broadcast.eventDate ? new Date(broadcast.eventDate) : undefined,
-          endDate: broadcast.endDate ? new Date(broadcast.endDate) : undefined,
-          acknowledgments: broadcast.acknowledgments || [],
-          isActive: broadcast.isActive !== false,
-          status: broadcast.status
-        };
-      });
-
-      // Update statistics
-      statistics = response.statistics || statistics;
-
-      console.log('✅ Broadcasts loaded successfully:', broadcasts.length);
-
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load broadcasts';
-      console.error('❌ Error loading broadcasts:', err);
-      broadcasts = [];
-    } finally {
-      isLoading = false;
-    }
-  };
-
-  // Load broadcasts when component mounts or tab changes
-  $effect(() => {
-    console.log('👀 Effect triggered - activeTab:', activeTab);
-    if (activeTab === 'My Broadcasts') {
-      loadBroadcasts();
-    }
-  });
-
   // Reload when filters change
   $effect(() => {
     console.log('🔍 Filter effect - search:', searchQuery, 'priority:', priorityFilter);
     if (activeTab === 'My Broadcasts') {
-      loadBroadcasts();
+      loadMyBroadcasts();
     }
   });
 
@@ -215,7 +234,9 @@
 
   let tabCounts = $derived((): { [key: string]: number } => {
     if (activeTab === 'My Broadcasts') {
-      return { 'My Broadcasts': statistics.active ?? 0 };
+      // Count only active broadcasts
+      const activeCount = broadcasts.filter(b => b.isActive).length;
+      return { 'My Broadcasts': activeCount };
     }
     // Ensure all keys have number values (not undefined)
     return { 'My Broadcasts': 0 };
@@ -373,7 +394,7 @@
           <p class="text-gray-500 mb-4">{error}</p>
           <div class="space-y-3">
             <button
-              onclick={() => loadBroadcasts()}
+              onclick={() => loadMyBroadcasts()}
               class="primary-button"
             >
               Try Again
