@@ -16,6 +16,18 @@ export interface BroadcastResponse {
     total: number;
     active: number;
     acknowledged: number;
+    byPriority: {
+      high: number;
+      medium: number;
+      low: number;
+    };
+    byStatus: {
+      sent: number;
+      scheduled: number;
+      draft: number;
+      archived: number;
+      deleted: number;
+    };
   };
   pagination: {
     currentPage: number;
@@ -25,7 +37,6 @@ export interface BroadcastResponse {
   };
 }
 
-// Helper function for making authenticated requests
 function makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
   const token = localStorage.getItem('authToken');
   
@@ -43,9 +54,6 @@ function makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promi
 class BroadcastAPI {
   private baseUrl = `${API_CONFIG.baseUrl}/api/v1/broadcasts`;
 
-  /**
-   * Get user's broadcasts
-   */
   async getMyBroadcasts(filters: BroadcastFilters = {}): Promise<BroadcastResponse> {
     const params = new URLSearchParams();
     
@@ -56,11 +64,11 @@ class BroadcastAPI {
     });
 
     const url = `${this.baseUrl}/my-broadcasts${params.toString() ? `?${params}` : ''}`;
-    console.log('🚀 Making request to:', url); // Debug log
+    console.log('🚀 Fetching broadcasts from:', url);
     
     try {
       const response = await makeAuthenticatedRequest(url);
-      console.log('📡 Response status:', response.status); // Debug log
+      console.log('📡 Response status:', response.status);
 
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`;
@@ -75,15 +83,45 @@ class BroadcastAPI {
       }
 
       const result = await response.json();
-      console.log('✅ API Response:', result); // Debug log
-      console.log('📊 Broadcasts count:', result.broadcasts?.length); // Debug log
+      console.log('✅ API Response:', result);
       return result;
     } catch (error) {
-      console.error('❌ API Error:', error); // Debug log
-      if (error instanceof Error) {
-        throw error;
+      console.error('❌ API Error:', error);
+      throw error instanceof Error ? error : new Error('Network error occurred');
+    }
+  }
+
+  async getBroadcastById(id: string): Promise<{ success: boolean; broadcast: any }> {
+    const url = `${this.baseUrl}/my-broadcasts/${id}`;
+    
+    try {
+      const response = await makeAuthenticatedRequest(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      throw new Error('Network error occurred');
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Error fetching broadcast:', error);
+      throw error;
+    }
+  }
+
+  async getBroadcastStats(): Promise<{ success: boolean; statistics: any }> {
+    const url = `${this.baseUrl}/my-broadcasts/stats`;
+    
+    try {
+      const response = await makeAuthenticatedRequest(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Error fetching broadcast stats:', error);
+      throw error;
     }
   }
 }
