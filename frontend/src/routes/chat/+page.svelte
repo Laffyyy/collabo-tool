@@ -1,4 +1,6 @@
 <script lang="ts">
+	//import {goto} from '$app/navigation';
+	import { getAllUsers } from '$lib/services/chatServices';
 	import { onMount } from 'svelte';
 	import { createConversation, getConversations } from '$lib/services/chatServices';
 	import Navigation from '$lib/components/Navigation.svelte';
@@ -195,72 +197,17 @@
 	let editingGroupName = $state('');
 
 	// Sample data
-	const availableUsers: User[] = [
-		{ 
-			id: '2', 
-			name: 'John Doe', 
-			firstName: 'John',
-			lastName: 'Doe',
-			avatar: '/placeholder.svg',
-			department: 'Engineering',
-			role: 'Manager',
-			organizationalUnit: 'Product Development',
-			email: 'john.doe@company.com',
-			status: 'online',
-			lastLogin: '2024-01-15 14:30',
-			managedTeams: ['Frontend Team', 'Backend Team'],
-			supervisors: ['Sarah Wilson (Director)'],
-			reportingTo: 'Sarah Wilson'
-		},
-		{ 
-			id: '3', 
-			name: 'Alice Johnson', 
-			firstName: 'Alice',
-			lastName: 'Johnson',
-			avatar: '/placeholder.svg',
-			department: 'Marketing',
-			role: 'Supervisor',
-			organizationalUnit: 'Digital Marketing',
-			email: 'alice.johnson@company.com',
-			status: 'online',
-			lastLogin: '2024-01-15 13:45',
-			managedTeams: ['Content Team'],
-			supervisors: ['Mike Chen (Manager)'],
-			reportingTo: 'Mike Chen'
-		},
-		{ 
-			id: '4', 
-			name: 'Bob Smith', 
-			firstName: 'Bob',
-			lastName: 'Smith',
-			avatar: '/placeholder.svg',
-			department: 'Sales',
-			role: 'Frontline',
-			organizationalUnit: 'Regional Sales',
-			email: 'bob.smith@company.com',
-			status: 'away',
-			lastLogin: '2024-01-15 12:20',
-			managedTeams: [],
-			supervisors: ['Lisa Brown (Supervisor)'],
-			reportingTo: 'Lisa Brown'
-		},
-		{ 
-			id: '5', 
-			name: 'Carol White', 
-			firstName: 'Carol',
-			lastName: 'White',
-			avatar: '/placeholder.svg',
-			department: 'Support',
-			role: 'Support',
-			organizationalUnit: 'Customer Success',
-			email: 'carol.white@company.com',
-			status: 'online',
-			lastLogin: '2024-01-15 15:10',
-			managedTeams: [],
-			supervisors: ['David Park (Supervisor)'],
-			reportingTo: 'David Park'
-		}
-	];
+	let availableUsers: User[] = [];
+
+onMount(async () => {
+  try {
+    conversations = await getConversations();
+    groupChats = conversations.filter((c: any) => c.type === 'group');
+    availableUsers = await getAllUsers(); // Fetch from backend
+  } catch (e) {
+    console.error('Failed to fetch conversations or users:', e);
+  }
+});
 
 	onMount(async () => {
   try {
@@ -689,18 +636,31 @@ if (typeof window !== 'undefined') {
 }
 
 const createGroup = async () => {
-  console.log('Create Group clicked', { groupName, selectedUsers, currentUserId });
-  if (!groupName.trim() || selectedUsers.length === 0 || !currentUserId) return;
+  console.log('Creating group with:', { groupName, selectedUsers, currentUserId });
+  
+  if (!groupName.trim() || selectedUsers.length === 0 || !currentUserId) {
+    console.error('Missing required fields:', { 
+      hasName: !!groupName.trim(), 
+      hasUsers: selectedUsers.length > 0, 
+      hasUserId: !!currentUserId 
+    });
+    return;
+  }
+
   try {
-    const dcreatedBy = currentUserId;
-    const dname = groupName;
-    const dtype = "group";
-    const newGroup = await createConversation({ dname, dtype, dcreatedBy });
+    const newGroup = await createConversation({
+      dname: groupName,
+      dtype: 'group',
+      dcreatedBy: currentUserId
+    });
+
+    console.log('Group created:', newGroup);
     groupChats = [...groupChats, newGroup];
     showCreateGroup = false;
     groupName = '';
     selectedUsers = [];
   } catch (e: any) {
+    console.error('Failed to create group:', e);
     alert('Failed to create group: ' + (e.message || e));
   }
 };

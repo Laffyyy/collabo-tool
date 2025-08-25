@@ -10,9 +10,30 @@ let pool = null;
 function getPool() {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
-    pool = new Pool({ connectionString });
+    pool = new Pool({ 
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false // Required for Supabase
+      },
+      max: 10 // Maximum number of clients in the pool
+    });
   }
   return pool;
+}
+
+/**
+ * Execute SQL query with parameters
+ * @param {string} text - SQL query text
+ * @param {Array} params - Query parameters
+ * @returns {Promise} Query result
+ */
+async function query(text, params) {
+  const client = await pool.connect();
+  try {
+    return await client.query(text, params);
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -27,5 +48,6 @@ function closePool() {
 
 module.exports = {
   getPool,
+  query,
   closePool
 };

@@ -11,12 +11,15 @@ const router = express.Router();
 router.use(requireAuth);
 
 // Create conversation
-router.post('/conversations', validateCreateConversation, chatController.createConversation, chatController.getUSerConversations);
+router.post('/conversations', validateCreateConversation, chatController.createConversation);
 
 // Add message
 router.post('/messages', validateAddMessage, chatController.addMessage);
 
 // Fetch messages for a conversation
 router.get('/messages/:conversationId', chatController.getMessagesByConversation);
+
+router.get('/conversations',chatController.getUserConversations);
+
 
 module.exports = router;

@@ -1,4 +1,5 @@
 const chatService = require('../services/chat.services');
+const { BadRequestError } = require('../utils/errors');
 
 exports.createConversation = async (req, res, next) => {
   try {
@@ -29,9 +30,13 @@ exports.getMessagesByConversation = async (req, res, next) => {
 
 exports.getUserConversations = async (req, res, next) => {
   try {
-    const userId = req.user.id; // or however you get the authenticated user's ID
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
     const conversations = await chatService.getUserConversations(userId);
-    res.json(conversations);
+    // Always return an array, even if empty
+    res.json(conversations || []);
   } catch (err) {
     next(err);
   }
