@@ -44,7 +44,7 @@ async function createOUmanager(req, res, next) {
 
         // Prepare OUsettings array based on Settings object
         let OUsettings = [];
-
+        console.log('Settings received:', JSON.stringify(Settings, null, 2));
         try {
             if (Settings && Settings.Chat) {
                 const chat = Settings.Chat;
@@ -58,28 +58,28 @@ async function createOUmanager(req, res, next) {
                         forwardMessage: !!chat.Frontline.ForwardMessage
                     });
                 }
-                if (chat.Support) {
+                if (chat.support) {
                     OUsettings.push({
                         settingstype: 'chat.support',
-                        init1v1: !!chat.Support.Init1v1,
-                        createGroup: !!chat.Support.CreateGroup,
-                        joinGroupChats: !!chat.Support.JoinGroupChats,
-                        shareFiles: !!chat.Support.ShareFiles,
-                        forwardMessage: !!chat.Support.ForwardMessage
+                        init1v1: !!chat.support.Init1v1,
+                        createGroup: !!chat.support.CreateGroup,
+                        joinGroupChats: !!chat.support.JoinGroupChats,
+                        shareFiles: !!chat.support.ShareFiles,
+                        forwardMessage: !!chat.support.ForwardMessage
                     });
                 }
-                if (chat.Supervisor) {
+                if (chat.supervisor) {
                     OUsettings.push({
                         settingstype: 'chat.supervisor',
-                        createGroup: !!chat.Supervisor.CreateGroup,
-                        shareFiles: !!chat.Supervisor.ShareFiles,
-                        forwardMessage: !!chat.Supervisor.ForwardMessage
+                        createGroup: !!chat.supervisor.CreateGroup,
+                        shareFiles: !!chat.supervisor.ShareFiles,
+                        forwardMessage: !!chat.supervisor.ForwardMessage
                     });
                 }
             }
 
-            if (Settings && Settings.Broadcast) {
-                const broadcast = Settings.Broadcast;
+            if (Settings && Settings.broadcast) {
+                const broadcast = Settings.broadcast;
                 if (broadcast.Frontline) {
                     OUsettings.push({
                         settingstype: 'broadcast.frontline',
@@ -87,17 +87,17 @@ async function createOUmanager(req, res, next) {
                         replyToBroadcasts: !!broadcast.Frontline.ReplyToBroadcasts
                     });
                 }
-                if (broadcast.Support) {
+                if (broadcast.support) {
                     OUsettings.push({
                         settingstype: 'broadcast.support',
-                        createBroadcasts: !!broadcast.Support.CreateBroadcasts,
-                        replyToBroadcasts: !!broadcast.Support.ReplyToBroadcasts
+                        createBroadcasts: !!broadcast.support.CreateBroadcasts,
+                        replyToBroadcasts: !!broadcast.support.ReplyToBroadcasts
                     });
                 }
-                if (broadcast.Supervisor) {
+                if (broadcast.supervisor) {
                     OUsettings.push({
                         settingstype: 'broadcast.supervisor',
-                        createBroadcasts: !!broadcast.Supervisor.CreateBroadcasts
+                        createBroadcasts: !!broadcast.supervisor.CreateBroadcasts
                     });
                 }
             }
@@ -107,6 +107,8 @@ async function createOUmanager(req, res, next) {
                 error: 'Invalid Settings structure: ' + parseErr.message
             });
         }
+
+        console.log('Final OUsettings array:', JSON.stringify(OUsettings, null, 2));
 
         // Call service with new structure
         let result;
@@ -118,6 +120,7 @@ async function createOUmanager(req, res, next) {
                 OUsettings,
                 Location
             );
+            console.log('result', result);
         } catch (serviceErr) {
             return res.status(500).json({
                 ok: false,

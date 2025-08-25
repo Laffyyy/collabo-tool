@@ -1,5 +1,7 @@
 // OU Management Service
 // This service handles all OU (Organizational Unit) related operations
+const OUmodel = require('../model/ou.model');
+const ouModel = new OUmodel();
 
 /**
  * Get active OUs with pagination and sorting
@@ -55,24 +57,12 @@ async function getDeactiveOU(howmany, page, sort) {
  * @param {Array} OUsettings - OU settings array
  * @returns {Object} - Created OU data
  */
-async function createOU(name, description, parentouid, OUsettings) {
+async function createOU(OrgName, Description, Location, Settings) {
     try {
-        // TODO: Implement database query to create new OU
-        // This is a placeholder implementation
-        const newOU = {
-            id: Date.now().toString(), // Temporary ID generation
-            name,
-            description,
-            parentouid: parentouid || null,
-            OUsettings,
-            active: true,
-            createdAt: new Date().toISOString()
-        };
-        
-        return {
-            message: 'OU created successfully',
-            data: newOU
-        };
+        const result = await ouModel.createOU(OrgName, Description, Location, Settings);
+        return result;
+
+
     } catch (error) {
         throw new Error(`Failed to create OU: ${error.message}`);
     }

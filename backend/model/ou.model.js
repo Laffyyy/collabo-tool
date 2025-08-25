@@ -1,18 +1,21 @@
 const { db } = require('../config/db');
 class OUmodel {
-    constructor(id, name, description, parentouid, createdat, OUsettings) {
-        this.id = id;
-        this.name = name;
-        this.description = description;
-        this.parentouid = parentouid;
-        this.createdat = createdat;
-        this.OUsettings = OUsettings;
-    }
 
     async getOUnamebyId(id) {
         try {
             const query = `SELECT dname FROM tblorganizationalunits WHERE did = $1`;
             const result = await db.query(query, [id]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
+
+    async createOU(OrgName, Description, Location, Settings) {
+        try {
+            const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, $5) RETURNING *`;
+            // Convert Settings to an array of JSONB - wrap the settings object in an array
+            const result = await db.query(query, [OrgName, Description, Location, new Date(), Settings]);
             return result.rows[0];
         } catch (error) {
             throw new Error(error);
