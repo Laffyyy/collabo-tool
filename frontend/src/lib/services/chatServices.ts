@@ -11,23 +11,19 @@ export async function createConversation({
   dcreatedBy: string
 }) {
   const token = localStorage.getItem('jwt');
-  
-  console.log('Creating conversation with:', { dname, dtype, dcreatedBy });
-
-  const response = await fetch(`${API_URL}/conversations`, {
+  const response = await fetch('http://localhost:5000/api/chat/conversations', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
+    credentials: 'include', // <-- This sends cookies!
     body: JSON.stringify({ dname, dtype, dcreatedBy })
   });
-
   if (!response.ok) {
     const error = await response.text();
     throw new Error(error);
   }
-
   return await response.json();
 }
 
@@ -84,7 +80,8 @@ export async function getAllUsers() {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
-    }
+    },
+    credentials: 'include' // <-- This is required to send cookies!
   });
   if (!response.ok) throw new Error('Failed to fetch users');
   return await response.json();

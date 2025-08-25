@@ -20,7 +20,9 @@ async function requireAuth(req, res, next) {
     }
     
     // Verify token
-    const decoded = jwt.verify(token, env.JWT_SECRET);
+  const decoded = jwt.verify(token, env.JWT_SECRET);
+  req.user = decoded;
+  next();
     
     // Verify session exists and is active
     const session = await sessionModel.findBySessionToken(sessionToken);

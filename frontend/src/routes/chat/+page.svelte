@@ -199,11 +199,28 @@
 	// Sample data
 	let availableUsers: User[] = [];
 
+let currentUserId: string | null = null;
+if (typeof window !== 'undefined') {
+  // If you store the whole user object as JSON:
+  const userStr = localStorage.getItem('auth_user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      currentUserId = user.id || user._id; // adjust property name as needed
+    } catch (e) {
+      currentUserId = null;
+    }
+  }
+}
+
+console.log('currentUserId:', currentUserId);
+
 onMount(async () => {
   try {
     conversations = await getConversations();
     groupChats = conversations.filter((c: any) => c.type === 'group');
-    availableUsers = await getAllUsers(); // Fetch from backend
+    availableUsers = (await getAllUsers()).filter(u => u.id !== currentUserId); // Fetch from backend
+	    console.log('Available users:', availableUsers);
   } catch (e) {
     console.error('Failed to fetch conversations or users:', e);
   }
@@ -630,10 +647,6 @@ onMount(async () => {
 		}
 	};
 
-	let currentUserId: string | null = null;
-if (typeof window !== 'undefined') {
-  currentUserId = localStorage.getItem('auth_userId');
-}
 
 const createGroup = async () => {
   console.log('Creating group with:', { groupName, selectedUsers, currentUserId });

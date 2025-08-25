@@ -38,6 +38,7 @@ app.get('/health', (_req, res) => {
 // API Routes
 app.use('/api', routes);
 app.use('/api/chat',chatRoutes)
+app.use('/api', require('./routes'));
 
 // 404 handler
 app.use((req, res, _next) => {
