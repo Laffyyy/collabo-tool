@@ -6,6 +6,8 @@ const cookieParser = require('cookie-parser');
 const routes = require('./routes');
 const { env } = require('./config');
 
+
+
 const app = express();
 
 // Core Middlewares
