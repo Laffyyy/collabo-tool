@@ -216,19 +216,39 @@ async function saveTemplate({
   }
 }
 
-/**
- * Get broadcast templates for a user
- * @param {string} userId - User ID (optional)
- * @returns {Promise<Array>} Array of templates
- */
-async function getTemplates(userId = null) {
-  try {
-    return await uploadBroadcastModel.getTemplates(userId);
-  } catch (error) {
-    console.error('[Broadcast Service] Error getting templates:', error);
-    throw error;
+  /**
+   * Get broadcast templates for users in the same OU
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of templates
+   */
+  async function getTemplates(userId) {
+    try {
+      if (!userId) {
+        throw new BadRequestError('User ID is required');
+      }
+      
+      // First get the user's OU from the database
+      const query = `SELECT douid FROM tblusers WHERE did = $1`;
+      const result = await pool.query(query, [userId]);
+      
+      if (result.rows.length === 0) {
+        throw new BadRequestError('User not found');
+      }
+      
+      const userOU = result.rows[0].douid;
+      
+      // If the user is not assigned to any OU (admin users), return all templates
+      if (!userOU) {
+        return await uploadBroadcastModel.getTemplates();
+      }
+      
+      // Get templates from users in the same OU
+      return await uploadBroadcastModel.getTemplatesByOU(userOU);
+    } catch (error) {
+      console.error('[Broadcast Service] Error getting templates:', error);
+      throw error;
+    }
   }
-}
 
 /**
  * Delete a broadcast template

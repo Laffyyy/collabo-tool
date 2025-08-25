@@ -255,25 +255,24 @@ class UploadBroadcastModel {
   }
 
   /**
-   * Get templates for a user
-   * @param {string} userId - User ID (optional, if not provided returns all templates)
+   * Get templates for users in the same OU
+   * @param {string} ouId - Organizational unit ID
    * @returns {Promise<Array>} Array of templates
    */
-  async getTemplates(userId = null) {
-    let query = `
-      SELECT * FROM tblbroadcasttemplates
-    `;
-    
-    const values = [];
-    
-    // If userId is provided, filter by that user
-    if (userId) {
-      query += ` WHERE dcreatedby = $1`;
-      values.push(userId);
+  async getTemplatesByOU(ouId) {
+    if (!ouId) {
+      return [];
     }
     
-    query += ` ORDER BY tcreatedat DESC`;
-
+    const query = `
+      SELECT t.* FROM tblbroadcasttemplates t
+      JOIN tblusers u ON t.dcreatedby = u.did
+      WHERE u.douid = $1
+      ORDER BY t.tcreatedat DESC
+    `;
+    
+    const values = [ouId];
+    
     const result = await this.pool.query(query, values);
     return result.rows.map(row => this.formatTemplate(row));
   }

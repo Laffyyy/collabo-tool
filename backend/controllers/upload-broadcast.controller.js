@@ -151,8 +151,7 @@ async function saveTemplate(req, res, next) {
  */
 async function getTemplates(req, res, next) {
   try {
-    // Can filter by user ID if provided in query
-    const userId = req.query.userId || req.user.id;
+    const userId = req.user.id;
     
     const templates = await broadcastService.getTemplates(userId);
     

@@ -279,7 +279,7 @@
           priority: newBroadcast.priority,
           acknowledgmentType: newBroadcast.acknowledgmentType,
           choices: processedChoices,
-          targetOUs: newBroadcast.targetOUs,  // Add these fields
+          targetOUs: newBroadcast.targetOUs,
           targetRoles: newBroadcast.targetRoles
         };
         
@@ -290,6 +290,22 @@
           templates = [response.template, ...templates];
           templateName = '';
           showSaveTemplate = false;
+          
+          // Reset the form after saving template
+          newBroadcast = {
+            title: '',
+            content: '',
+            priority: 'medium',
+            targetRoles: [],
+            targetOUs: [],
+            acknowledgmentType: 'none',
+            scheduleType: 'now',
+            eventDate: '',
+            scheduledFor: '',
+            endDate: '',
+            choices: ['']
+          };
+          
           $toastStore.success('Template saved successfully!');
         } else {
           throw new Error(response.message || 'Failed to save template');
@@ -637,20 +653,35 @@ const markAsDone = (broadcastId: string) => {
                       </div>
                     {:else}
                       <select 
-                        id="templateSelect" 
-                        bind:value={selectedTemplate}
-                        onchange={() => {
-                          if (selectedTemplate) {
-                            loadTemplate(selectedTemplate);
-                          }
-                        }}
-                        class="input-field flex-1"
-                      >
-                        <option value="">No Template</option>
-                        {#each templates as template}
-                          <option value={template.id}>{template.name}</option>
-                        {/each}
-                      </select>
+                      id="templateSelect" 
+                      bind:value={selectedTemplate}
+                      onchange={() => {
+                        if (selectedTemplate) {
+                          loadTemplate(selectedTemplate);
+                        } else {
+                          // Reset the form to default values when "No Template" is selected
+                          newBroadcast = {
+                            title: '',
+                            content: '',
+                            priority: 'medium',
+                            targetRoles: [],
+                            targetOUs: [],
+                            acknowledgmentType: 'none',
+                            scheduleType: 'now',
+                            eventDate: '',
+                            scheduledFor: '',
+                            endDate: '',
+                            choices: ['']
+                          };
+                        }
+                      }}
+                      class="input-field flex-1"
+                    >
+                      <option value="">No Template</option>
+                      {#each templates as template}
+                        <option value={template.id}>{template.name}</option>
+                      {/each}
+                    </select>
                       {#if selectedTemplate}
                         <button
                           type="button"
