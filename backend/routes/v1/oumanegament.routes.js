@@ -6,14 +6,22 @@ const { body } = require('express-validator');
 const router = Router();
 
 router.get(
-    '/',
-    [body('howmany').isInt().notEmpty(),
-    body('page').isInt().notEmpty(),
-    body('sort').isString().notEmpty(),
+    '/active',
+    [
     ],
     validate,
     OUmanagerController.getOU
 )
+
+router.get(
+    '/active/list',
+    [
+        body('range').isString().notEmpty(),
+    ],
+    validate,
+    OUmanagerController.getOU
+)
+
 router.get(
     '/deactive',
     [],
@@ -23,23 +31,40 @@ router.get(
 
 router.get(
     '/deactive/list',
-    [body('howmany').isInt().notEmpty(),
-    body('page').isInt().notEmpty(),
-    body('sort').isString().notEmpty(),
+    [
+
     ],
     validate,
-    OUmanagerController.getDeactiveOUList
+    OUmanagerController.getDeactiveOU
 )
 
 router.post(
     '/create',
     [
-    body('name').isString().notEmpty(),
-    body('description').isString().notEmpty(),
-    body('parentouid').isString(),
-    body('OUsettings').isArray().notEmpty(),
-    body('OUsettings.*.settingstype').isString().notEmpty(),
-
+    body('OrgName').isString().notEmpty(),
+    body('Description').isString().notEmpty(),
+    body('Location').isString().notEmpty(),
+    body('Settings').isObject().notEmpty(),
+    // Chat settings validation (optional - only validate if present)
+    body('Settings.Chat.Frontline.Init1v1').optional().isBoolean(),
+    body('Settings.Chat.Frontline.CreateGroup').optional().isBoolean(),
+    body('Settings.Chat.Frontline.JoinGroupChats').optional().isBoolean(),
+    body('Settings.Chat.Frontline.ShareFiles').optional().isBoolean(),
+    body('Settings.Chat.Frontline.ForwardMessage').optional().isBoolean(),
+    body('Settings.Chat.support.Init1v1').optional().isBoolean(),
+    body('Settings.Chat.support.CreateGroup').optional().isBoolean(),
+    body('Settings.Chat.support.JoinGroupChats').optional().isBoolean(),
+    body('Settings.Chat.support.ShareFiles').optional().isBoolean(),
+    body('Settings.Chat.support.ForwardMessage').optional().isBoolean(),
+    body('Settings.Chat.supervisor.CreateGroup').optional().isBoolean(),
+    body('Settings.Chat.supervisor.ShareFiles').optional().isBoolean(),
+    body('Settings.Chat.supervisor.ForwardMessage').optional().isBoolean(),
+    // Broadcast settings validation (optional - only validate if present)
+    body('Settings.broadcast.Frontline.CreateBroadcasts').optional().isBoolean(),
+    body('Settings.broadcast.Frontline.ReplyToBroadcasts').optional().isBoolean(),
+    body('Settings.broadcast.support.CreateBroadcasts').optional().isBoolean(),
+    body('Settings.broadcast.support.ReplyToBroadcasts').optional().isBoolean(),
+    body('Settings.broadcast.supervisor.CreateBroadcasts').optional().isBoolean(),
     ],
     validate,
     OUmanagerController.createOUmanager
@@ -58,8 +83,8 @@ router.post(
     body('name').isString().notEmpty(),
     body('description').isString().notEmpty(),
     body('parentouid').isString(),
-    body('OUsettings').isArray().notEmpty(),
-    body('OUsettings.*.settingstype').isString().notEmpty(),
+    body('OUSettings').isArray().notEmpty(),
+    body('OUSettings.*.Settingstype').isString().notEmpty(),
 ],
     validate,
     OUmanagerController.updateOU
