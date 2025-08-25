@@ -186,10 +186,7 @@
 
   const tabs = [
     { id: 'My Broadcasts', label: 'My Broadcasts' },
-    { id: 'HR', label: 'HR' },
-    { id: 'Team Lead', label: 'Team Lead' },
-    { id: 'Cluster', label: 'Cluster' },
-    { id: 'Site Broadcast', label: 'Site Broadcast' }
+    { id: 'Received Broadcasts', label: 'Received Broadcasts' }
   ];
 
   // Reload when filters change
