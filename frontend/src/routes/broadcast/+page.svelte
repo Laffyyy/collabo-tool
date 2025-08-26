@@ -157,6 +157,20 @@
   let showDeleteTemplateModal = $state(false);
   let templateToDelete = $state<string | null>(null);
 
+  // Add state for tracking user responses
+  let userResponses = $state<Map<string, any>>(new Map());
+  let hasUserResponded = $derived((broadcastId: string) => userResponses.has(broadcastId));
+
+    // Add state to track original response values
+  let originalPreferredDate = $state('');
+  let originalSelectedChoice = $state('');
+  let originalTextResponse = $state('');
+
+  // Add derived state to check if response has changed
+  let hasPreferredDateChanged = $derived(preferredDate !== originalPreferredDate);
+  let hasChoiceChanged = $derived(selectedChoice !== originalSelectedChoice);
+  let hasTextChanged = $derived(textResponse.trim() !== originalTextResponse);
+
     const loadMyBroadcasts = async () => {
     console.log('🔄 Loading user broadcasts from API...');
     isLoading = true;
@@ -237,47 +251,39 @@
     }
   });
 
+  // Load user responses when switching to Received Broadcasts tab
   const loadReceivedBroadcasts = async () => {
-  isLoadingReceived = true;
-  try {
-    const response = await receivedBroadcastAPI.getReceivedBroadcasts({
-      search: searchQuery.trim() || undefined,
-      priority: priorityFilter !== 'all' ? priorityFilter : undefined,
-      limit: 50,
-      page: 1
-    });
+    isLoadingReceived = true;
+    try {
+      const response = await receivedBroadcastAPI.getReceivedBroadcasts({
+        search: searchQuery.trim() || undefined,
+        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        limit: 50,
+        page: 1
+      });
 
-    // Log the raw response from the backend
-    console.log('Received broadcasts API response:', response);
+      const userRole = currentUser?.role || '';
 
-    // Get current user's role
-    const userRole = currentUser?.role || '';
+      receivedBroadcasts = response.broadcasts
+        .map(b => ({
+          ...b,
+          createdAt: new Date(b.createdAt),
+          scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
+          eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
+          targets: b.targets ?? []
+        }));
 
-    // Filter broadcasts by role
-    receivedBroadcasts = response.broadcasts
-      .map(b => ({
-        ...b,
-        createdAt: new Date(b.createdAt),
-        scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
-        eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
-        targets: b.targets ?? []
-      }))
+      // Load responses for all received broadcasts
+      for (const broadcast of receivedBroadcasts) {
+        await checkExistingResponse(broadcast.id);
+      }
 
-      /*
-      .filter(b =>
-        b.targets.some(
-          (t: { dtargettype: string; dtargetname: string }) => t.dtargettype === 'role' && t.dtargetname === userRole
-        )
-      ); */
-
-    // Log the processed broadcasts that will be shown in the UI
-    console.log('Processed received broadcasts:', receivedBroadcasts);
-  } catch (err) {
-    console.error('Error loading received broadcasts:', err);
-  } finally {
-    isLoadingReceived = false;
-  }
-};
+    } catch (err) {
+      console.error('Error loading received broadcasts:', err);
+    } finally {
+      isLoadingReceived = false;
+    }
+  };
 
   const roles = ['admin', 'manager', 'supervisor', 'support', 'frontline'];
   const priorities = [
@@ -384,6 +390,10 @@ let sortedReceivedBroadcasts = $derived(
     preferredDate = '';
     selectedChoice = '';
     textResponse = '';
+    // Reset original values
+    originalPreferredDate = '';
+    originalSelectedChoice = '';
+    originalTextResponse = '';
     
     // Check if user has already responded (for received broadcasts)
     if (activeTab === 'Received Broadcasts') {
@@ -711,11 +721,15 @@ onMount(async () => {
   }, 1000);
 });
 
- // Response handler functions - replace your existing ones
+ // Update response handlers to store responses locally
   const handleAcknowledgment = async (broadcastId: string) => {
     try {
       const response = await responseBroadcastAPI.submitAcknowledgment(broadcastId);
+      
+      // Store the response locally
+      userResponses.set(broadcastId, response.response);
       isAcknowledged = true;
+      
       $toastStore.success('Broadcast acknowledged successfully!');
     } catch (error) {
       console.error('Error acknowledging broadcast:', error);
@@ -725,9 +739,12 @@ onMount(async () => {
 
   const handlePreferredDateResponse = async (broadcastId: string, date: string) => {
     try {
-      await responseBroadcastAPI.submitPreferredDate(broadcastId, date);
+      const response = await responseBroadcastAPI.submitPreferredDate(broadcastId, date);
+      
+      // Store the response locally
+      userResponses.set(broadcastId, response.response);
+      
       $toastStore.success(`Preferred date submitted: ${new Date(date).toLocaleString()}`);
-      selectedBroadcast = null;
     } catch (error) {
       console.error('Error submitting preferred date:', error);
       $toastStore.error('Failed to submit preferred date');
@@ -736,9 +753,12 @@ onMount(async () => {
 
   const handleChoiceResponse = async (broadcastId: string, choice: string) => {
     try {
-      await responseBroadcastAPI.submitChoice(broadcastId, choice);
+      const response = await responseBroadcastAPI.submitChoice(broadcastId, choice);
+      
+      // Store the response locally
+      userResponses.set(broadcastId, response.response);
+      
       $toastStore.success(`Response submitted: ${choice}`);
-      selectedBroadcast = null;
     } catch (error) {
       console.error('Error submitting choice:', error);
       $toastStore.error('Failed to submit response');
@@ -747,9 +767,12 @@ onMount(async () => {
 
   const handleTextResponse = async (broadcastId: string, response: string) => {
     try {
-      await responseBroadcastAPI.submitTextResponse(broadcastId, response);
+      const apiResponse = await responseBroadcastAPI.submitTextResponse(broadcastId, response);
+      
+      // Store the response locally
+      userResponses.set(broadcastId, apiResponse.response);
+      
       $toastStore.success('Text response submitted successfully!');
-      selectedBroadcast = null;
     } catch (error) {
       console.error('Error submitting text response:', error);
       $toastStore.error('Failed to submit response');
@@ -761,22 +784,60 @@ onMount(async () => {
     try {
       const response = await responseBroadcastAPI.getUserResponse(broadcastId);
       if (response.response) {
+        // Store the response in our map
+        userResponses.set(broadcastId, response.response);
+        
         // User has already responded - check the responseType from responseData
         const responseData = response.response.responseData;
         isAcknowledged = responseData.responseType === 'required';
         
         if (responseData.responseType === 'preferred-date') {
           preferredDate = responseData.preferredDate || '';
+          originalPreferredDate = responseData.preferredDate || '';
         }
         if (responseData.responseType === 'choices') {
           selectedChoice = responseData.selectedChoice || '';
+          originalSelectedChoice = responseData.selectedChoice || '';
         }
         if (responseData.responseType === 'textbox') {
           textResponse = responseData.textResponse || '';
+          originalTextResponse = responseData.textResponse || '';
         }
+      } else {
+        // No response found, remove from map if it exists
+        userResponses.delete(broadcastId);
+        // Reset original values
+        originalPreferredDate = '';
+        originalSelectedChoice = '';
+        originalTextResponse = '';
       }
     } catch (error) {
       console.error('Error checking existing response:', error);
+    }
+  };
+
+    // Function to get user's response for display
+  const getUserResponseForBroadcast = (broadcastId: string) => {
+    return userResponses.get(broadcastId);
+  };
+
+  // Function to format response for display
+  const formatResponseDisplay = (response: any) => {
+    if (!response || !response.responseData) return '';
+    
+    const data = response.responseData;
+    
+    switch (data.responseType) {
+      case 'required':
+        return 'Acknowledged';
+      case 'preferred-date':
+        return `Preferred date: ${new Date(data.preferredDate).toLocaleString()}`;
+      case 'choices':
+        return `Selected: ${data.selectedChoice}`;
+      case 'textbox':
+        return `Response: ${data.textResponse}`;
+      default:
+        return '';
     }
   };
 
@@ -1558,75 +1619,87 @@ onMount(async () => {
       </p>
     </div>
   {:else}
-    {#each sortedReceivedBroadcasts as broadcast}
-      <div 
-        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''}"
-        role="button"
-        tabindex="0"
-        onclick={() => openBroadcastDetails(broadcast)}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
-      >
-        <div class="flex items-start justify-between">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center space-x-3 mb-2">
-              <h3 class="text-lg font-bold text-gray-800 truncate">{broadcast.title}</h3>
-              <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
-                {broadcast.priority.toUpperCase()}
-              </span>
-              <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
+    <!-- Replace the existing received broadcasts section around line 1555 -->
+{#each sortedReceivedBroadcasts as broadcast}
+  {@const userResponse = getUserResponseForBroadcast(broadcast.id)}
+  {@const hasResponded = !!userResponse}
+  
+  <div 
+    class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''} {hasResponded ? 'bg-green-50 border-green-200' : ''}"
+    role="button"
+    tabindex="0"
+    onclick={() => openBroadcastDetails(broadcast)}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
+  >
+    {#if hasResponded}
+      <div class="absolute top-2 right-2">
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          RESPONDED
+        </span>
+      </div>
+    {/if}
+    
+    <div class="flex items-start justify-between">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center space-x-3 mb-2">
+          <h3 class="text-lg font-bold {hasResponded ? 'text-gray-600' : 'text-gray-800'} truncate">{broadcast.title}</h3>
+        </div>
+        <div class="flex items-center space-x-3 mb-3">
+          <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
+            {broadcast.priority.toUpperCase()}
+          </span>
+          <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
+        </div>
+        <div class="mb-3">
+          <p class="text-gray-600 text-sm line-clamp-2 break-words {hasResponded ? 'opacity-75' : ''}">
+            {#if broadcast.content.length > 120}
+              {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
+            {:else}
+              {broadcast.content}
+            {/if}
+          </p>
+        </div>
+        
+        <!-- Show user's response if they have responded -->
+        {#if hasResponded}
+          <div class="bg-white rounded border border-green-200 p-3 mb-3">
+            <div class="flex items-center space-x-2 mb-1">
+              <CheckCircle class="w-4 h-4 text-green-600 flex-shrink-0" />
+              <span class="text-sm font-medium text-green-800">Your Response:</span>
             </div>
-            <div class="mb-3">
-              <p class="text-gray-600 text-sm line-clamp-2 break-words">
-                {#if broadcast.content.length > 120}
-                  {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
-                {:else}
-                  {broadcast.content}
-                {/if}
-              </p>
-            </div>
-            <div class="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
-              <div class="flex items-center space-x-1">
-                <Calendar class="w-4 h-4 flex-shrink-0" />
-                <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
-              </div>
-              <div class="flex items-center space-x-1">
-                <Users class="w-4 h-4 flex-shrink-0" />
-                <span class="truncate">{broadcast.targetRoles?.join(', ') || ''} | {broadcast.targetOUs?.join(', ') || ''}</span>
-              </div>
-              {#if broadcast.eventDate}
-                <div class="flex items-center space-x-1">
-                  <Clock class="w-4 h-4 flex-shrink-0" />
-                  <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
-                </div>
-              {/if}
-            </div>
-          </div>
-          {#if broadcast.requiresAcknowledgment}
-          <div class="text-right flex-shrink-0 ml-4">
-            <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
-              {broadcast.acknowledgments.length} acknowledgments
-            </div>
-            <div class="space-y-2">
-              <button 
-                onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
-                class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
-              >
-                <Download class="w-4 h-4" />
-                <span>Export CSV</span>
-              </button>
-              <button 
-                onclick={(e) => { e.stopPropagation(); viewReport(broadcast); }}
-                class="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1 whitespace-nowrap"
-              >
-                <FileText class="w-4 h-4" />
-                <span>View Report</span>
-              </button>
-            </div>
+            <p class="text-sm text-gray-700 break-words">
+              {formatResponseDisplay(userResponse)}
+            </p>
           </div>
         {/if}
+        
+        <div class="flex items-center space-x-4 text-sm {hasResponded ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
+          <div class="flex items-center space-x-1">
+            <Calendar class="w-4 h-4 flex-shrink-0" />
+            <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
+          </div>
+          <div class="flex items-center space-x-1">
+            <Users class="w-4 h-4 flex-shrink-0" />
+            <span class="truncate">{broadcast.targetRoles?.join(', ') || ''} | {broadcast.targetOUs?.join(', ') || ''}</span>
+          </div>
+          {#if broadcast.eventDate}
+            <div class="flex items-center space-x-1">
+              <Clock class="w-4 h-4 flex-shrink-0" />
+              <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
+            </div>
+          {/if}
         </div>
       </div>
-    {/each}
+      {#if broadcast.requiresAcknowledgment && !hasResponded}
+      <div class="text-right flex-shrink-0 ml-4">
+        <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
+          {broadcast.acknowledgments.length} acknowledgments
+        </div>
+      </div>
+      {/if}
+    </div>
+  </div>
+{/each}
   {/if}
 
   {:else}
@@ -1696,106 +1769,164 @@ onMount(async () => {
           </div>
 
           <!-- In the broadcast details modal, replace the "Mark as Done" button section -->
-          <div class="flex justify-end pt-4 border-t border-gray-200">
-            {#if activeTab === 'Received Broadcasts'}
-              <!-- Response options based on responseType -->
-              {#if selectedBroadcast.responseType === 'none'}
-                <div class="text-sm text-gray-500 italic">No response required</div>
-              {:else if selectedBroadcast.responseType === 'required'}
-                <!-- Acknowledgment required -->
-                <div class="flex items-center space-x-3">
-                  <button
-                    onclick={() => handleAcknowledgment(selectedBroadcast.id)}
-                    class="primary-button"
-                    disabled={isAcknowledged}
-                  >
-                    {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
-                  </button>
-                </div>
-              {:else if selectedBroadcast.responseType === 'preferred-date'}
-                <!-- Preferred date selection -->
-                <div class="flex flex-col space-y-3 w-full">
-                  <label for="preferred-date" class="text-sm font-medium text-gray-700">
-                    Select your preferred date:
-                  </label>
-                  <div class="flex items-center space-x-3">
-                    <input
-                      id="preferred-date"
-                      type="datetime-local"
-                      bind:value={preferredDate}
-                      class="input-field flex-1"
-                    />
-                    <button
-                      onclick={() => handlePreferredDateResponse(selectedBroadcast.id, preferredDate)}
-                      class="primary-button"
-                      disabled={!preferredDate}
-                    >
-                      Submit Date
-                    </button>
-                  </div>
-                </div>
-              {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
-                <!-- Multiple choice options -->
-                <div class="flex flex-col space-y-3 w-full">
-                  <label class="text-sm font-medium text-gray-700">Select an option:</label>
-                  <div class="space-y-2">
-                    {#each selectedBroadcast.choices as choice, index}
-                      <label class="flex items-center space-x-3">
-                        <input
-                          type="radio"
-                          bind:group={selectedChoice}
-                          value={choice}
-                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                        />
-                        <span class="text-sm text-gray-700">{choice}</span>
-                      </label>
-                    {/each}
-                  </div>
-                  <button
-                    onclick={() => handleChoiceResponse(selectedBroadcast.id, selectedChoice)}
-                    class="primary-button self-end"
-                    disabled={!selectedChoice}
-                  >
-                    Submit Response
-                  </button>
-                </div>
-              {:else if selectedBroadcast.responseType === 'textbox'}
-                <!-- Text response -->
-                <div class="flex flex-col space-y-3 w-full">
-                  <label for="text-response" class="text-sm font-medium text-gray-700">
-                    Your response:
-                  </label>
-                  <div class="space-y-3">
-                    <textarea
-                      id="text-response"
-                      bind:value={textResponse}
-                      placeholder="Enter your response..."
-                      rows="3"
-                      class="input-field w-full resize-none"
-                    ></textarea>
-                    <button
-                      onclick={() => handleTextResponse(selectedBroadcast.id, textResponse)}
-                      class="primary-button self-end"
-                      disabled={!textResponse.trim()}
-                    >
-                      Submit Response
-                    </button>
-                  </div>
-                </div>
-              {/if}
-            {:else if selectedBroadcast.isActive}
-              <!-- Keep existing "Mark as Done" for My Broadcasts tab -->
-              <div class="flex space-x-3">
-                <button onclick={() => markBroadcastAsDone(selectedBroadcast.id)} class="primary-button">
-                  Mark as Done
-                </button>
-              </div>
-            {:else}
-              <button onclick={() => selectedBroadcast = null} class="secondary-button">
-                Close
-              </button>
-            {/if}
+          <!-- Update the response section in the broadcast details modal around line 1690 -->
+<div class="flex justify-end pt-4 border-t border-gray-200">
+  {#if activeTab === 'Received Broadcasts'}
+    {@const userResponse = getUserResponseForBroadcast(selectedBroadcast.id)}
+    {@const hasResponded = !!userResponse}
+    
+    <!-- Response options based on responseType -->
+    {#if selectedBroadcast.responseType === 'none'}
+      <div class="text-sm text-gray-500 italic">No response required</div>
+    {:else if selectedBroadcast.responseType === 'required'}
+      <!-- Acknowledgment required -->
+      <div class="flex items-center space-x-3 w-full">
+        {#if hasResponded}
+          <div class="flex-1 bg-green-50 border border-green-200 rounded p-3">
+            <div class="flex items-center space-x-2 mb-2">
+              <CheckCircle class="w-4 h-4 text-green-600" />
+              <span class="text-sm font-medium text-green-800">Response Status:</span>
+            </div>
+            <p class="text-sm text-gray-700">Acknowledged on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
           </div>
+        {:else}
+          <button
+            onclick={() => handleAcknowledgment(selectedBroadcast.id)}
+            class="primary-button"
+            disabled={isAcknowledged}
+          >
+            {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
+          </button>
+        {/if}
+      </div>
+    {:else if selectedBroadcast.responseType === 'preferred-date'}
+      <!-- Preferred date selection -->
+      <div class="flex flex-col space-y-3 w-full">
+        {#if hasResponded}
+          <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+            <div class="flex items-center space-x-2 mb-2">
+              <CheckCircle class="w-4 h-4 text-green-600" />
+              <span class="text-sm font-medium text-green-800">Current Response:</span>
+            </div>
+            <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+          </div>
+        {/if}
+        
+        <label for="preferred-date" class="text-sm font-medium text-gray-700">
+          {hasResponded ? 'Update your preferred date:' : 'Select your preferred date:'}
+        </label>
+        <div class="flex items-center space-x-3">
+          <input
+            id="preferred-date"
+            type="datetime-local"
+            bind:value={preferredDate}
+            class="input-field flex-1"
+          />
+          <button
+            onclick={() => handlePreferredDateResponse(selectedBroadcast.id, preferredDate)}
+            class="primary-button"
+            disabled={hasResponded ? !hasPreferredDateChanged || !preferredDate : !preferredDate}
+          >
+            {hasResponded ? 'Update Date' : 'Submit Date'}
+          </button>
+        </div>
+        {#if hasResponded && !hasPreferredDateChanged}
+          <p class="text-xs text-gray-500 italic">Select a different date to update your response</p>
+        {/if}
+      </div>
+    {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
+      <!-- Multiple choice options -->
+      <div class="flex flex-col space-y-3 w-full">
+        {#if hasResponded}
+          <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+            <div class="flex items-center space-x-2 mb-2">
+              <CheckCircle class="w-4 h-4 text-green-600" />
+              <span class="text-sm font-medium text-green-800">Current Response:</span>
+            </div>
+            <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+          </div>
+        {/if}
+        
+        <label class="text-sm font-medium text-gray-700">
+          {hasResponded ? 'Update your selection:' : 'Select an option:'}
+        </label>
+        <div class="space-y-2">
+          {#each selectedBroadcast.choices as choice, index}
+            <label class="flex items-center space-x-3">
+              <input
+                type="radio"
+                bind:group={selectedChoice}
+                value={choice}
+                class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+              />
+              <span class="text-sm text-gray-700">{choice}</span>
+            </label>
+          {/each}
+        </div>
+        <button
+          onclick={() => handleChoiceResponse(selectedBroadcast.id, selectedChoice)}
+          class="primary-button self-end"
+          disabled={hasResponded ? !hasChoiceChanged || !selectedChoice : !selectedChoice}
+        >
+          {hasResponded ? 'Update Response' : 'Submit Response'}
+        </button>
+        {#if hasResponded && !hasChoiceChanged}
+          <p class="text-xs text-gray-500 italic">Select a different option to update your response</p>
+        {/if}
+      </div>
+    {:else if selectedBroadcast.responseType === 'textbox'}
+      <!-- Text response -->
+      <div class="flex flex-col space-y-3 w-full">
+        {#if hasResponded}
+          <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+            <div class="flex items-center space-x-2 mb-2">
+              <CheckCircle class="w-4 h-4 text-green-600" />
+              <span class="text-sm font-medium text-green-800">Current Response:</span>
+            </div>
+            <p class="text-sm text-gray-700 break-words">{userResponse.responseData.textResponse}</p>
+            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+          </div>
+        {/if}
+        
+        <label for="text-response" class="text-sm font-medium text-gray-700">
+          {hasResponded ? 'Update your response:' : 'Your response:'}
+        </label>
+        <div class="space-y-3">
+          <textarea
+            id="text-response"
+            bind:value={textResponse}
+            placeholder="Enter your response..."
+            rows="3"
+            class="input-field w-full resize-none"
+          ></textarea>
+          <button
+            onclick={() => handleTextResponse(selectedBroadcast.id, textResponse)}
+            class="primary-button self-end"
+            disabled={hasResponded ? !hasTextChanged || !textResponse.trim() : !textResponse.trim()}
+          >
+            {hasResponded ? 'Update Response' : 'Submit Response'}
+          </button>
+          {#if hasResponded && !hasTextChanged}
+            <p class="text-xs text-gray-500 italic">Modify your text to update your response</p>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  {:else if selectedBroadcast.isActive}
+    <!-- Keep existing "Mark as Done" for My Broadcasts tab -->
+    <div class="flex space-x-3">
+      <button onclick={() => markBroadcastAsDone(selectedBroadcast.id)} class="primary-button">
+        Mark as Done
+      </button>
+    </div>
+  {:else}
+    <button onclick={() => selectedBroadcast = null} class="secondary-button">
+      Close
+    </button>
+  {/if}
+</div>
         </div>
       </div>
     </div>
