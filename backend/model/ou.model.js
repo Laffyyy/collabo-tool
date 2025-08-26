@@ -11,11 +11,12 @@ class OUmodel {
         }
     }
 
-    async createOU(OrgName, Description, Location, Settings) {
+    async createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
         try {
             const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, $5) RETURNING *`;
-            // Convert Settings to an array of JSONB - wrap the settings object in an array
-            const result = await db.query(query, [OrgName, Description, Location, new Date(), Settings]);
+            // Pass jsSettings as an array directly to PostgreSQL
+            // PostgreSQL will handle the JSON objects within the array
+            const result = await db.query(query, [OrgName, Description, parentouid, new Date(), jsSettings]);
             return result.rows[0];
         } catch (error) {
             throw new Error(error);

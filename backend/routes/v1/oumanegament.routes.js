@@ -59,12 +59,21 @@ router.post(
     body('Settings.Chat.supervisor.CreateGroup').optional().isBoolean(),
     body('Settings.Chat.supervisor.ShareFiles').optional().isBoolean(),
     body('Settings.Chat.supervisor.ForwardMessage').optional().isBoolean(),
+
+    body('Settings.Chat.General.FileSharing').optional().isBoolean(),
+    body('Settings.Chat.General.Emoji').optional().isBoolean(),
+    body('Settings.Chat.General.Retention').optional().isInt(),
     // Broadcast settings validation (optional - only validate if present)
     body('Settings.broadcast.Frontline.CreateBroadcasts').optional().isBoolean(),
     body('Settings.broadcast.Frontline.ReplyToBroadcasts').optional().isBoolean(),
     body('Settings.broadcast.support.CreateBroadcasts').optional().isBoolean(),
     body('Settings.broadcast.support.ReplyToBroadcasts').optional().isBoolean(),
     body('Settings.broadcast.supervisor.CreateBroadcasts').optional().isBoolean(),
+
+    body('Settings.broadcast.General.ApprovalforBroadcast').optional().isBoolean(),
+    body('Settings.broadcast.General.ScheduleBroadcast').optional().isBoolean(),
+    body('Settings.broadcast.General.PriorityBroadcast').optional().isBoolean(),
+    body('Settings.broadcast.General.Retention').optional().isInt(),
     ],
     validate,
     OUmanagerController.createOUmanager

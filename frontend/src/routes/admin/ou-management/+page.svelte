@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+  import { createOU as createOUAPI, transformOUDataForAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -203,6 +204,11 @@
     action: () => void;
   } | null>(null);
 
+  // API state management
+  let isCreatingOU = $state<boolean>(false);
+  let apiError = $state<string>('');
+  let apiSuccess = $state<string>('');
+
   let newOU = $state({
     name: '',
     description: '',
@@ -285,80 +291,117 @@
   });
 
   // Functions
-  const createOU = () => {
+  const createOU = async () => {
     if (newOU.name.trim() && newOU.description.trim()) {
-      const ou: OrganizationUnit = {
-        id: Date.now().toString(),
-        name: newOU.name.trim(),
-        description: newOU.description.trim(),
-        parentId: null,
-        memberCount: 0,
-        location: newOU.location.trim(),
-        createdAt: new Date(),
-        modifiedAt: new Date(),
-        status: 'active',
-        rules: newOU.rules
-      };
+      // Clear previous messages
+      apiError = '';
+      apiSuccess = '';
+      isCreatingOU = true;
 
-      organizationUnits = [ou, ...organizationUnits];
-      
-      // Reset form
-      newOU = {
-        name: '',
-        description: '',
-        location: '',
-        rules: {
-          chat: {
-            frontlineCanInitiate1v1: true,
-            frontlineCanCreateGroups: false,
-            frontlineCanJoinGroups: true,
-            frontlineCanShareFiles: false,
-            frontlineCanForwardMessages: false,
-            supportCanInitiate1v1: true,
-            supportCanCreateGroups: false,
-            supportCanJoinGroups: true,
-            supportCanShareFiles: true,
-            supportCanForwardMessages: true,
-            supervisorCanCreateGroups: true,
-            supervisorCanShareFiles: true,
-            supervisorCanForwardMessages: true,
-            managerCanAccessAllGroups: true,
-            managerCanShareFiles: true,
-            managerCanForwardMessages: true,
-            allowFileSharing: true,
-            allowEmojis: true,
-            messageRetentionDays: 365,
-            maxFileSize: 10,
-            allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
-            maxGroupSize: 50,
-            messageEditWindow: 15,
-            pinnedMessages: {
-              enabled: true,
-              maxPinnedPerConversation: 10
-            }
-          },
-          broadcast: {
-            frontlineCanCreateBroadcast: false,
-            frontlineCanReplyToBroadcast: true,
-            supportCanCreateBroadcast: false,
-            supportCanReplyToBroadcast: true,
-            supervisorCanCreateBroadcast: true,
-            managerCanCreateBroadcast: true,
-            requireApprovalForBroadcast: false,
-            allowScheduledBroadcasts: true,
-            allowPriorityBroadcasts: true,
-            broadcastRetentionDays: 365,
-            requireAcknowledgment: true,
-            acknowledgmentReminders: true,
-            reminderInterval: 1440,
-            maxBroadcastTargets: 1000
-          }
+      try {
+        // Transform frontend data to backend API format
+        const apiData = transformOUDataForAPI(newOU);
+        
+        // Call the API
+        const result = await createOUAPI(apiData);
+        
+        if (result.success) {
+          // Create local OU object for immediate UI update
+          const ou: OrganizationUnit = {
+            id: result.data?.id || Date.now().toString(),
+            name: newOU.name.trim(),
+            description: newOU.description.trim(),
+            parentId: null,
+            memberCount: 0,
+            location: newOU.location.trim(),
+            createdAt: new Date(),
+            modifiedAt: new Date(),
+            status: 'active',
+            rules: newOU.rules
+          };
+
+          // Update the local state
+          organizationUnits = [ou, ...organizationUnits];
+          
+          // Show success message
+          apiSuccess = result.message || 'Organization Unit created successfully!';
+          
+          // Reset form
+          resetNewOUForm();
+          
+          // Close modal after a short delay to show success message
+          setTimeout(() => {
+            showCreateModal = false;
+            apiSuccess = '';
+          }, 2000);
+          
+        } else {
+          // Handle API error
+          apiError = result.error || 'Failed to create Organization Unit';
         }
-      };
-      showCreateModal = false;
-      
-      alert('Organization Unit created successfully!');
+      } catch (error) {
+        console.error('Error creating OU:', error);
+        apiError = 'Network error: Failed to create Organization Unit';
+      } finally {
+        isCreatingOU = false;
+      }
     }
+  };
+
+  // Helper function to reset the form
+  const resetNewOUForm = () => {
+    newOU = {
+      name: '',
+      description: '',
+      location: '',
+      rules: {
+        chat: {
+          frontlineCanInitiate1v1: true,
+          frontlineCanCreateGroups: false,
+          frontlineCanJoinGroups: true,
+          frontlineCanShareFiles: false,
+          frontlineCanForwardMessages: false,
+          supportCanInitiate1v1: true,
+          supportCanCreateGroups: false,
+          supportCanJoinGroups: true,
+          supportCanShareFiles: true,
+          supportCanForwardMessages: true,
+          supervisorCanCreateGroups: true,
+          supervisorCanShareFiles: true,
+          supervisorCanForwardMessages: true,
+          managerCanAccessAllGroups: true,
+          managerCanShareFiles: true,
+          managerCanForwardMessages: true,
+          allowFileSharing: true,
+          allowEmojis: true,
+          messageRetentionDays: 365,
+          maxFileSize: 10,
+          allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+          maxGroupSize: 50,
+          messageEditWindow: 15,
+          pinnedMessages: {
+            enabled: true,
+            maxPinnedPerConversation: 10
+          }
+        },
+        broadcast: {
+          frontlineCanCreateBroadcast: false,
+          frontlineCanReplyToBroadcast: true,
+          supportCanCreateBroadcast: false,
+          supportCanReplyToBroadcast: true,
+          supervisorCanCreateBroadcast: true,
+          managerCanCreateBroadcast: true,
+          requireApprovalForBroadcast: false,
+          allowScheduledBroadcasts: true,
+          allowPriorityBroadcasts: true,
+          broadcastRetentionDays: 365,
+          requireAcknowledgment: true,
+          acknowledgmentReminders: true,
+          reminderInterval: 1440,
+          maxBroadcastTargets: 1000
+        }
+      }
+    };
   };
 
   const editOUFunction = (ou: OrganizationUnit) => {
@@ -814,6 +857,37 @@
             </button>
           </div>
 
+          <!-- Error/Success Messages -->
+          {#if apiError}
+            <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-red-800">{apiError}</p>
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          {#if apiSuccess}
+            <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-green-800">{apiSuccess}</p>
+                </div>
+              </div>
+            </div>
+          {/if}
+
           <form onsubmit={(e) => { e.preventDefault(); createOU(); }} class="space-y-6">
             <div>
               <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">Organization Unit Name</label>
@@ -822,7 +896,8 @@
                 bind:value={newOU.name}
                 placeholder="Enter unit name"
                 required
-                class="input-field"
+                disabled={isCreatingOU}
+                class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -834,7 +909,8 @@
                 placeholder="Describe the purpose and responsibilities of this unit"
                 required
                 rows="3"
-                class="input-field resize-none"
+                disabled={isCreatingOU}
+                class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed"
               ></textarea>
             </div>
 
@@ -845,19 +921,37 @@
                   id="location"
                   bind:value={newOU.location}
                   placeholder="Enter location"
-                  class="input-field"
+                  disabled={isCreatingOU}
+                  class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
             <div class="flex space-x-3 pt-6">
-              <button type="submit" class="primary-button flex-1">
-                Create Organization Unit
+              <button 
+                type="submit" 
+                disabled={isCreatingOU}
+                class="primary-button flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {#if isCreatingOU}
+                  <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating...
+                {:else}
+                  Create Organization Unit
+                {/if}
               </button>
               <button
                 type="button"
-                onclick={() => showCreateModal = false}
-                class="secondary-button flex-1"
+                onclick={() => {
+                  showCreateModal = false;
+                  apiError = '';
+                  apiSuccess = '';
+                }}
+                disabled={isCreatingOU}
+                class="secondary-button flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>

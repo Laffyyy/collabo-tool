@@ -51,17 +51,18 @@ async function getDeactiveOU(howmany, page, sort) {
 
 /**
  * Create a new OU
- * @param {string} name - OU name
- * @param {string} description - OU description
+ * @param {string} OrgName - OU name
+ * @param {string} Description - OU description
  * @param {string} parentouid - Parent OU ID (optional)
  * @param {Array} OUsettings - OU settings array
+ * @param {string} Location - OU location
+ * @param {Array} jsSettings - JS formatted settings array
  * @returns {Object} - Created OU data
  */
-async function createOU(OrgName, Description, Location, Settings) {
+async function createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
     try {
-        const result = await ouModel.createOU(OrgName, Description, Location, Settings);
+        const result = await ouModel.createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings);
         return result;
-
 
     } catch (error) {
         throw new Error(`Failed to create OU: ${error.message}`);

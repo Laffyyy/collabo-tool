@@ -1,5 +1,5 @@
 const oumanegamentService = require('../services/OUmanagement.service');
-const { transformSettingsToOUSettings, validateSettings } = require('../utils/settingsTransformer');
+const { transformSettingsToOUSettings, validateSettings, transformSettingsToJSSettings } = require('../utils/settingsTransformer');
 
 async function getOU(req, res, next) {
     try {
@@ -44,7 +44,6 @@ async function createOUmanager(req, res, next) {
         }
 
         // Validate Settings structure
-        console.log('Settings received:', JSON.stringify(Settings, null, 2));
         const validation = validateSettings(Settings);
         if (!validation.isValid) {
             return res.status(400).json({
@@ -54,11 +53,12 @@ async function createOUmanager(req, res, next) {
             });
         }
 
-        // Transform Settings to OUsettings array
+        // Transform Settings to OUsettings array and jsSettings
         let OUsettings = [];
+        let jsSettings = [];
         try {
             OUsettings = transformSettingsToOUSettings(Settings);
-            console.log('Transformed OUsettings array:', JSON.stringify(OUsettings, null, 2));
+            jsSettings = transformSettingsToJSSettings(Settings);
         } catch (transformErr) {
             return res.status(400).json({
                 ok: false,
@@ -74,9 +74,9 @@ async function createOUmanager(req, res, next) {
                 Description,
                 null, // parentouid is not provided in the new structure
                 OUsettings,
-                Location
+                Location,
+                jsSettings
             );
-            console.log('result', result);
         } catch (serviceErr) {
             return res.status(500).json({
                 ok: false,
