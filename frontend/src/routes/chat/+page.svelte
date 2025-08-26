@@ -2,7 +2,7 @@
 	//import {goto} from '$app/navigation';
 	import { getAllUsers } from '$lib/services/chatServices';
 	import { onMount } from 'svelte';
-	import { createConversation, getConversations } from '$lib/services/chatServices';
+	import { createConversation, getConversations, addMemberToConversation } from '$lib/services/chatServices';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
@@ -200,6 +200,7 @@
 	let availableUsers: User[] = [];
 
 let currentUserId: string | null = null;
+let jwtToken = $state<string | null>(null);
 if (typeof window !== 'undefined') {
   // If you store the whole user object as JSON:
   const userStr = localStorage.getItem('auth_user');
@@ -216,26 +217,68 @@ if (typeof window !== 'undefined') {
 console.log('currentUserId:', currentUserId);
 
 onMount(async () => {
+if (typeof window !== 'undefined') {
+    // Try different possible token keys
+    jwtToken = localStorage.getItem('jwt') || 
+               localStorage.getItem('auth_token') || 
+               localStorage.getItem('token');
+    
+    // Try different possible user ID keys
+    currentUserId = localStorage.getItem('auth_userId') || 
+                    localStorage.getItem('userId');
+    
+    // If we have a user object in storage, extract the ID
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr && !currentUserId) {
+      try {
+        const user = JSON.parse(userStr);
+        currentUserId = user.id || user._id || user.userId;
+      } catch (e) {
+        console.error('Failed to parse user object:', e);
+      }
+    }
+    
+    console.log('Auth state:', { 
+      jwtToken: jwtToken ? 'Present' : 'Missing',
+      currentUserId
+    });
+  }
+
   try {
     conversations = await getConversations();
     groupChats = conversations.filter((c: any) => c.type === 'group');
-    availableUsers = (await getAllUsers()).filter(u => u.id !== currentUserId); // Fetch from backend
-	    console.log('Available users:', availableUsers);
+    const users = await getAllUsers();
+    
+    // Debug what's actually coming from the server
+    console.log("Raw users from backend:", users);
+    
+    // Map each property explicitly
+ availableUsers = users.filter(u => u.id !== currentUserId)
+  .map(u => {
+    // Log each user to see exact structure
+    console.log("Processing user:", u);
+    
+    return {
+      id: u.did || u.uid || u.id || u._id, 
+      name: u.dusername || u.username || 
+            (u.dfirstname && u.dlastname ? `${u.dfirstname} ${u.dlastname}` : null) ||
+            (u.firstname && u.lastname ? `${u.firstname} ${u.lastname}` : null) ||
+            u.name || 
+            'Unknown User',
+      firstName: u.dfirstname || u.firstname || u.firstName,
+      lastName: u.dlastname || u.lastname || u.lastName,
+      username: u.dusername || u.username,
+      avatar: u.davatar || u.avatar || u.profilePhoto || u.image || '/placeholder.svg',
+      department: u.ddepartment || u.department || u.org_unit || 'Department',
+      role: u.drole || u.role || 'Role'
+    };
+  });
+      
+    console.log('Transformed users:', availableUsers);
   } catch (e) {
     console.error('Failed to fetch conversations or users:', e);
   }
-});
-
-	onMount(async () => {
-  try {
-    // Fetch conversations from backend
-    conversations = await getConversations();
-    // Optionally, filter group chats
-    groupChats = conversations.filter((c: any) => c.type === 'group');
-  } catch (e) {
-    console.error('Failed to fetch conversations:', e);
-  }
-});
+}); 
 
 	// Available emojis for picker
 	const emojiGroups = {
@@ -661,18 +704,59 @@ const createGroup = async () => {
   }
 
   try {
+    // First create the conversation in the backend
     const newGroup = await createConversation({
       dname: groupName,
       dtype: 'group',
       dcreatedBy: currentUserId
     });
-
-    console.log('Group created:', newGroup);
-    groupChats = [...groupChats, newGroup];
+    
+    console.log("New group created:", newGroup);
+    
+    // Now add each member to the conversation in the backend
+  for (const user of selectedUsers) {
+  try {
+    console.log('Adding member:', user);
+    await addMemberToConversation({
+      conversationId: newGroup.did || newGroup.id,
+      userId: user.id
+    });
+  } catch (memberErr) {
+    console.error(`Failed to add member ${user.name}:`, memberErr);
+  }
+}
+    
+    // Now enhance with UI data for display
+    const enhancedGroup = {
+      ...newGroup,
+      id: newGroup.did || newGroup.id,
+      name: newGroup.dname || groupName,
+      type: 'group',
+      lastMessage: 'Group created',
+      lastMessageTime: new Date(),
+      unreadCount: 0,
+      isRead: true,
+      avatar: '/placeholder.svg',
+      isOnline: false,
+      messages: [],
+      members: [...selectedUsers, { 
+        id: currentUserId, 
+        name: 'You', 
+        avatar: '/placeholder.svg', 
+        department: 'My Dept', 
+        role: 'My Role' 
+      }]
+    };
+    
+    // Update frontend state
+    conversations = [...conversations, enhancedGroup];
+    groupChats = conversations.filter((c) => c.type === 'group');
+    
+    // Close modal and reset form
     showCreateGroup = false;
     groupName = '';
     selectedUsers = [];
-  } catch (e: any) {
+  } catch (e) {
     console.error('Failed to create group:', e);
     alert('Failed to create group: ' + (e.message || e));
   }

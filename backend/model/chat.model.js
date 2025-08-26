@@ -32,23 +32,58 @@ class ChatModel {
     );
     return result.rows;
   }
-
-  static async getUserConversations(userId) {
-    try {
-      const result = await query(
-        `SELECT DISTINCT c.*
-         FROM "tblconversations" c
-         LEFT JOIN "tblconversationparticipants" cm ON c.did = cm.dconversationid
-         WHERE cm.duserid = $1
-         ORDER BY c.tcreatedat DESC`,
-        [userId]
-      );
-      return result.rows;
-    } catch (error) {
-      console.error('Database error:', error);
-      throw error;
-    }
+  
+static async getUserConversations(userId) {
+  console.log('DB query for conversations of user:', userId);
+  
+  try {
+    const result = await query(
+      `SELECT DISTINCT c.*
+       FROM tblconversations c
+       JOIN tblconversationparticipants cm ON c.did = cm.dconversationid
+       WHERE cm.duserid = $1
+       ORDER BY c.tcreatedat DESC`,
+      [userId]
+    );
+    
+    // Log and return the results
+    console.log(`Found ${result.rows.length} conversations in database`);
+    return result.rows;
+  } catch (error) {
+    console.error('Database error:', error);
+    throw error;
   }
+}
+
+static async addMember(conversationId, userId) {
+  try {
+    console.log('Adding member to conversation:', { conversationId, userId });
+    
+    // First check if member already exists
+    const checkResult = await query(
+      'SELECT * FROM tblconversationparticipants WHERE dconversationid = $1 AND duserid = $2',
+      [conversationId, userId]
+    );
+    
+    // If member already exists, just return that record
+    if (checkResult.rows.length > 0) {
+      console.log('Member already exists in conversation:', checkResult.rows[0]);
+      return checkResult.rows[0];
+    }
+    
+    // Otherwise add the member
+    const result = await query(
+      'INSERT INTO tblconversationparticipants (dconversationid, duserid) VALUES ($1, $2) RETURNING *',
+      [conversationId, userId]
+    );
+    
+    console.log('Member added successfully:', result.rows[0]);
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error adding member to conversation:', error);
+    throw error;
+  }
+}
 }
 
 module.exports = ChatModel;

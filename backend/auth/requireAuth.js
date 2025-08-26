@@ -13,32 +13,18 @@ async function requireAuth(req, res, next) {
   try {
     // Check for token in cookies or Authorization header
     const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
-    const sessionToken = req.cookies?.session;
     
-    if (!token || !sessionToken) {
+    if (!token) {
       throw new UnauthorizedError('Authentication required');
     }
     
     // Verify token
-  const decoded = jwt.verify(token, env.JWT_SECRET);
-  req.user = decoded;
-  next();
+    const decoded = jwt.verify(token, env.JWT_SECRET);
     
-    // Verify session exists and is active
-    const session = await sessionModel.findBySessionToken(sessionToken);
-    if (!session || !session.isActive || new Date(session.expiresAt) < new Date()) {
-      throw new UnauthorizedError('Session expired');
-    }
-    
-    // Check if the token's user ID matches the session's user ID
-    if (decoded.id !== session.userId) {
-      throw new UnauthorizedError('Invalid session');
-    }
-    
-    // Attach user and session info to request
+    // Attach user info to request
     req.user = decoded;
-    req.session = session;
     
+    // Only call next() AFTER verification is complete
     next();
   } catch (err) {
     if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {

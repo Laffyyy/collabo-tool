@@ -2,8 +2,23 @@ const ChatModel = require('../model/chat.model');  // Note the capital C in Chat
 const { BadRequestError } = require('../utils/errors');
 
 exports.createConversation = async ({ dname, dtype, dcreatedBy }) => {
+  console.log('Creating conversation with:', { dname, dtype, dcreatedBy });
+  
   if (!dname || !dtype || !dcreatedBy) throw new BadRequestError('Missing fields');
-  return await ChatModel.createConversation({ dname, dtype, dcreatedBy });
+  
+  try {
+    const conversation = await ChatModel.createConversation({ dname, dtype, dcreatedBy });
+    console.log('Created conversation:', conversation);
+    
+    // Also add the creator as a member
+    await ChatModel.addMember(conversation.did, dcreatedBy);
+    console.log('Added creator as member to conversation:', conversation.did);
+    
+    return conversation;
+  } catch (err) {
+    console.error('Error creating conversation:', err);
+    throw err;
+  }
 };
 
 exports.addMessage = async ({ dconversationId, dsenderId, dcontent, dmessageType }) => {
@@ -17,13 +32,20 @@ exports.getMessagesByConversation = async (conversationId) => {
 };
 
 exports.getUserConversations = async (userId) => {
-  if (!userId) throw new BadRequestError('User ID is required');
+  if (!userId) throw new Error('User ID is required');
+  
+  console.log('Fetching conversations for user:', userId); // Debug log
   
   try {
     const conversations = await ChatModel.getUserConversations(userId);
+    console.log('Found conversations:', conversations.length); // Debug log
     return conversations;
-  } catch (error) {
-    console.error('Service error:', error);
-    throw error;
+  } catch (err) {
+    console.error('Error fetching conversations:', err);
+    throw err;
   }
+};
+
+exports.addMemberToConversation = async (conversationId, userId) => {
+  return await ChatModel.addMember(conversationId, userId);
 };
