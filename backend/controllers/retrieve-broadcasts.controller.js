@@ -1,6 +1,8 @@
 const RetrieveBroadcastService = require('../services/retrieve-broadcasts.service');
 const { validateRequest } = require('../utils/validate');
-const UserRoleModel = require('../models/user-role.model'); 
+const UserRoleModel = require('../model/user-role.model'); 
+const { getPool } = require('../config/db');
+
 
 class RetrieveBroadcastController {
   async getMyBroadcasts(req, res, next) {
@@ -125,12 +127,22 @@ class RetrieveBroadcastController {
   async getReceivedBroadcasts(req, res, next) {
   try {
     const userId = req.user.id;
+    const userRoleModel = new UserRoleModel(getPool());
+    const userRoles = await userRoleModel.findByUserId(userId);
+    console.log('userRoles:', userRoles);
 
-    // 1. Fetch all role IDs and OU IDs for the user from tbluserroles
-    const userRoles = await UserRoleModel.getRolesAndOUsByUserId(userId);
-    // userRoles: [{ droleid, douid }, ...]
-    const userRoleIds = userRoles.map(r => r.droleid).filter(Boolean);
-    const userOuIds = userRoles.map(r => r.douid).filter(Boolean);
+    if (!userRoles || userRoles.length === 0) {
+      return res.status(200).json({
+        success: true,
+        broadcasts: [],
+        statistics: { total: 0 },
+        pagination: { currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: 50 }
+      });
+    }
+
+    // Use camelCase properties
+    const { roleId: userRoleId, ouId: userOuId } = userRoles[0] || {};
+    console.log('userRoleId:', userRoleId, 'userOuId:', userOuId);
 
     const filters = {
       page: parseInt(req.query.page) || 1,
@@ -140,8 +152,11 @@ class RetrieveBroadcastController {
       search: req.query.search
     };
 
-    // 2. Pass arrays of IDs to the service
-    const result = await RetrieveBroadcastService.getReceivedBroadcasts(userId, userRoleIds, userOuIds, filters);
+    const result = await RetrieveBroadcastService.getReceivedBroadcasts({
+      userRoleId,
+      userOuId,
+      ...filters
+    });
 
     res.status(200).json({
       success: true,

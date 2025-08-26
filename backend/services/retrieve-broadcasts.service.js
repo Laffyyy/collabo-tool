@@ -137,30 +137,23 @@ class RetrieveBroadcastService {
     }
   }
 
-  async getReceivedBroadcasts(userId, userRole, userOUs, filters = {}) {
-  const {
-    page = 1,
-    limit = 50,
-    status,
-    priority,
-    search
-  } = filters;
-
+  async getReceivedBroadcasts({ userRoleId, userOuId, page = 1, limit = 50, status, priority, search }) {
   const offset = (page - 1) * limit;
 
   try {
-    // Query broadcasts where the user is a target (by user, role, or OU)
     const broadcasts = await this.broadcastModel.getReceivedBroadcasts({
-      userId,
-      userRole,
-      userOUs,
+      userRoleId,
+      userOuId,
       limit: parseInt(limit),
       offset: parseInt(offset),
       status,
       priority
     });
 
-    // Optionally filter by search
+    // Log the retrieved broadcasts for debugging
+    console.log('Retrieved broadcasts:', broadcasts);
+
+    // ...rest of your logic...
     let filteredBroadcasts = broadcasts;
     if (search && search.trim()) {
       const searchTerm = search.toLowerCase().trim();
@@ -170,7 +163,6 @@ class RetrieveBroadcastService {
       );
     }
 
-    // TODO: Add statistics if needed
     const stats = { total: filteredBroadcasts.length };
 
     return {

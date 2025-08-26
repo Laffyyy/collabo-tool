@@ -289,71 +289,62 @@ class RetrieveBroadcastModel {
     }
   }
 
-  /**
- * Get broadcasts received by the user (by user, role, or OU)
- * @param {Object} options
- * @returns {Promise<Array>}
- */
-async getReceivedBroadcasts(options = {}) {
-  const {
-    userId,
-    userRoleIds = [], // <-- array of role IDs
-    userOuIds = [],   // <-- array of OU IDs
-    limit = 50,
-    offset = 0,
-    status,
-    priority
-  } = options;
+ /**
+   * Get broadcasts received by a user (must match both role and OU)
+   * @param {Object} options
+   * @param {string} options.userRoleId - User's role ID
+   * @param {string} options.userOuId - User's OU ID
+   * @param {number} [options.limit=50]
+   * @param {number} [options.offset=0]
+   * @param {string} [options.status]
+   * @param {string} [options.priority]
+   * @returns {Promise<Array>}
+   */
+  async getReceivedBroadcasts({ userRoleId, userOuId, limit = 50, offset = 0, status, priority }) {
+  const params = [userRoleId, userOuId];
+  let paramIndex = 3;
+  let whereConditions = [];
 
-  try {
-    // Build target match conditions
-    const targetConditions = [
-      `(bt.dtargettype = 'user' AND bt.dtargetid = $1)`
-    ];
-    const params = [userId];
-    let paramIndex = 2;
-
-    if (userRoleIds.length > 0) {
-      targetConditions.push(`(bt.dtargettype = 'role' AND bt.dtargetid = ANY($${paramIndex}))`);
-      params.push(userRoleIds);
-      paramIndex++;
-    }
-    if (userOuIds.length > 0) {
-      targetConditions.push(`(bt.dtargettype = 'ou' AND bt.dtargetid = ANY($${paramIndex}))`);
-      params.push(userOuIds);
-      paramIndex++;
-    }
-
-    let whereConditions = [`(${targetConditions.join(' OR ')})`];
-    if (status && status !== 'all') {
-      whereConditions.push(`b.dstatus = $${paramIndex}`);
-      params.push(status);
-      paramIndex++;
-    }
-    if (priority && priority !== 'all') {
-      whereConditions.push(`b.dpriority = $${paramIndex}`);
-      params.push(priority);
-      paramIndex++;
-    }
-
-    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
-
-    const query = `
-      SELECT b.*
-      FROM tblbroadcasts b
-      JOIN tblbroadcasttargets bt ON bt.dbroadcastid = b.did
-      ${whereClause}
-      ORDER BY b.tcreatedat DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-    params.push(limit, offset);
-
-    const result = await this.pool.query(query, params);
-    return this.formatBroadcasts(result.rows);
-  } catch (error) {
-    console.error('Database error in getReceivedBroadcasts:', error);
-    throw new Error(`Failed to fetch received broadcasts: ${error.message}`);
+  if (status && status !== 'all') {
+    whereConditions.push(`b.dstatus = $${paramIndex++}`);
+    params.push(status);
   }
+  if (priority && priority !== 'all') {
+    whereConditions.push(`b.dpriority = $${paramIndex++}`);
+    params.push(priority);
+  }
+
+  const whereClause =
+    (whereConditions.length > 0 ? `AND ${whereConditions.join(' AND ')}` : '');
+
+  const query = `
+    SELECT b.*
+    FROM tblbroadcasts b
+    WHERE EXISTS (
+      SELECT 1 FROM tblbroadcasttargets t
+      WHERE t.dbroadcastid = b.did
+        AND t.dtargettype = 'role'
+        AND t.dtargetid = $1
+    )
+    AND EXISTS (
+      SELECT 1 FROM tblbroadcasttargets t
+      WHERE t.dbroadcastid = b.did
+        AND t.dtargettype = 'ou'
+        AND t.dtargetid = $2
+    )
+    ${whereClause}
+    ORDER BY b.tcreatedat DESC
+    LIMIT $${paramIndex++} OFFSET $${paramIndex}
+  `;
+  params.push(limit, offset);
+
+  // Log the actual parameters for debugging
+  console.log('getReceivedBroadcasts params:', { userRoleId, userOuId, limit, offset, status, priority });
+  console.log('Final SQL params:', params);
+
+  const { rows } = await this.pool.query(query, params);
+  console.log('Retrieved broadcasts from DB:', rows);
+  return this.formatBroadcasts(rows);
 }
 
 }
