@@ -143,13 +143,11 @@
     }
   };
 
-  // FIXED: Load data on component mount if already on "My Broadcasts"
   onMount(() => {
-    console.log('🔄 Component mounted, activeTab:', activeTab);
-    if (activeTab === 'My Broadcasts') {
-      loadMyBroadcasts();
-    }
-  });
+  console.log('🔄 Component mounted, activeTab:', activeTab);
+  loadMyBroadcasts();
+  loadReceivedBroadcasts();
+});
 
   // FIXED: Effect for tab switching (separate from mount)
   $effect(() => {
@@ -328,15 +326,32 @@
     })
 );
 
+let sortedReceivedBroadcasts = $derived(
+  isLoadingReceived
+    ? []
+    : [...receivedBroadcasts]
+        .sort((a, b) => {
+          // Active first
+          if (a.isActive !== b.isActive) {
+            return a.isActive ? -1 : 1;
+          }
+          // Then by priority (high > medium > low)
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
+          const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+          if (priorityDiff !== 0) return priorityDiff;
+          // Then by creation date (newest first)
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        })
+);
+
   let tabCounts = $derived((): { [key: string]: number } => {
-    if (activeTab === 'My Broadcasts') {
-      // Count only active broadcasts
-      const activeCount = broadcasts.filter(b => b.isActive).length;
-      return { 'My Broadcasts': activeCount };
-    }
-    // Ensure all keys have number values (not undefined)
-    return { 'My Broadcasts': 0 };
-  });
+  const myCount = broadcasts.filter(b => b.isActive).length;
+  const receivedCount = receivedBroadcasts.filter(b => b.isActive).length;
+  return {
+    'My Broadcasts': myCount,
+    'Received Broadcasts': receivedCount
+  };
+});
 
   let canSendBroadcasts = $derived(
     currentUser && ['admin', 'manager'].includes(currentUser.role)
@@ -680,7 +695,7 @@ let prevTab = $state(activeTab);
       </p>
     </div>
   {:else}
-    {#each receivedBroadcasts as broadcast}
+    {#each sortedReceivedBroadcasts as broadcast}
       <div 
         class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''}"
         role="button"
