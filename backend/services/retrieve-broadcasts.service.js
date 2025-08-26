@@ -136,7 +136,59 @@ class RetrieveBroadcastService {
       throw new Error(`Failed to mark broadcast as done: ${error.message}`);
     }
   }
-  
+
+  async getReceivedBroadcasts(userId, userRole, userOUs, filters = {}) {
+  const {
+    page = 1,
+    limit = 50,
+    status,
+    priority,
+    search
+  } = filters;
+
+  const offset = (page - 1) * limit;
+
+  try {
+    // Query broadcasts where the user is a target (by user, role, or OU)
+    const broadcasts = await this.broadcastModel.getReceivedBroadcasts({
+      userId,
+      userRole,
+      userOUs,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      status,
+      priority
+    });
+
+    // Optionally filter by search
+    let filteredBroadcasts = broadcasts;
+    if (search && search.trim()) {
+      const searchTerm = search.toLowerCase().trim();
+      filteredBroadcasts = broadcasts.filter(broadcast =>
+        broadcast.title.toLowerCase().includes(searchTerm) ||
+        broadcast.content.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // TODO: Add statistics if needed
+    const stats = { total: filteredBroadcasts.length };
+
+    return {
+      broadcasts: filteredBroadcasts,
+      statistics: stats,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: 1,
+        totalItems: filteredBroadcasts.length,
+        itemsPerPage: parseInt(limit)
+      }
+    };
+  } catch (error) {
+    console.error('Service error in getReceivedBroadcasts:', error);
+    throw new Error(`Failed to retrieve received broadcasts: ${error.message}`);
+  }
+}
+
 }
 
 module.exports = new RetrieveBroadcastService();

@@ -18,4 +18,7 @@ router.post('/', requireAuth, RetrieveBroadcastController.createBroadcast);
 // Mark broadcast as done
 router.put('/my-broadcasts/:id/mark-done', requireAuth, RetrieveBroadcastController.markBroadcastAsDone);
 
+// Get broadcasts received by the user
+router.get('/received-broadcasts', requireAuth, RetrieveBroadcastController.getReceivedBroadcasts);
+
 module.exports = router;

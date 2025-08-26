@@ -289,6 +289,69 @@ class RetrieveBroadcastModel {
     }
   }
 
+  /**
+ * Get broadcasts received by the user (by user, role, or OU)
+ * @param {Object} options
+ * @returns {Promise<Array>}
+ */
+async getReceivedBroadcasts(options = {}) {
+  const {
+    userId,
+    userRole,
+    userOUs = [],
+    limit = 50,
+    offset = 0,
+    status,
+    priority
+  } = options;
+
+  try {
+    // Build target match conditions
+    const targetConditions = [
+      `(bt.dtargettype = 'user' AND bt.dtargetid = $1)`,
+      `(bt.dtargettype = 'role' AND bt.dtargetname = $2)`
+    ];
+    const params = [userId, userRole];
+    let paramIndex = 3;
+
+    if (userOUs && userOUs.length > 0) {
+      targetConditions.push(`(bt.dtargettype = 'ou' AND bt.dtargetname = ANY($${paramIndex}))`);
+      params.push(userOUs);
+      paramIndex++;
+    }
+
+    let whereConditions = [`(${targetConditions.join(' OR ')})`];
+    if (status && status !== 'all') {
+      whereConditions.push(`b.dstatus = $${paramIndex}`);
+      params.push(status);
+      paramIndex++;
+    }
+    if (priority && priority !== 'all') {
+      whereConditions.push(`b.dpriority = $${paramIndex}`);
+      params.push(priority);
+      paramIndex++;
+    }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    const query = `
+      SELECT b.*
+      FROM tblbroadcasts b
+      JOIN tblbroadcasttargets bt ON bt.dbroadcastid = b.did
+      ${whereClause}
+      ORDER BY b.tcreatedat DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+
+    const result = await this.pool.query(query, params);
+    return this.formatBroadcasts(result.rows);
+  } catch (error) {
+    console.error('Database error in getReceivedBroadcasts:', error);
+    throw new Error(`Failed to fetch received broadcasts: ${error.message}`);
+  }
+}
+
 }
 
 module.exports = RetrieveBroadcastModel;

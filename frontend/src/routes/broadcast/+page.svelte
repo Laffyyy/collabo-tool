@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { broadcastAPI } from '$lib/api/retrieve-broadcasts';
+  import { receivedBroadcastAPI } from '$lib/api/received-broadcasts';
   import { authStore } from '$lib/stores/auth.svelte';
+  import { receivedBroadcastsStore } from '$lib/stores/received-broadcasts.svelte';
   import { 
     Megaphone, 
     Plus, 
@@ -41,7 +43,37 @@
     acknowledgments: Acknowledgment[];
     isActive: boolean;
     status?: string;
+    
   }
+
+  interface BroadcastTarget {
+  dtargettype: 'role' | 'ou' | 'user';
+  dtargetid?: string | null;
+  dtargetname: string;
+}
+
+  // Add ReceivedBroadcast interface
+  interface ReceivedBroadcast {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  targetRoles: string[];
+  targetOUs: string[];
+  createdBy: string;
+  createdAt: Date;
+  scheduledFor?: Date;
+  requiresAcknowledgment: boolean;
+  responseType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  choices?: string[];
+  eventDate?: Date;
+  endDate?: Date;
+  acknowledgments: Acknowledgment[];
+  isActive: boolean;
+  status?: string; // allow any string status
+  targets?: BroadcastTarget[]; // <-- use the correct type here
+  // Add any additional fields specific to received broadcasts if needed
+}
 
   // Get current user from auth store
   const currentUser = $authStore.user;
@@ -50,6 +82,9 @@
   let broadcasts = $state<Broadcast[]>([]);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
+
+  let receivedBroadcasts = $state<ReceivedBroadcast[]>([]);
+  let isLoadingReceived = $state(false);
 
   // FIXED: Load broadcasts on component mount AND when switching to "My Broadcasts"
   const loadMyBroadcasts = async () => {
@@ -151,6 +186,71 @@
     }
   });
   */
+
+  const loadReceivedBroadcasts = async () => {
+  isLoadingReceived = true;
+  try {
+    const response = await receivedBroadcastAPI.getReceivedBroadcasts({
+      search: searchQuery.trim() || undefined,
+      priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+      limit: 50,
+      page: 1
+    });
+
+    // Log the raw response from the backend
+    console.log('Received broadcasts API response:', response);
+
+    // Get current user's role
+    const userRole = currentUser?.role || '';
+
+    // Filter broadcasts by role
+    receivedBroadcasts = response.broadcasts
+      .map(b => ({
+        ...b,
+        createdAt: new Date(b.createdAt),
+        scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
+        eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
+        targets: b.targets ?? []
+      }))
+
+      /*
+      .filter(b =>
+        b.targets.some(
+          (t: { dtargettype: string; dtargetname: string }) => t.dtargettype === 'role' && t.dtargetname === userRole
+        )
+      ); */
+
+    // Log the processed broadcasts that will be shown in the UI
+    console.log('Processed received broadcasts:', receivedBroadcasts);
+  } catch (err) {
+    console.error('Error loading received broadcasts:', err);
+  } finally {
+    isLoadingReceived = false;
+  }
+};
+
+  /* $effect(() => {
+    // Only show broadcasts where the user's role matches a target role
+    receivedBroadcasts = $receivedBroadcastsStore.getForRole(currentUser?.role || '').map((b: any) => ({
+      id: b.id,
+      title: b.title,
+      content: b.content,
+      priority: b.priority ?? 'low',
+      targetRoles: b.targetRoles ?? [],
+      targetOUs: b.targetOUs ?? [],
+      createdBy: b.createdBy,
+      createdAt: b.createdAt ? new Date(b.createdAt) : new Date(),
+      scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
+      requiresAcknowledgment: b.requiresAcknowledgment ?? false,
+      responseType: b.responseType ?? 'none',
+      choices: b.choices ?? [],
+      eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
+      endDate: b.endDate ? new Date(b.endDate) : undefined,
+      acknowledgments: b.acknowledgments ?? [],
+      isActive: b.isActive ?? true,
+      status: b.status
+    }));
+  }); */
 
   // Keep existing state variables...
   let showCreateBroadcast = $state(false);
@@ -296,6 +396,18 @@
     }
   };
 
+let prevTab = $state(activeTab);
+
+ $effect(() => {
+  if (
+    activeTab === 'Received Broadcasts' &&
+    prevTab !== 'Received Broadcasts'
+  ) {
+    loadReceivedBroadcasts();
+  }
+  prevTab = activeTab;
+});
+
   // Keep all existing functions (createBroadcast, acknowledgeBroadcast, etc.)...
 </script>
 
@@ -405,6 +517,8 @@
   <!-- Broadcasts List -->
   <div class="space-y-4">
     {#if activeTab === 'My Broadcasts'}
+
+    
       {#if isLoading}
         <div class="collaboration-card p-12 text-center">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#01c0a4] mx-auto mb-4"></div>
@@ -539,9 +653,90 @@
           </div>
         {/each}
       {/if}
-    {:else}
-      <!-- Other tabs placeholder -->
-      <div class="collaboration-card p-12 text-center">
+    
+    
+    {:else if activeTab === 'Received Broadcasts'}
+  {#if isLoadingReceived}
+    <div class="collaboration-card p-12 text-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#01c0a4] mx-auto mb-4"></div>
+      <h3 class="text-xl font-semibold text-gray-600 mb-2">Loading received broadcasts...</h3>
+      <p class="text-gray-500">Fetching broadcasts from the server</p>
+    </div>
+  {:else if receivedBroadcasts.length === 0}
+    <div class="collaboration-card p-12 text-center">
+      <Megaphone class="w-16 h-16 text-gray-300 mx-auto mb-4" />
+      <h3 class="text-xl font-semibold text-gray-600 mb-2">
+        {searchQuery || priorityFilter !== 'all' 
+          ? 'No received broadcasts match your filters' 
+          : 'No received broadcasts yet'}
+      </h3>
+      <p class="text-gray-500 mb-4">
+        {#if searchQuery || priorityFilter !== 'all'}
+          Try adjusting your search or filter criteria
+        {:else}
+          You haven't received any broadcasts yet.
+        {/if}
+      </p>
+    </div>
+  {:else}
+    {#each receivedBroadcasts as broadcast}
+      <div 
+        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''}"
+        role="button"
+        tabindex="0"
+        onclick={() => openBroadcastDetails(broadcast)}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
+      >
+        <div class="flex items-start justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center space-x-3 mb-2">
+              <h3 class="text-lg font-bold text-gray-800 truncate">{broadcast.title}</h3>
+              <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
+                {broadcast.priority.toUpperCase()}
+              </span>
+              <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
+            </div>
+            <div class="mb-3">
+              <p class="text-gray-600 text-sm line-clamp-2 break-words">
+                {#if broadcast.content.length > 120}
+                  {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
+                {:else}
+                  {broadcast.content}
+                {/if}
+              </p>
+            </div>
+            <div class="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
+              <div class="flex items-center space-x-1">
+                <Calendar class="w-4 h-4 flex-shrink-0" />
+                <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
+              </div>
+              <div class="flex items-center space-x-1">
+                <Users class="w-4 h-4 flex-shrink-0" />
+                <span class="truncate">{broadcast.targetRoles?.join(', ') || ''} | {broadcast.targetOUs?.join(', ') || ''}</span>
+              </div>
+              {#if broadcast.eventDate}
+                <div class="flex items-center space-x-1">
+                  <Clock class="w-4 h-4 flex-shrink-0" />
+                  <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+          {#if broadcast.requiresAcknowledgment}
+            <div class="text-right flex-shrink-0 ml-4">
+              <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
+                {broadcast.acknowledgments.length} acknowledgments
+              </div>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/each}
+  {/if}
+
+  {:else}
+    <!-- Other tabs placeholder -->
+    <div class="collaboration-card p-12 text-center">
         <Megaphone class="w-16 h-16 text-gray-300 mx-auto mb-4" />
         <h3 class="text-xl font-semibold text-gray-600 mb-2">Coming Soon</h3>
         <p class="text-gray-500">

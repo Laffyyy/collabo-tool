@@ -120,7 +120,35 @@ class RetrieveBroadcastController {
       next(error);
     }
   }
-  
+
+  async getReceivedBroadcasts(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const userOUs = req.user.orgUnits || []; // adjust if your user object has OUs
+
+    const filters = {
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 50,
+      status: req.query.status,
+      priority: req.query.priority,
+      search: req.query.search
+    };
+
+    const result = await RetrieveBroadcastService.getReceivedBroadcasts(userId, userRole, userOUs, filters);
+
+    res.status(200).json({
+      success: true,
+      broadcasts: result.broadcasts,
+      statistics: result.statistics,
+      pagination: result.pagination
+    });
+  } catch (error) {
+    console.error('Controller error in getReceivedBroadcasts:', error);
+    next(error);
+  }
+}
+
 }
 
 module.exports = new RetrieveBroadcastController();
