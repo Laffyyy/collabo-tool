@@ -31,6 +31,15 @@ export const API_CONFIG = {
       getOUs: '/api/v1/broadcast/ou',
       getRoles: '/api/v1/broadcast/roles',
       templates: '/api/v1/broadcast/templates'
+    },
+    broadcastResponse: {
+      acknowledge: '/api/v1/broadcast-responses/:id/acknowledge',
+      preferredDate: '/api/v1/broadcast-responses/:id/preferred-date',
+      choice: '/api/v1/broadcast-responses/:id/choice',
+      text: '/api/v1/broadcast-responses/:id/text',
+      myResponse: '/api/v1/broadcast-responses/:id/my-response',
+      allResponses: '/api/v1/broadcast-responses/:id/responses',
+      stats: '/api/v1/broadcast-responses/:id/stats'
     }
   }
 };

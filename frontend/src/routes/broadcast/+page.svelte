@@ -2,6 +2,7 @@
   import { broadcastAPI } from '$lib/api/retrieve-broadcasts';
   import { receivedBroadcastAPI } from '$lib/api/received-broadcasts';
   import { receivedBroadcastsStore } from '$lib/stores/received-broadcasts.svelte';
+  import { responseBroadcastAPI } from '$lib/api/response-broadcast';
   import { 
     Megaphone, 
     Plus, 
@@ -375,10 +376,19 @@ let sortedReceivedBroadcasts = $derived(
     const p = priorities.find(p => p.value === priority);
     return p?.color || 'text-gray-600 bg-gray-100';
   };
-  const openBroadcastDetails = (broadcast: Broadcast) => {
+
+  const openBroadcastDetails = async (broadcast: Broadcast | ReceivedBroadcast) => {
     selectedBroadcast = broadcast;
-    viewedBroadcasts.add(broadcast.id);
-    viewedBroadcasts = new Set(viewedBroadcasts);
+    // Reset response states
+    isAcknowledged = false;
+    preferredDate = '';
+    selectedChoice = '';
+    textResponse = '';
+    
+    // Check if user has already responded (for received broadcasts)
+    if (activeTab === 'Received Broadcasts') {
+      await checkExistingResponse(broadcast.id);
+    }
   };
 
   const closeBroadcastDetails = () => {
@@ -700,6 +710,76 @@ onMount(async () => {
     $toastStore.success('Component loaded successfully');
   }, 1000);
 });
+
+ // Response handler functions - replace your existing ones
+  const handleAcknowledgment = async (broadcastId: string) => {
+    try {
+      const response = await responseBroadcastAPI.submitAcknowledgment(broadcastId);
+      isAcknowledged = true;
+      $toastStore.success('Broadcast acknowledged successfully!');
+    } catch (error) {
+      console.error('Error acknowledging broadcast:', error);
+      $toastStore.error('Failed to acknowledge broadcast');
+    }
+  };
+
+  const handlePreferredDateResponse = async (broadcastId: string, date: string) => {
+    try {
+      await responseBroadcastAPI.submitPreferredDate(broadcastId, date);
+      $toastStore.success(`Preferred date submitted: ${new Date(date).toLocaleString()}`);
+      selectedBroadcast = null;
+    } catch (error) {
+      console.error('Error submitting preferred date:', error);
+      $toastStore.error('Failed to submit preferred date');
+    }
+  };
+
+  const handleChoiceResponse = async (broadcastId: string, choice: string) => {
+    try {
+      await responseBroadcastAPI.submitChoice(broadcastId, choice);
+      $toastStore.success(`Response submitted: ${choice}`);
+      selectedBroadcast = null;
+    } catch (error) {
+      console.error('Error submitting choice:', error);
+      $toastStore.error('Failed to submit response');
+    }
+  };
+
+  const handleTextResponse = async (broadcastId: string, response: string) => {
+    try {
+      await responseBroadcastAPI.submitTextResponse(broadcastId, response);
+      $toastStore.success('Text response submitted successfully!');
+      selectedBroadcast = null;
+    } catch (error) {
+      console.error('Error submitting text response:', error);
+      $toastStore.error('Failed to submit response');
+    }
+  };
+
+  // Function to check if user has already responded
+  const checkExistingResponse = async (broadcastId: string) => {
+    try {
+      const response = await responseBroadcastAPI.getUserResponse(broadcastId);
+      if (response.response) {
+        // User has already responded - check the responseType from responseData
+        const responseData = response.response.responseData;
+        isAcknowledged = responseData.responseType === 'required';
+        
+        if (responseData.responseType === 'preferred-date') {
+          preferredDate = responseData.preferredDate || '';
+        }
+        if (responseData.responseType === 'choices') {
+          selectedChoice = responseData.selectedChoice || '';
+        }
+        if (responseData.responseType === 'textbox') {
+          textResponse = responseData.textResponse || '';
+        }
+      }
+    } catch (error) {
+      console.error('Error checking existing response:', error);
+    }
+  };
+
 </script>
 
 <svelte:head>
@@ -1615,22 +1695,103 @@ onMount(async () => {
             </div>
           </div>
 
+          <!-- In the broadcast details modal, replace the "Mark as Done" button section -->
           <div class="flex justify-end pt-4 border-t border-gray-200">
-            {#if selectedBroadcast.isActive}
+            {#if activeTab === 'Received Broadcasts'}
+              <!-- Response options based on responseType -->
+              {#if selectedBroadcast.responseType === 'none'}
+                <div class="text-sm text-gray-500 italic">No response required</div>
+              {:else if selectedBroadcast.responseType === 'required'}
+                <!-- Acknowledgment required -->
+                <div class="flex items-center space-x-3">
+                  <button
+                    onclick={() => handleAcknowledgment(selectedBroadcast.id)}
+                    class="primary-button"
+                    disabled={isAcknowledged}
+                  >
+                    {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
+                  </button>
+                </div>
+              {:else if selectedBroadcast.responseType === 'preferred-date'}
+                <!-- Preferred date selection -->
+                <div class="flex flex-col space-y-3 w-full">
+                  <label for="preferred-date" class="text-sm font-medium text-gray-700">
+                    Select your preferred date:
+                  </label>
+                  <div class="flex items-center space-x-3">
+                    <input
+                      id="preferred-date"
+                      type="datetime-local"
+                      bind:value={preferredDate}
+                      class="input-field flex-1"
+                    />
+                    <button
+                      onclick={() => handlePreferredDateResponse(selectedBroadcast.id, preferredDate)}
+                      class="primary-button"
+                      disabled={!preferredDate}
+                    >
+                      Submit Date
+                    </button>
+                  </div>
+                </div>
+              {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
+                <!-- Multiple choice options -->
+                <div class="flex flex-col space-y-3 w-full">
+                  <label class="text-sm font-medium text-gray-700">Select an option:</label>
+                  <div class="space-y-2">
+                    {#each selectedBroadcast.choices as choice, index}
+                      <label class="flex items-center space-x-3">
+                        <input
+                          type="radio"
+                          bind:group={selectedChoice}
+                          value={choice}
+                          class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                        />
+                        <span class="text-sm text-gray-700">{choice}</span>
+                      </label>
+                    {/each}
+                  </div>
+                  <button
+                    onclick={() => handleChoiceResponse(selectedBroadcast.id, selectedChoice)}
+                    class="primary-button self-end"
+                    disabled={!selectedChoice}
+                  >
+                    Submit Response
+                  </button>
+                </div>
+              {:else if selectedBroadcast.responseType === 'textbox'}
+                <!-- Text response -->
+                <div class="flex flex-col space-y-3 w-full">
+                  <label for="text-response" class="text-sm font-medium text-gray-700">
+                    Your response:
+                  </label>
+                  <div class="space-y-3">
+                    <textarea
+                      id="text-response"
+                      bind:value={textResponse}
+                      placeholder="Enter your response..."
+                      rows="3"
+                      class="input-field w-full resize-none"
+                    ></textarea>
+                    <button
+                      onclick={() => handleTextResponse(selectedBroadcast.id, textResponse)}
+                      class="primary-button self-end"
+                      disabled={!textResponse.trim()}
+                    >
+                      Submit Response
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            {:else if selectedBroadcast.isActive}
+              <!-- Keep existing "Mark as Done" for My Broadcasts tab -->
               <div class="flex space-x-3">
-                <button
-                  onclick={() => selectedBroadcast && markBroadcastAsDone(selectedBroadcast.id)}
-                  class="primary-button flex items-center space-x-2"
-                >
-                  <CheckCircle class="w-4 h-4" />
-                  <span>Mark as Done</span>
+                <button onclick={() => markBroadcastAsDone(selectedBroadcast.id)} class="primary-button">
+                  Mark as Done
                 </button>
               </div>
             {:else}
-              <button
-                onclick={closeBroadcastDetails}
-                class="secondary-button"
-              >
+              <button onclick={() => selectedBroadcast = null} class="secondary-button">
                 Close
               </button>
             {/if}
