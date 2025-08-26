@@ -159,8 +159,13 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
     
     // Get user role(s)
     const userRoles = await userRoleModel.findByUserId(userId);
+    console.log('User roles retrieved:', userRoles);
     const userRole = userRoles.length > 0 ? userRoles[0] : null; // Get primary role
     const role = userRole ? userRole.roleName.toLowerCase() : 'user'; // Default to 'user' if no role
+    
+    // Extract the OU ID from the user role
+    const ouId = userRole ? userRole.ouId : null;
+    console.log(`[Auth Service] User OU ID: ${ouId || 'Not assigned'} for user: ${userId}`);
     
     console.log(`[Auth Service] User role determined: ${role} for user: ${userId}`);
     
@@ -174,6 +179,7 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       username: user.username,
       email: user.email,
       role: role,
+      ouId: ouId,
       name: `${user.firstName} ${user.lastName}`
     });
     console.log(`[Auth Service] JWT token generated for user: ${userId}`);
@@ -206,7 +212,8 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       expiresAt,
       user: {
         ...user,
-        role
+        role,
+        ouId
       }
     };
   } catch (error) {

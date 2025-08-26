@@ -83,7 +83,8 @@ async function verifyOtp(req, res, next) {
         name: `${result.user.firstName} ${result.user.lastName}`,
         email: result.user.email,
         role: result.user.role,
-        username: result.user.username
+        username: result.user.username,
+        ouId: result.user.ouId
       },
       token: result.token,
       sessionToken: result.sessionToken,

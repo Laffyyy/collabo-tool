@@ -53,14 +53,16 @@ class UserRoleModel {
    */
   async findByUserId(userId) {
     const query = `
-      SELECT ur.*, r.dname as rolename, r.dhierarchylevel
+      SELECT ur.did, ur.duserid, ur.droleid, ur.douid, ur.dsupervisorid, ur.dmanagerid, ur.tassignedat,
+            r.dname as rolename, r.dhierarchylevel
       FROM ${this.tableName} ur
       JOIN tblroles r ON ur.droleid = r.did
       WHERE ur.duserid = $1
     `;
 
     const { rows } = await this.pool.query(query, [userId]);
-    return rows.map(this.formatUserRole);
+    console.log(`Raw user role data for ${userId}:`, JSON.stringify(rows));
+    return rows.map(row => this.formatUserRole(row));
   }
 
   /**
@@ -77,7 +79,7 @@ class UserRoleModel {
     `;
 
     const { rows } = await this.pool.query(query, [roleId]);
-    return rows.map(this.formatUserRole);
+    return rows.map(row => this.formatUserRole(row));
   }
 
   /**
@@ -95,7 +97,7 @@ class UserRoleModel {
     `;
 
     const { rows } = await this.pool.query(query, [roleId, ouId]);
-    return rows.map(this.formatUserRole);
+    return rows.map(row => this.formatUserRole(row));
   }
 
   /**
@@ -112,7 +114,7 @@ class UserRoleModel {
     `;
 
     const { rows } = await this.pool.query(query, [supervisorId]);
-    return rows.map(this.formatUserRole);
+    return rows.map(row => this.formatUserRole(row));
   }
 
   /**
@@ -129,7 +131,7 @@ class UserRoleModel {
     `;
 
     const { rows } = await this.pool.query(query, [managerId]);
-    return rows.map(this.formatUserRole);
+    return rows.map(row => this.formatUserRole(row));
   }
 
   /**
