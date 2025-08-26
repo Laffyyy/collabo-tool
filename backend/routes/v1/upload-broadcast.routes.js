@@ -7,7 +7,7 @@ const { requireRole } = require('../../auth/requireRole');
 const { validate } = require('../../utils/validate');
 
 // Only allow admin and manager to create broadcasts
-const canCreateBroadcast = requireRole(['admin', 'manager']);
+const canCreateBroadcast = requireRole(['admin', 'manager', 'support', 'supervisor']);
 
 /**
  * @route   GET /api/v1/broadcast/ou

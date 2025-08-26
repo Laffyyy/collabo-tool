@@ -406,19 +406,19 @@
         title: newBroadcast.title.trim(),
         content: newBroadcast.content.trim(),
         priority: newBroadcast.priority,
-        targetRoles: newBroadcast.targetRoles,
-        targetOUs: newBroadcast.targetOUs,
+        // Ensure all role IDs are strings
+        targetRoles: newBroadcast.targetRoles.map(role => String(role)),
+        // Ensure all OU IDs are strings too
+        targetOUs: newBroadcast.targetOUs.map(ou => String(ou)),
         responseType: newBroadcast.acknowledgmentType,
         requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
-        // Add scheduling parameters
         scheduledFor: newBroadcast.scheduleType === 'pick' ? newBroadcast.scheduledFor : null,
         endDate: newBroadcast.endDate || null,
-        // Add choices if response type is 'choices'
         choices: newBroadcast.acknowledgmentType === 'choices' 
           ? newBroadcast.choices.filter(choice => choice.trim() !== '')
           : null
       };
-      
+          
       console.log('Sending broadcast data to API:', broadcastData);
       
       const response = await BroadcastAPI.createBroadcast(broadcastData);

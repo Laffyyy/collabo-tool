@@ -81,9 +81,3 @@ export async function deleteTemplate(
     `${API_CONFIG.endpoints.broadcast.templates}/${templateId}`
   );
 }
-
-export async function getBroadcasts(): Promise<GetBroadcastsResponse> {
-  return await apiClient.get<GetBroadcastsResponse>(
-    API_CONFIG.endpoints.broadcast.getBroadcasts
-  );
-}
