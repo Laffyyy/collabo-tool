@@ -267,7 +267,8 @@ class UploadBroadcastModel {
     const query = `
       SELECT t.* FROM tblbroadcasttemplates t
       JOIN tblusers u ON t.dcreatedby = u.did
-      WHERE u.douid = $1
+      JOIN tbluserroles ur ON u.did = ur.duserid
+      WHERE ur.douid = $1
       ORDER BY t.tcreatedat DESC
     `;
     
