@@ -255,28 +255,60 @@ class UploadBroadcastModel {
   }
 
   /**
-   * Get templates for users in the same OU
-   * @param {string} ouId - Organizational unit ID
-   * @returns {Promise<Array>} Array of templates
-   */
-  async getTemplatesByOU(ouId) {
-    if (!ouId) {
-      return [];
+ * Get all templates or templates for a specific user
+ * @param {string} userId - User ID to filter templates (optional)
+ * @returns {Promise<Array>} Array of templates
+ */
+async getTemplates(userId = null) {
+  try {
+    // If no userId is provided, return all templates (admin case)
+    if (!userId) {
+      const query = `
+        SELECT * FROM tblbroadcasttemplates
+        ORDER BY tcreatedat DESC
+      `;
+      
+      const result = await this.pool.query(query);
+      return result.rows.map(row => this.formatTemplate(row));
     }
     
-    const query = `
-      SELECT t.* FROM tblbroadcasttemplates t
-      JOIN tblusers u ON t.dcreatedby = u.did
-      JOIN tbluserroles ur ON u.did = ur.duserid
-      WHERE ur.douid = $1
+    // For users with an OU, get their templates directly instead of calling getTemplatesByOU
+    // Check if user is admin first
+    const roleQuery = `
+      SELECT r.dname 
+      FROM tbluserroles ur
+      JOIN tblroles r ON ur.droleid = r.did
+      WHERE ur.duserid = $1 AND LOWER(r.dname) = 'admin'
+    `;
+    
+    const roleResult = await this.pool.query(roleQuery, [userId]);
+    
+    // If user is admin, return all templates
+    if (roleResult.rows.length > 0) {
+      const allTemplatesQuery = `
+        SELECT * FROM tblbroadcasttemplates
+        ORDER BY tcreatedat DESC
+      `;
+      
+      const result = await this.pool.query(allTemplatesQuery);
+      return result.rows.map(row => this.formatTemplate(row));
+    }
+    
+    // For non-admin users, get templates they created
+    const userTemplatesQuery = `
+      SELECT t.*
+      FROM tblbroadcasttemplates t
+      WHERE t.dcreatedby = $1
       ORDER BY t.tcreatedat DESC
     `;
     
-    const values = [ouId];
-    
-    const result = await this.pool.query(query, values);
+    const result = await this.pool.query(userTemplatesQuery, [userId]);
     return result.rows.map(row => this.formatTemplate(row));
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    return [];
   }
+}
 
   /**
    * Format a template from DB row

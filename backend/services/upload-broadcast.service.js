@@ -216,7 +216,7 @@ async function saveTemplate({
   }
 }
 
-  /**
+/**
  * Get broadcast templates for users in the same OU
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Array of templates
@@ -227,41 +227,10 @@ async function getTemplates(userId) {
       throw new BadRequestError('User ID is required');
     }
     
-    // Get the user's OU from tbluserroles instead of tblusers
-    const query = `
-      SELECT ur.douid 
-      FROM tbluserroles ur
-      WHERE ur.duserid = $1
-      LIMIT 1
-    `;
+    // Use the model's getTemplates method directly instead of trying to get OU first
+    // The model's getTemplates method already handles all the logic we need
+    return await uploadBroadcastModel.getTemplates(userId);
     
-    const result = await pool.query(query, [userId]);
-    
-    // If user has no OU assignment, check if they're an admin
-    if (result.rows.length === 0) {
-      // Check if user is admin (can return all templates)
-      const roleQuery = `
-        SELECT r.dname 
-        FROM tbluserroles ur
-        JOIN tblroles r ON ur.droleid = r.did
-        WHERE ur.duserid = $1 AND r.dname = 'admin'
-      `;
-      
-      const roleResult = await pool.query(roleQuery, [userId]);
-      
-      // If user is admin, return all templates
-      if (roleResult.rows.length > 0) {
-        return await uploadBroadcastModel.getTemplates();
-      }
-      
-      // No OU and not admin, return empty array
-      return [];
-    }
-    
-    const userOU = result.rows[0].douid;
-    
-    // Get templates from users in the same OU
-    return await uploadBroadcastModel.getTemplatesByOU(userOU);
   } catch (error) {
     console.error('[Broadcast Service] Error getting templates:', error);
     throw error;

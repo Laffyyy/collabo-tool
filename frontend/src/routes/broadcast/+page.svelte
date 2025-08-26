@@ -29,6 +29,7 @@
   import { authStore } from '$lib/stores/auth.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 
   // Type definitions
   interface Acknowledgment {
@@ -102,10 +103,9 @@
 
 
   // Get current user from auth store
-  const currentUser = $authStore.user;
+  let currentUser = $derived($authStore?.user || { id: '', role: '' });
 
   // State for broadcasts - will be loaded from API for "My Broadcasts" tab
-  let broadcasts = $state<Broadcast[]>([]);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
 
@@ -152,6 +152,9 @@
 
   let broadcasts = $state<Broadcast[]>([]);
   let templates = $state<BroadcastTemplate[]>([]);
+
+  let showDeleteTemplateModal = $state(false);
+  let templateToDelete = $state<string | null>(null);
 
     const loadMyBroadcasts = async () => {
     console.log('🔄 Loading user broadcasts from API...');
@@ -431,10 +434,273 @@ const exportCSV = (broadcast: Broadcast) => {
     alert('View detailed report functionality would be implemented here.');
   };
 
-  // Keep all existing functions (createBroadcast, acknowledgeBroadcast, etc.)...
-</script>
+const createBroadcast = async () => {
+  if (newBroadcast.title.trim() && newBroadcast.content.trim()) {
+    try {
+      isCreatingBroadcast = true;
+      apiError = '';
+      
+      const broadcastData: CreateBroadcastRequest = {
+        title: newBroadcast.title.trim(),
+        content: newBroadcast.content.trim(),
+        priority: newBroadcast.priority,
+        // Ensure all role IDs are strings
+        targetRoles: newBroadcast.targetRoles.map(role => String(role)),
+        // Ensure all OU IDs are strings too
+        targetOUs: newBroadcast.targetOUs.map(ou => String(ou)),
+        responseType: newBroadcast.acknowledgmentType,
+        requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
+        scheduledFor: newBroadcast.scheduleType === 'pick' ? newBroadcast.scheduledFor : null,
+        endDate: newBroadcast.endDate || null,
+        choices: newBroadcast.acknowledgmentType === 'choices' 
+          ? newBroadcast.choices.filter(choice => choice.trim() !== '')
+          : null
+      };
+          
+      console.log('Sending broadcast data to API:', broadcastData);
+      
+      const response = await BroadcastAPI.createBroadcast(broadcastData);
+      
+      if (response.ok) {
+        // Add the new broadcast to the local state with scheduling info
+        const createdBroadcast = response.broadcast;
+        broadcasts = [
+          {
+            id: response.broadcast?.id || Date.now().toString(),
+            title: newBroadcast.title.trim(),
+            content: newBroadcast.content.trim(),
+            priority: newBroadcast.priority,
+            targetRoles: newBroadcast.targetRoles,
+            targetOUs: newBroadcast.targetOUs,
+            createdBy: currentUser.id,
+            createdAt: new Date(),
+            scheduledFor: newBroadcast.scheduleType === 'pick' ? new Date(newBroadcast.scheduledFor) : undefined,
+            requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
+            responseType: newBroadcast.acknowledgmentType,
+            acknowledgments: [],
+            isActive: true,
+            endDate: newBroadcast.endDate ? new Date(newBroadcast.endDate) : undefined
+          },
+          ...broadcasts
+        ];
+        
+        closeCreateModal();
+        console.log('Creating toast with store:', $toastStore);
+        $toastStore.success('Broadcast created successfully!');
+      } else {
+        throw new Error(response.message || 'Failed to create broadcast');
+      }
+    } catch (error: any) {
+      console.error('Error creating broadcast:', error);
+      apiError = error.message || 'An error occurred while creating the broadcast';
+      $toastStore.error(apiError);
+    } finally {
+      isCreatingBroadcast = false;
+    }
+  }
+};
 
-<ToastContainer />
+// Add this function to close the modal and reset the form
+const closeCreateModal = () => {
+  showCreateBroadcast = false;
+  apiError = '';
+  newBroadcast = {
+    title: '',
+    content: '',
+    priority: 'medium',
+    targetRoles: [],
+    targetOUs: [],
+    acknowledgmentType: 'none',
+    scheduleType: 'now',
+    eventDate: '',
+    scheduledFor: '',
+    endDate: '',
+    choices: ['']
+  };
+  showSaveTemplate = false;
+  templateName = '';
+};
+
+// Add missing template functions
+const loadTemplate = (templateId: string) => {
+  const template = templates.find(t => t.id === templateId);
+  if (template) {
+    newBroadcast = {
+      title: template.title,
+      content: template.content,
+      priority: template.priority,
+      targetRoles: template.targetRoles || [],
+      targetOUs: template.targetOUs || [],
+      acknowledgmentType: template.acknowledgmentType,
+      scheduleType: 'now',
+      eventDate: '',
+      scheduledFor: '',
+      endDate: '',
+      choices: template.choices || ['']
+    };
+  }
+};
+
+const saveAsTemplate = async () => {
+    if (templateName.trim() && newBroadcast.title.trim() && newBroadcast.content.trim()) {
+      try {
+        isSavingTemplate = true;
+        
+        // Properly filter and clean up choices
+        let processedChoices = null;
+        if (newBroadcast.acknowledgmentType === 'choices') {
+          processedChoices = newBroadcast.choices
+            .filter(choice => typeof choice === 'string' && choice.trim() !== '')
+            .map(choice => choice.trim());
+          
+          // Don't send an empty array
+          if (processedChoices.length === 0) {
+            processedChoices = null;
+          }
+        }
+        
+        const templateData: SaveTemplateRequest = {
+          name: templateName.trim(),
+          title: newBroadcast.title.trim(),
+          content: newBroadcast.content.trim(),
+          priority: newBroadcast.priority,
+          acknowledgmentType: newBroadcast.acknowledgmentType,
+          choices: processedChoices,
+          targetOUs: newBroadcast.targetOUs,
+          targetRoles: newBroadcast.targetRoles
+        };
+        
+        console.log('Saving template with data:', templateData);
+        const response = await BroadcastAPI.saveTemplate(templateData);
+        
+        if (response.ok) {
+          templates = [response.template, ...templates];
+          templateName = '';
+          showSaveTemplate = false;
+          
+          // Reset the form after saving template
+          newBroadcast = {
+            title: '',
+            content: '',
+            priority: 'medium',
+            targetRoles: [],
+            targetOUs: [],
+            acknowledgmentType: 'none',
+            scheduleType: 'now',
+            eventDate: '',
+            scheduledFor: '',
+            endDate: '',
+            choices: ['']
+          };
+          
+          $toastStore.success('Template saved successfully!');
+        } else {
+          throw new Error(response.message || 'Failed to save template');
+        }
+      } catch (error: any) {
+        console.error('Error saving template:', error);
+        $toastStore.error(error.message || 'An error occurred while saving the template');
+      } finally {
+        isSavingTemplate = false;
+      }
+    }
+  };
+
+  const deleteTemplate = async () => {
+    if (!selectedTemplate) return;
+    
+    // Show the confirmation modal instead of using confirm()
+    templateToDelete = selectedTemplate;
+    showDeleteTemplateModal = true;
+  };
+
+  const confirmDeleteTemplate = async () => {
+    try {
+      if (!templateToDelete) return;
+      
+      const response = await BroadcastAPI.deleteTemplate(templateToDelete);
+      
+      if (response.ok) {
+        // Remove template from local state
+        templates = templates.filter(t => t.id !== templateToDelete);
+        // Clear selection
+        selectedTemplate = '';
+        // Reset form
+        newBroadcast = {
+          title: '',
+          content: '',
+          priority: 'medium',
+          targetRoles: [],
+          targetOUs: [],
+          acknowledgmentType: 'none',
+          scheduleType: 'now',
+          eventDate: '',
+          scheduledFor: '',
+          endDate: '',
+          choices: ['']
+        };
+        $toastStore.success('Template deleted successfully!');
+      } else {
+        throw new Error(response.message || 'Failed to delete template');
+      }
+    } catch (error: any) {
+      console.error('Error deleting template:', error);
+      $toastStore.error(error.message || 'An error occurred while deleting the template');
+    } finally {
+      // Close the modal
+      showDeleteTemplateModal = false;
+      templateToDelete = null;
+    }
+  };
+
+// Load templates and available roles/OUs on mount
+onMount(async () => {
+  console.log('🔄 Component mounted, activeTab:', activeTab);
+  loadMyBroadcasts();
+  loadReceivedBroadcasts();
+  
+  try {
+    isLoadingOUs = true;
+    isLoadingRoles = true;
+    isLoadingTemplates = true;
+    
+    // Load all data in parallel for better performance
+    const [ousResponse, rolesResponse, templatesResponse] = await Promise.all([
+      BroadcastAPI.getOrganizationalUnits(),
+      BroadcastAPI.getRoles(),
+      BroadcastAPI.getTemplates()
+    ]);
+    
+    // Use only the API data
+    availableOUs = ousResponse.organizationalUnits || [];
+    availableRoles = rolesResponse.roles || [];
+    templates = templatesResponse.templates || [];
+    
+    console.log('Loaded OUs:', availableOUs);
+    console.log('Loaded Roles:', availableRoles);
+    console.log('Loaded Templates:', templates);
+  } catch (error: any) {
+    console.error('Failed to load broadcast data:', error);
+    
+    // Initialize with empty arrays if loading fails
+    availableOUs = [];
+    availableRoles = [];
+    templates = [];
+    
+    apiError = 'Failed to load data. Please try again later.';
+  } finally {
+    isLoadingOUs = false;
+    isLoadingRoles = false;
+    isLoadingTemplates = false;
+  }
+  
+  // Test toast functionality after component is mounted
+  setTimeout(() => {
+    console.log('Testing toast system...');
+    $toastStore.success('Component loaded successfully');
+  }, 1000);
+});
+</script>
 
 <svelte:head>
   <title>Broadcast - CollabHub</title>
@@ -1373,4 +1639,24 @@ const exportCSV = (broadcast: Broadcast) => {
       </div>
     </div>
   {/if}
+
+  <!-- Template Delete Confirmation Modal -->
+  {#if showDeleteTemplateModal}
+    <ConfirmationModal
+      show={showDeleteTemplateModal}
+      title="Delete Template"
+      message="Are you sure you want to delete this template? This action cannot be undone."
+      confirmText="Delete"
+      confirmStyle="danger"
+      onConfirm={confirmDeleteTemplate}
+      onCancel={() => {
+        showDeleteTemplateModal = false;
+        templateToDelete = null;
+      }}
+    />
+  {/if}
+
+
 </div>
+
+<ToastContainer />

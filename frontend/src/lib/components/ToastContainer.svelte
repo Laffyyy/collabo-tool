@@ -11,7 +11,7 @@
   }
 </script>
 
-<div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100]" 
+<div class="fixed top-20 left-1/2 transform -translate-x-1/2 z-[9999]" 
      role="alert" 
      aria-live="polite">
   {#if currentToast && currentToast.id}
