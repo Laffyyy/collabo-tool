@@ -396,6 +396,7 @@
     }
   };
 
+// svelte-ignore state_referenced_locally
 let prevTab = $state(activeTab);
 
  $effect(() => {
