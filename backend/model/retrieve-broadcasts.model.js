@@ -297,8 +297,8 @@ class RetrieveBroadcastModel {
 async getReceivedBroadcasts(options = {}) {
   const {
     userId,
-    userRole,
-    userOUs = [],
+    userRoleIds = [], // <-- array of role IDs
+    userOuIds = [],   // <-- array of OU IDs
     limit = 50,
     offset = 0,
     status,
@@ -308,15 +308,19 @@ async getReceivedBroadcasts(options = {}) {
   try {
     // Build target match conditions
     const targetConditions = [
-      `(bt.dtargettype = 'user' AND bt.dtargetid = $1)`,
-      `(bt.dtargettype = 'role' AND bt.dtargetname = $2)`
+      `(bt.dtargettype = 'user' AND bt.dtargetid = $1)`
     ];
-    const params = [userId, userRole];
-    let paramIndex = 3;
+    const params = [userId];
+    let paramIndex = 2;
 
-    if (userOUs && userOUs.length > 0) {
-      targetConditions.push(`(bt.dtargettype = 'ou' AND bt.dtargetname = ANY($${paramIndex}))`);
-      params.push(userOUs);
+    if (userRoleIds.length > 0) {
+      targetConditions.push(`(bt.dtargettype = 'role' AND bt.dtargetid = ANY($${paramIndex}))`);
+      params.push(userRoleIds);
+      paramIndex++;
+    }
+    if (userOuIds.length > 0) {
+      targetConditions.push(`(bt.dtargettype = 'ou' AND bt.dtargetid = ANY($${paramIndex}))`);
+      params.push(userOuIds);
       paramIndex++;
     }
 

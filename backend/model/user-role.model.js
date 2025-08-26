@@ -1,3 +1,4 @@
+
 /**
  * UserRole model for managing user role assignments
  */

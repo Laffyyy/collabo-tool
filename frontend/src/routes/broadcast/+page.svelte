@@ -424,6 +424,14 @@ let prevTab = $state(activeTab);
   prevTab = activeTab;
 });
 
+const exportCSV = (broadcast: Broadcast) => {
+    alert('CSV export functionality would be implemented here.');
+  };
+
+  const viewReport = (broadcast: Broadcast) => {
+    alert('View detailed report functionality would be implemented here.');
+  };
+
   // Keep all existing functions (createBroadcast, acknowledgeBroadcast, etc.)...
 </script>
 
@@ -659,12 +667,28 @@ let prevTab = $state(activeTab);
               </div>
 
               {#if broadcast.requiresAcknowledgment}
-                <div class="text-right flex-shrink-0 ml-4">
-                  <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
-                    {broadcast.acknowledgments.length} acknowledgments
-                  </div>
+              <div class="text-right flex-shrink-0 ml-4">
+                <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
+                  {broadcast.acknowledgments.length} acknowledgments
                 </div>
-              {/if}
+                <div class="space-y-2">
+                  <button 
+                    onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
+                    class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
+                  >
+                    <Download class="w-4 h-4" />
+                    <span>Export CSV</span>
+                  </button>
+                  <button 
+                    onclick={(e) => { e.stopPropagation(); viewReport(broadcast); }}
+                    class="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1 whitespace-nowrap"
+                  >
+                    <FileText class="w-4 h-4" />
+                    <span>View Report</span>
+                  </button>
+                </div>
+              </div>
+            {/if}
             </div>
           </div>
         {/each}
@@ -739,12 +763,28 @@ let prevTab = $state(activeTab);
             </div>
           </div>
           {#if broadcast.requiresAcknowledgment}
-            <div class="text-right flex-shrink-0 ml-4">
-              <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
-                {broadcast.acknowledgments.length} acknowledgments
-              </div>
+          <div class="text-right flex-shrink-0 ml-4">
+            <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
+              {broadcast.acknowledgments.length} acknowledgments
             </div>
-          {/if}
+            <div class="space-y-2">
+              <button 
+                onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
+                class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
+              >
+                <Download class="w-4 h-4" />
+                <span>Export CSV</span>
+              </button>
+              <button 
+                onclick={(e) => { e.stopPropagation(); viewReport(broadcast); }}
+                class="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1 whitespace-nowrap"
+              >
+                <FileText class="w-4 h-4" />
+                <span>View Report</span>
+              </button>
+            </div>
+          </div>
+        {/if}
         </div>
       </div>
     {/each}

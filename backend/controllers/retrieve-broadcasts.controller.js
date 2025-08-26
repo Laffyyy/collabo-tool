@@ -1,5 +1,6 @@
 const RetrieveBroadcastService = require('../services/retrieve-broadcasts.service');
 const { validateRequest } = require('../utils/validate');
+const UserRoleModel = require('../models/user-role.model'); 
 
 class RetrieveBroadcastController {
   async getMyBroadcasts(req, res, next) {
@@ -124,8 +125,12 @@ class RetrieveBroadcastController {
   async getReceivedBroadcasts(req, res, next) {
   try {
     const userId = req.user.id;
-    const userRole = req.user.role;
-    const userOUs = req.user.orgUnits || []; // adjust if your user object has OUs
+
+    // 1. Fetch all role IDs and OU IDs for the user from tbluserroles
+    const userRoles = await UserRoleModel.getRolesAndOUsByUserId(userId);
+    // userRoles: [{ droleid, douid }, ...]
+    const userRoleIds = userRoles.map(r => r.droleid).filter(Boolean);
+    const userOuIds = userRoles.map(r => r.douid).filter(Boolean);
 
     const filters = {
       page: parseInt(req.query.page) || 1,
@@ -135,7 +140,8 @@ class RetrieveBroadcastController {
       search: req.query.search
     };
 
-    const result = await RetrieveBroadcastService.getReceivedBroadcasts(userId, userRole, userOUs, filters);
+    // 2. Pass arrays of IDs to the service
+    const result = await RetrieveBroadcastService.getReceivedBroadcasts(userId, userRoleIds, userOuIds, filters);
 
     res.status(200).json({
       success: true,
