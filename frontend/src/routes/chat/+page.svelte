@@ -260,7 +260,7 @@ if (typeof window !== 'undefined') {
     
     return {
       id: u.did || u.uid || u.id || u._id, 
-      name: u.dusername || u.username || 
+      name: u.firstname || u.firstname || 
             (u.dfirstname && u.dlastname ? `${u.dfirstname} ${u.dlastname}` : null) ||
             (u.firstname && u.lastname ? `${u.firstname} ${u.lastname}` : null) ||
             u.name || 
