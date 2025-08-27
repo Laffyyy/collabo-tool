@@ -83,6 +83,13 @@
 	let totalPages = $state<number>(1);
 	let loading = $state<boolean>(false);
 	let error = $state<string>('');
+	let isNavigatingPages = $state<boolean>(false); // Flag to prevent filter effect during page navigation
+	// Previous filter values to track changes
+	let prevSearchQuery = $state<string>('');
+	let prevSelectedOU = $state<string>('all');
+	let prevSelectedRole = $state<string>('all');
+	let prevSelectedStatus = $state<string>('all');
+	let lastNavigationTime = $state<number>(0); // Track when navigation occurred
 	
 	// Sorting states
 	let sortColumn = $state<string>('');
@@ -475,10 +482,23 @@
 
 	// Reactive statements for filters
 	$effect(() => {
-		if (searchQuery !== undefined || selectedOU !== undefined || selectedRole !== undefined || selectedStatus !== undefined) {
+		const timeSinceNavigation = Date.now() - lastNavigationTime;
+		// Check if any filter values have actually changed
+		const filtersChanged = searchQuery !== prevSearchQuery || selectedOU !== prevSelectedOU || selectedRole !== prevSelectedRole || selectedStatus !== prevSelectedStatus;
+		const shouldTrigger = !isNavigatingPages && timeSinceNavigation > 100 && filtersChanged;
+		console.log(`Filter effect triggered - filtersChanged: ${filtersChanged}, isNavigatingPages: ${isNavigatingPages}, timeSinceNavigation: ${timeSinceNavigation}ms, currentPage: ${currentPage}, shouldTrigger: ${shouldTrigger}`); // Debug log
+		
+		if (shouldTrigger) {
+			console.log(`Resetting currentPage from ${currentPage} to 1 due to filter change`); // Debug log
 			currentPage = 1; // Reset to first page when filtering
 			loadUsers();
 		}
+		
+		// Update previous values
+		prevSearchQuery = searchQuery;
+		prevSelectedOU = selectedOU;
+		prevSelectedRole = selectedRole;
+		prevSelectedStatus = selectedStatus;
 	});
 
 
@@ -486,6 +506,7 @@
 	// Load users from API with tab-specific caching for performance
 	async function loadUsers(forceRefresh = false) {
 		try {
+			console.log(`loadUsers called - forceRefresh: ${forceRefresh}, isNavigatingPages: ${isNavigatingPages}, currentPage: ${currentPage}`); // Enhanced debug log
 			// Create cache key based on current tab and filters (excluding page for status-based filtering)
 			const statusFilter = getStatusFilter();
 			const cacheKey = `${currentTab}_${currentPage}_${itemsPerPage}_${searchQuery}_${selectedOU}_${selectedRole}_${statusFilter}_${sortColumn}_${sortDirection}`;
@@ -1304,8 +1325,13 @@
 	const goToPage = async (page: number) => {
 		if (page >= 1 && page <= totalPages) {
 			console.log(`Navigating from page ${currentPage} to page ${page}`); // Debug log
+			isNavigatingPages = true; // Set flag to prevent filter effect
+			lastNavigationTime = Date.now(); // Record navigation time
+			console.log(`Setting currentPage to ${page}`); // Debug log
 			currentPage = page;
 			await loadUsers(true); // Force refresh to ensure new page data is fetched
+			console.log(`Navigation completed, currentPage is now ${currentPage}`); // Debug log
+			isNavigatingPages = false; // Reset flag
 		}
 	};
 
