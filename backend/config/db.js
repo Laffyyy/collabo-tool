@@ -14,9 +14,9 @@ function getPool() {
     pool = new Pool({ 
       connectionString,
       // Add robust connection pool settings
-      max: 20, // Maximum number of clients in the pool
-      idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-      connectionTimeoutMillis: 5000, // Return an error after 5 seconds if connection could not be established
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
       // Add error event handler for pool recovery
       on: {
         error: (err, client) => {
@@ -26,14 +26,17 @@ function getPool() {
           if (err.message && err.message.includes('termination')) {
             console.log('Database connection terminated - will reconnect automatically');
           }
-          
-          // Don't terminate the process on connection errors
-          // The pool will create a new client when needed
         }
       }
     });
     
-    // Add additional error handling for pool health
+    // Add explicit error handler to the pool itself to prevent crashes
+    pool.on('error', (err) => {
+      console.error('Postgres pool error:', err);
+      // Don't let this error crash the application
+      // The pool will attempt to reconnect on next query
+    });
+    
     pool.on('connect', () => {
       console.log('New database connection established');
     });
@@ -52,17 +55,24 @@ function getPool() {
  * Starts a periodic connection tester to keep the pool healthy
  */
 function startConnectionTester() {
-  // Test a connection from the pool every 5 minutes
-  const interval = 5 * 60 * 1000; // 5 minutes
+  // Test a connection from the pool more frequently (every 1 minute instead of 5)
+  const interval = 60 * 1000; // 1 minute
   
   setInterval(async () => {
     try {
       const client = await pool.connect();
       const result = await client.query('SELECT 1');
       client.release();
-      console.log('Connection test successful:', result.rows[0]);
+      console.log('Connection test successful');
     } catch (err) {
       console.error('Connection test failed:', err.message);
+      
+      // If pool is unresponsive or broken, recreate it
+      if (err.message.includes('termination') || err.message.includes('connection')) {
+        console.log('Attempting to recreate the connection pool');
+        closePool();
+        pool = null; // Reset pool to null so getPool() will create a new one
+      }
     }
   }, interval);
 }

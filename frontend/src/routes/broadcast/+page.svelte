@@ -7,7 +7,8 @@
     Megaphone, 
     Plus, 
     Calendar, 
-    Users, 
+    Users,
+    User, 
     AlertTriangle,
     CheckCircle,
     Clock,
@@ -15,7 +16,8 @@
     FileText,
     Search,
     Filter,
-    ChevronDown
+    ChevronDown,
+    X
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { apiClient } from '$lib/api/client';
@@ -180,77 +182,101 @@
   let hasLoadedEmptyBroadcasts = $state(false);
   let loadingFailed = $state(false);
 
+  // Add these new state variables
+  let showReportModal = $state(false);
+  let reportBroadcast = $state<Broadcast | null>(null);
+  let reportResponses = $state<any[]>([]);
+  let isLoadingReport = $state(false);
+
     const loadMyBroadcasts = async () => {
-    console.log('🔄 Loading user broadcasts from API...');
-    isLoading = true;
-    error = null;
+      console.log('🔄 Loading user broadcasts from API...');
+      isLoading = true;
+      error = null;
 
-    try {
-      // Prepare filters - only send non-default values to API
-      const searchFilters: any = {
-        limit: 50,
-        page: 1,
-        includeDeleted: false
-      };
-
-      // Only add search filter if there's actually a search term
-      if (searchQuery.trim() !== '') {
-        searchFilters.search = searchQuery.trim();
-      }
-
-      // Only add priority filter if it's not 'all'
-      if (priorityFilter !== 'all') {
-        searchFilters.priority = priorityFilter;
-      }
-
-      console.log('📤 API Request filters:', searchFilters);
-      const response = await broadcastAPI.getMyBroadcasts(searchFilters);
-      console.log('📥 API Response:', response);
-
-      if (!response.success) {
-        throw new Error('Failed to load broadcasts');
-      }
-
-      // Transform API response to match frontend format
-      broadcasts = response.broadcasts.map(broadcast => {
-        return {
-          id: broadcast.id,
-          title: broadcast.title,
-          content: broadcast.content,
-          priority: broadcast.priority as 'low' | 'medium' | 'high',
-          targetRoles: broadcast.targetRoles || ['admin'],
-          targetOUs: broadcast.targetOUs || ['HR'],
-          createdBy: broadcast.createdBy,
-          createdAt: new Date(broadcast.createdAt),
-          scheduledFor: broadcast.scheduledFor ? new Date(broadcast.scheduledFor) : undefined,
-          requiresAcknowledgment: broadcast.requiresAcknowledgment || false,
-          responseType: broadcast.responseType as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
-          choices: broadcast.choices,
-          eventDate: broadcast.eventDate ? new Date(broadcast.eventDate) : undefined,
-          endDate: broadcast.endDate ? new Date(broadcast.endDate) : undefined,
-          acknowledgments: broadcast.acknowledgments || [],
-          isActive: broadcast.isActive !== false,
-          status: broadcast.status 
+      try {
+        // Prepare filters - only send non-default values to API
+        const searchFilters: any = {
+          limit: 50,
+          page: 1,
+          includeDeleted: false,
+          includeTargets: true // Add this flag to ensure we get target names
         };
-      });
 
-      // Set this flag when we've successfully loaded broadcasts (even if empty)
-    hasLoadedEmptyBroadcasts = broadcasts.length === 0;
+        // Only add search filter if there's actually a search term
+        if (searchQuery.trim() !== '') {
+          searchFilters.search = searchQuery.trim();
+        }
 
-      // Reset failed flag on success
-      loadingFailed = false;
-      console.log('✅ Broadcasts loaded successfully:', broadcasts.length);
+        // Only add priority filter if it's not 'all'
+        if (priorityFilter !== 'all') {
+          searchFilters.priority = priorityFilter;
+        }
 
-    } catch (err) {
-      // Set failed loading flag to prevent infinite loop
-      loadingFailed = true;
-      error = err instanceof Error ? err.message : 'Failed to load broadcasts';
-      console.error('❌ Error loading broadcasts:', err);
-      broadcasts = [];
-    } finally {
-      isLoading = false;
-    }
-  };
+        console.log('📤 API Request filters:', searchFilters);
+        const response = await broadcastAPI.getMyBroadcasts(searchFilters);
+        console.log('📥 API Response:', response);
+
+        if (!response.success) {
+          throw new Error('Failed to load broadcasts');
+        }
+
+        // Transform API response to match frontend format
+        broadcasts = response.broadcasts.map(broadcast => {
+          return {
+            id: broadcast.id,
+            title: broadcast.title,
+            content: broadcast.content,
+            priority: broadcast.priority as 'low' | 'medium' | 'high',
+            // Use the names that are returned from the API instead of the IDs
+            targetRoles: Array.isArray(broadcast.targetRoles) ? broadcast.targetRoles : [],
+            targetOUs: Array.isArray(broadcast.targetOUs) ? broadcast.targetOUs : [],
+            createdBy: broadcast.createdBy,
+            createdAt: new Date(broadcast.createdAt),
+            scheduledFor: broadcast.scheduledFor ? new Date(broadcast.scheduledFor) : undefined,
+            requiresAcknowledgment: broadcast.requiresAcknowledgment || false,
+            responseType: broadcast.responseType as 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox',
+            choices: broadcast.choices,
+            eventDate: broadcast.eventDate ? new Date(broadcast.eventDate) : undefined,
+            endDate: broadcast.endDate ? new Date(broadcast.endDate) : undefined,
+            acknowledgments: broadcast.acknowledgments || [],
+            isActive: broadcast.isActive !== false,
+            status: broadcast.status 
+          };
+        });
+
+        // Load acknowledgment counts for each broadcast
+        for (const broadcast of broadcasts) {
+          try {
+            if (broadcast.requiresAcknowledgment) {
+              const statsResponse = await responseBroadcastAPI.getResponseStats(broadcast.id);
+              if (statsResponse.success && statsResponse.statistics) {
+                // Update acknowledgments array with actual count data
+                const count = statsResponse.statistics.totalResponses || 0;
+                broadcast.acknowledgments = Array(count).fill({ userId: '', acknowledgedAt: new Date() });
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to load stats for broadcast ${broadcast.id}:`, err);
+          }
+        }
+
+        // Set this flag when we've successfully loaded broadcasts (even if empty)
+        hasLoadedEmptyBroadcasts = broadcasts.length === 0;
+
+        // Reset failed flag on success
+        loadingFailed = false;
+        console.log('✅ Broadcasts loaded successfully:', broadcasts.length);
+
+      } catch (err) {
+        // Set failed loading flag to prevent infinite loop
+        loadingFailed = true;
+        error = err instanceof Error ? err.message : 'Failed to load broadcasts';
+        console.error('❌ Error loading broadcasts:', err);
+        broadcasts = [];
+      } finally {
+        isLoading = false;
+      }
+    };
 
   onMount(() => {
     console.log('🔄 Component mounted, activeTab:', activeTab);
@@ -299,50 +325,85 @@
 
   // Load user responses when switching to Received Broadcasts tab
   const loadReceivedBroadcasts = async () => {
-    isLoadingReceived = true;
-    try {
-      // Prepare filters - only send non-default values to API
-      const filters: any = {
-        limit: 50,
-        page: 1
-      };
+  isLoadingReceived = true;
+  try {
+    // Prepare filters - only send non-default values to API
+    const filters: any = {
+      limit: 50,
+      page: 1,
+      includeTargets: true // Always include targets
+    };
 
-      // Only add search filter if there's actually a search term
-      if (searchQuery.trim() !== '') {
-        filters.search = searchQuery.trim();
-      }
-
-      // Only add priority filter if it's not 'all'
-      if (priorityFilter !== 'all') {
-        filters.priority = priorityFilter;
-      }
-
-      console.log('📤 Loading received broadcasts with filters:', filters);
-      
-      const response = await receivedBroadcastAPI.getReceivedBroadcasts(filters);
-
-      receivedBroadcasts = response.broadcasts
-        .map(b => ({
-          ...b,
-          createdAt: new Date(b.createdAt),
-          scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
-          eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
-          targets: b.targets ?? []
-        }));
-
-      // Load responses for all received broadcasts
-      for (const broadcast of receivedBroadcasts) {
-        await checkExistingResponse(broadcast.id);
-      }
-
-      console.log('✅ Received broadcasts loaded:', receivedBroadcasts.length);
-
-    } catch (err) {
-      console.error('Error loading received broadcasts:', err);
-    } finally {
-      isLoadingReceived = false;
+    // Only add search filter if there's actually a search term
+    if (searchQuery.trim() !== '') {
+      filters.search = searchQuery.trim();
     }
-  };
+
+    // Only add priority filter if it's not 'all'
+    if (priorityFilter !== 'all') {
+      filters.priority = priorityFilter;
+    }
+
+    console.log('📤 Loading received broadcasts with filters:', filters);
+    
+    const response = await receivedBroadcastAPI.getReceivedBroadcasts(filters);
+    console.log('📥 Received broadcast response:', response);
+
+    // Process the broadcasts with improved target handling
+    receivedBroadcasts = response.broadcasts.map(b => {
+      console.log(`Processing broadcast ${b.id}:`, b);
+      
+      // Extract target information from the broadcast
+      let targetRoles: string[] = [];
+      let targetOUs: string[] = [];
+      
+      // First check if targetRoles and targetOUs are already provided directly
+      if (Array.isArray(b.targetRoles) && b.targetRoles.length > 0) {
+        targetRoles = [...b.targetRoles];
+      }
+      
+      if (Array.isArray(b.targetOUs) && b.targetOUs.length > 0) {
+        targetOUs = [...b.targetOUs];
+      }
+      
+      // If the above didn't work, try to extract from targets array as fallback
+      if ((targetRoles.length === 0 || targetOUs.length === 0) && b.targets && Array.isArray(b.targets)) {
+        console.log(`Extracting from targets array for broadcast ${b.id}:`, b.targets);
+        
+        b.targets.forEach((target: BroadcastTarget) => {
+          if (target && target.dtargettype === 'role' && target.dtargetname) {
+            targetRoles.push(target.dtargetname);
+          } else if (target && target.dtargettype === 'ou' && target.dtargetname) {
+            targetOUs.push(target.dtargetname);
+          }
+        });
+      }
+
+      console.log(`Final targets for broadcast ${b.id}:`, { targetRoles, targetOUs });
+      
+      return {
+        ...b,
+        targetRoles, // Use the extracted target roles
+        targetOUs,   // Use the extracted target OUs
+        createdAt: new Date(b.createdAt),
+        scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
+        eventDate: b.eventDate ? new Date(b.eventDate) : undefined
+      };
+    });
+
+    // Load responses for all received broadcasts
+    for (const broadcast of receivedBroadcasts) {
+      await checkExistingResponse(broadcast.id);
+    }
+
+    console.log('✅ Received broadcasts loaded:', receivedBroadcasts);
+
+  } catch (err) {
+    console.error('Error loading received broadcasts:', err);
+  } finally {
+    isLoadingReceived = false;
+  }
+};
 
   const roles = ['admin', 'manager', 'supervisor', 'support', 'frontline'];
   const priorities = [
@@ -567,8 +628,47 @@ const exportCSV = (broadcast: Broadcast) => {
     alert('CSV export functionality would be implemented here.');
   };
 
-  const viewReport = (broadcast: Broadcast) => {
-    alert('View detailed report functionality would be implemented here.');
+  const viewReport = async (broadcast: Broadcast, e: MouseEvent) => {
+    e.stopPropagation(); // Prevent opening the broadcast details modal
+    reportBroadcast = broadcast;
+    showReportModal = true;
+    await loadBroadcastResponses(broadcast.id);
+  };
+
+  const loadBroadcastResponses = async (broadcastId: string) => {
+    try {
+      isLoadingReport = true;
+      const response = await responseBroadcastAPI.getBroadcastResponses(broadcastId);
+      if (response.success) {
+        // Add proper type annotation for the resp parameter
+        reportResponses = response.responses.map((resp: any) => ({
+          ...resp,
+          acknowledgedAt: new Date(resp.acknowledgedAt)
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading broadcast responses:', error);
+      $toastStore.error('Failed to load response data');
+      reportResponses = [];
+    } finally {
+      isLoadingReport = false;
+    }
+  };
+  
+  // Add this helper function for formatting
+  const formatResponse = (responseData: any) => {
+    if (!responseData) return 'Acknowledged';
+    
+    switch (responseData.responseType) {
+      case 'preferred-date':
+        return `${new Date(responseData.preferredDate).toLocaleString()}`;
+      case 'choices':
+        return responseData.selectedChoice;
+      case 'textbox':
+        return responseData.textResponse;
+      default:
+        return 'Acknowledged';
+    }
   };
 
 const createBroadcast = async () => {
@@ -599,31 +699,14 @@ const createBroadcast = async () => {
       const response = await BroadcastAPI.createBroadcast(broadcastData);
       
       if (response.ok) {
-        // Add the new broadcast to the local state with scheduling info
-        const createdBroadcast = response.broadcast;
-        broadcasts = [
-          {
-            id: response.broadcast?.id || Date.now().toString(),
-            title: newBroadcast.title.trim(),
-            content: newBroadcast.content.trim(),
-            priority: newBroadcast.priority,
-            targetRoles: newBroadcast.targetRoles,
-            targetOUs: newBroadcast.targetOUs,
-            createdBy: currentUser.id,
-            createdAt: new Date(),
-            scheduledFor: newBroadcast.scheduleType === 'pick' ? new Date(newBroadcast.scheduledFor) : undefined,
-            requiresAcknowledgment: newBroadcast.acknowledgmentType !== 'none',
-            responseType: newBroadcast.acknowledgmentType,
-            acknowledgments: [],
-            isActive: true,
-            endDate: newBroadcast.endDate ? new Date(newBroadcast.endDate) : undefined
-          },
-          ...broadcasts
-        ];
-        
+        // Close the modal first
         closeCreateModal();
-        console.log('Creating toast with store:', $toastStore);
+        
+        // Display success message
         $toastStore.success('Broadcast created successfully!');
+        
+        // Reload broadcasts from API to ensure we get the correct role/OU names
+        await loadMyBroadcasts();
       } else {
         throw new Error(response.message || 'Failed to create broadcast');
       }
@@ -1721,6 +1804,7 @@ onMount(async () => {
           {@const isNewBroadcast = (Date.now() - new Date(broadcast.createdAt).getTime()) < 86400000 && !viewedBroadcasts.has(broadcast.id)}
           {@const prevBroadcast = index > 0 ? sortedBroadcasts[index - 1] : null}
           {@const needsSeparator = prevBroadcast && prevBroadcast.isActive && !broadcast.isActive}
+          {@const isBroadcastDone = !broadcast.isActive}
           
           {#if needsSeparator}
             <div class="flex items-center my-8">
@@ -1773,14 +1857,18 @@ onMount(async () => {
                   </p>
                 </div>
                 
-                <div class="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
+                <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
                   <div class="flex items-center space-x-1">
                     <Calendar class="w-4 h-4 flex-shrink-0" />
                     <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
                   </div>
                   <div class="flex items-center space-x-1">
                     <Users class="w-4 h-4 flex-shrink-0" />
-                    <span class="truncate">{broadcast.targetRoles.join(', ')} | {broadcast.targetOUs.join(', ')}</span>
+                    <span class="truncate">{Array.isArray(broadcast.targetRoles) && broadcast.targetRoles.length > 0 ? broadcast.targetRoles.join(', ') : 'All'}</span>
+                  </div>
+                  <div class="flex items-center space-x-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 flex-shrink-0"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    <span class="truncate">{Array.isArray(broadcast.targetOUs) && broadcast.targetOUs.length > 0 ? broadcast.targetOUs.join(', ') : 'All'}</span>
                   </div>
                   {#if broadcast.eventDate}
                     <div class="flex items-center space-x-1">
@@ -1792,10 +1880,11 @@ onMount(async () => {
               </div>
 
               {#if broadcast.requiresAcknowledgment}
-              <div class="text-right flex-shrink-0 ml-4">
-                <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
-                  {broadcast.acknowledgments.length} acknowledgments
-                </div>
+                <div class="text-right flex-shrink-0 ml-4">
+                  <div class="flex items-center space-x-2 text-sm text-gray-600">
+                    <CheckCircle class="w-4 h-4 flex-shrink-0" />
+                    <span class="break-words">{broadcast.acknowledgments.length} acknowledgments</span>
+                  </div>
                 <div class="space-y-2">
                   <button 
                     onclick={(e) => { e.stopPropagation(); exportCSV(broadcast); }}
@@ -1805,7 +1894,7 @@ onMount(async () => {
                     <span>Export CSV</span>
                   </button>
                   <button 
-                    onclick={(e) => { e.stopPropagation(); viewReport(broadcast); }}
+                    onclick={(e) => viewReport(broadcast, e)}
                     class="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1 whitespace-nowrap"
                   >
                     <FileText class="w-4 h-4" />
@@ -1845,103 +1934,101 @@ onMount(async () => {
     </div>
   {:else}
     <!-- Replace the existing received broadcasts section around line 1555 -->
-{#each sortedReceivedBroadcasts as broadcast}
-  {@const userResponse = getUserResponseForBroadcast(broadcast.id)}
-  {@const hasResponded = !!userResponse}
-  {@const isBroadcastDone = !broadcast.isActive}
-  
-  <div 
-    class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isBroadcastDone ? 'opacity-60 bg-gray-50' : ''}"
-    role="button"
-    tabindex="0"
-    onclick={() => openBroadcastDetails(broadcast)}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
-  >
-    {#if isBroadcastDone}
-      <div class="absolute top-2 right-2">
-        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          DONE
-        </span>
-      </div>
-    {:else if hasResponded}
-      <div class="absolute top-2 right-2">
-        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          RESPONDED
-        </span>
-      </div>
-    {/if}
-    
-    <div class="flex items-start justify-between">
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center space-x-3 mb-2">
-          <h3 class="text-lg font-bold {isBroadcastDone ? 'text-gray-500' : 'text-gray-800'} truncate">{broadcast.title}</h3>
-        </div>
-        <div class="flex items-center space-x-3 mb-3">
-          <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)} {isBroadcastDone ? 'opacity-75' : ''}">
-            {broadcast.priority.toUpperCase()}
-          </span>
-          <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'} {isBroadcastDone ? 'opacity-60' : ''}"></div>
-        </div>
-        <div class="mb-3">
-          <p class="text-gray-600 text-sm line-clamp-2 break-words {isBroadcastDone ? 'opacity-60' : ''}">
-            {#if broadcast.content.length > 120}
-              {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
-            {:else}
-              {broadcast.content}
-            {/if}
-          </p>
-        </div>
-        
-        <!-- Show user's response if they have responded -->
-        {#if hasResponded && !isBroadcastDone}
-          <div class="bg-green-50 rounded border border-green-200 p-3 mb-3 shadow-sm">
-            <div class="flex items-center space-x-2 mb-1">
-              <CheckCircle class="w-4 h-4 text-green-600 flex-shrink-0" />
-              <span class="text-sm font-medium text-green-700">Your Response:</span>
-            </div>
-            <p class="text-sm text-gray-600 break-words">
-              {formatResponseDisplay(userResponse)}
-            </p>
+    {#each sortedReceivedBroadcasts as broadcast}
+      {@const userResponse = getUserResponseForBroadcast(broadcast.id)}
+      {@const hasResponded = !!userResponse}
+      {@const isBroadcastDone = !broadcast.isActive}
+      
+      <div 
+        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isBroadcastDone ? 'opacity-60 bg-gray-50' : ''}"
+        role="button"
+        tabindex="0"
+        onclick={() => openBroadcastDetails(broadcast)}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
+      >
+        {#if isBroadcastDone}
+          <div class="absolute top-2 right-2">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              DONE
+            </span>
           </div>
-        {:else if hasResponded && isBroadcastDone}
-          <div class="bg-gray-100 rounded border border-gray-300 p-3 mb-3 shadow-sm">
-            <div class="flex items-center space-x-2 mb-1">
-              <CheckCircle class="w-4 h-4 text-gray-600 flex-shrink-0" />
-              <span class="text-sm font-medium text-gray-700">Your Response:</span>
-            </div>
-            <p class="text-sm text-gray-500 break-words">
-              {formatResponseDisplay(userResponse)}
-            </p>
+        {:else if hasResponded}
+          <div class="absolute top-2 right-2">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              RESPONDED
+            </span>
           </div>
         {/if}
         
-        <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
-          <div class="flex items-center space-x-1">
-            <Calendar class="w-4 h-4 flex-shrink-0" />
-            <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
-          </div>
-          <div class="flex items-center space-x-1">
-            <Users class="w-4 h-4 flex-shrink-0" />
-            <span class="truncate">{broadcast.targetRoles?.join(', ') || ''} | {broadcast.targetOUs?.join(', ') || ''}</span>
-          </div>
-          {#if broadcast.eventDate}
-            <div class="flex items-center space-x-1">
-              <Clock class="w-4 h-4 flex-shrink-0" />
-              <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
+        <div class="flex items-start justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center space-x-3 mb-2">
+              <h3 class="text-lg font-bold {isBroadcastDone ? 'text-gray-500' : 'text-gray-800'} truncate">{broadcast.title}</h3>
             </div>
-          {/if}
+            <div class="flex items-center space-x-3 mb-3">
+              <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)} {isBroadcastDone ? 'opacity-75' : ''}">
+                {broadcast.priority.toUpperCase()}
+              </span>
+              <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'} {isBroadcastDone ? 'opacity-60' : ''}"></div>
+            </div>
+            <div class="mb-3">
+              <p class="text-gray-600 text-sm line-clamp-2 break-words {isBroadcastDone ? 'opacity-60' : ''}">
+                {#if broadcast.content.length > 120}
+                  {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
+                {:else}
+                  {broadcast.content}
+                {/if}
+              </p>
+            </div>
+            
+            <!-- Show user's response if they have responded -->
+            {#if hasResponded && !isBroadcastDone}
+              <div class="bg-green-50 rounded border border-green-200 p-3 mb-3 shadow-sm">
+                <div class="flex items-center space-x-2 mb-1">
+                  <CheckCircle class="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <span class="text-sm font-medium text-green-700">Your Response:</span>
+                </div>
+                <p class="text-sm text-gray-600 break-words">
+                  {formatResponseDisplay(userResponse)}
+                </p>
+              </div>
+            {:else if hasResponded && isBroadcastDone}
+              <div class="bg-gray-100 rounded border border-gray-300 p-3 mb-3 shadow-sm">
+                <div class="flex items-center space-x-2 mb-1">
+                  <CheckCircle class="w-4 h-4 text-gray-600 flex-shrink-0" />
+                  <span class="text-sm font-medium text-gray-700">Your Response:</span>
+                </div>
+                <p class="text-sm text-gray-500 break-words">
+                  {formatResponseDisplay(userResponse)}
+                </p>
+              </div>
+            {/if}
+
+            <!-- Display broadcast metadata -->
+            <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
+              <div class="flex items-center space-x-1">
+                <Calendar class="w-4 h-4 flex-shrink-0" />
+                <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
+              </div>
+              <div class="flex items-center space-x-1">
+                <Users class="w-4 h-4 flex-shrink-0" />
+                <span class="truncate">{Array.isArray(broadcast.targetRoles) && broadcast.targetRoles.length > 0 ? broadcast.targetRoles.join(', ') : 'All'}</span>
+              </div>
+              <div class="flex items-center space-x-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 flex-shrink-0"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span class="truncate">{Array.isArray(broadcast.targetOUs) && broadcast.targetOUs.length > 0 ? broadcast.targetOUs.join(', ') : 'All'}</span>
+              </div>
+              {#if broadcast.eventDate}
+                <div class="flex items-center space-x-1">
+                  <Clock class="w-4 h-4 flex-shrink-0" />
+                  <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
+                </div>
+              {/if}
+            </div>
+          </div>
         </div>
       </div>
-      {#if broadcast.requiresAcknowledgment && !hasResponded && !isBroadcastDone}
-      <div class="text-right flex-shrink-0 ml-4">
-        <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
-          {broadcast.acknowledgments.length} acknowledgments
-        </div>
-      </div>
-      {/if}
-    </div>
-  </div>
-{/each}
+    {/each}
   {/if}
 
   {:else}
@@ -1993,7 +2080,11 @@ onMount(async () => {
               </div>
               <div class="flex items-center space-x-2 text-sm text-gray-600">
                 <Users class="w-4 h-4 flex-shrink-0" />
-                <span class="break-words">Target: {selectedBroadcast.targetRoles.join(', ')} | Units: {selectedBroadcast.targetOUs.join(', ')}</span>
+                <span class="break-words">Roles: {selectedBroadcast.targetRoles.join(', ')}</span>
+              </div>
+              <div class="flex items-center space-x-2 text-sm text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 flex-shrink-0"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span class="break-words">Units: {selectedBroadcast.targetOUs.join(', ')}</span>
               </div>
               {#if selectedBroadcast.eventDate}
                 <div class="flex items-center space-x-2 text-sm text-gray-600">
@@ -2041,66 +2132,34 @@ onMount(async () => {
         {/if}
       </div>
     {:else}
-      <!-- Original response options (only show when broadcast is active) -->
-      {#if selectedBroadcast.responseType === 'none'}
-        <div class="text-sm text-gray-500 italic">No response required</div>
-      {:else if selectedBroadcast.responseType === 'required'}
-        <!-- Acknowledgment required -->
-        <div class="flex items-center space-x-3 w-full">
-          {#if hasResponded}
-            <div class="flex-1 bg-green-50 border border-green-200 rounded p-3">
-              <div class="flex items-center space-x-2 mb-2">
-                <CheckCircle class="w-4 h-4 text-green-600" />
-                <span class="text-sm font-medium text-green-800">Response Status:</span>
+      {#if selectedBroadcast}
+        {@const broadcast = selectedBroadcast as Broadcast}
+        <!-- Original response options (only show when broadcast is active) -->
+        {#if broadcast.responseType === 'none'}
+          <div class="text-sm text-gray-500 italic">No response required</div>
+        {:else if broadcast.responseType === 'required'}
+          <!-- Acknowledgment required -->
+          <div class="flex items-center space-x-3 w-full">
+            {#if hasResponded}
+              <div class="flex-1 bg-green-50 border border-green-200 rounded p-3">
+                <div class="flex items-center space-x-2 mb-2">
+                  <CheckCircle class="w-4 h-4 text-green-600" />
+                  <span class="text-sm font-medium text-green-800">Response Status:</span>
+                </div>
+                <p class="text-sm text-gray-700">Acknowledged on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
               </div>
-              <p class="text-sm text-gray-700">Acknowledged on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
-            </div>
-          {:else}
-            <button
-              onclick={() => handleAcknowledgment(selectedBroadcast.id)}
-              class="primary-button"
-              disabled={isAcknowledged}
-            >
-              {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
-            </button>
-          {/if}
-        </div>
-      {:else if selectedBroadcast.responseType === 'preferred-date'}
-        <!-- Preferred date selection -->
-        <div class="flex flex-col space-y-3 w-full">
-          {#if hasResponded}
-            <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
-              <div class="flex items-center space-x-2 mb-2">
-                <CheckCircle class="w-4 h-4 text-green-600" />
-                <span class="text-sm font-medium text-green-800">Current Response:</span>
-              </div>
-              <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
-              <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
-            </div>
-          {/if}
-          
-          <label for="preferred-date" class="text-sm font-medium text-gray-700">
-            {hasResponded ? 'Update your preferred date:' : 'Select your preferred date:'}
-          </label>
-          <div class="flex items-center space-x-3">
-            <input
-              id="preferred-date"
-              type="datetime-local"
-              bind:value={preferredDate}
-              class="input-field flex-1"
-              disabled={isBroadcastDone}
-            />
-            <button
-              onclick={() => handlePreferredDateResponse(selectedBroadcast.id, preferredDate)}
-              class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isBroadcastDone || (hasResponded ? !hasPreferredDateChanged || !preferredDate : !preferredDate)}
-            >
-              {hasResponded ? 'Update Date' : 'Submit Date'}
-            </button>
+            {:else}
+              <button
+                onclick={() => handleAcknowledgment(broadcast.id)}
+                class="primary-button"
+                disabled={isAcknowledged}
+              >
+                {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
+              </button>
+            {/if}
           </div>
-        </div>
-        {:else if selectedBroadcast.responseType === 'choices'}
-          <!-- Multiple choice selection -->
+        {:else if broadcast.responseType === 'preferred-date'}
+          <!-- Preferred date selection -->
           <div class="flex flex-col space-y-3 w-full">
             {#if hasResponded}
               <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
@@ -2113,81 +2172,119 @@ onMount(async () => {
               </div>
             {/if}
             
-            <label class="text-sm font-medium text-gray-700">
-              {hasResponded ? 'Update your choice:' : 'Select your choice:'}
+            <label for="preferred-date" class="text-sm font-medium text-gray-700">
+              {hasResponded ? 'Update your preferred date:' : 'Select your preferred date:'}
             </label>
-            <div class="space-y-2">
-              {#each selectedBroadcast.choices || [] as choice}
-                <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-50 {isBroadcastDone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
-                  <input
-                    type="radio"
-                    bind:group={selectedChoice}
-                    value={choice}
-                    disabled={isBroadcastDone}
-                    class="text-[#01c0a4] focus:ring-[#01c0a4] disabled:opacity-50"
-                  />
-                  <span class="text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-700'}">{choice}</span>
-                </label>
-              {/each}
-            </div>
-            <div class="flex justify-end">
+            <div class="flex items-center space-x-3">
+              <input
+                id="preferred-date"
+                type="datetime-local"
+                bind:value={preferredDate}
+                class="input-field flex-1"
+                disabled={isBroadcastDone}
+              />
               <button
-                onclick={() => handleChoiceResponse(selectedBroadcast.id, selectedChoice)}
+                onclick={() => handlePreferredDateResponse(broadcast.id, preferredDate)}
                 class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isBroadcastDone || (hasResponded ? !hasChoiceChanged || !selectedChoice : !selectedChoice)}
+                disabled={isBroadcastDone || (hasResponded ? !hasPreferredDateChanged || !preferredDate : !preferredDate)}
               >
-                {hasResponded ? 'Update Choice' : 'Submit Choice'}
+                {hasResponded ? 'Update Date' : 'Submit Date'}
               </button>
             </div>
           </div>
-      {:else if selectedBroadcast.responseType === 'textbox'}
-        <!-- Text response -->
-        <div class="flex flex-col space-y-3 w-full">
-          {#if hasResponded}
-            <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
-              <div class="flex items-center space-x-2 mb-2">
-                <CheckCircle class="w-4 h-4 text-green-600" />
-                <span class="text-sm font-medium text-green-800">Current Response:</span>
+          {:else if broadcast.responseType === 'choices'}
+            <!-- Multiple choice selection -->
+            <div class="flex flex-col space-y-3 w-full">
+              {#if hasResponded}
+                <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+                  <div class="flex items-center space-x-2 mb-2">
+                    <CheckCircle class="w-4 h-4 text-green-600" />
+                    <span class="text-sm font-medium text-green-800">Current Response:</span>
+                  </div>
+                  <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+                  <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+                </div>
+              {/if}
+              
+              <label class="text-sm font-medium text-gray-700">
+                {hasResponded ? 'Update your choice:' : 'Select your choice:'}
+              </label>
+              <div class="space-y-2">
+                {#each broadcast.choices || [] as choice}
+                  <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-50 {isBroadcastDone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
+                    <input
+                      type="radio"
+                      bind:group={selectedChoice}
+                      value={choice}
+                      disabled={isBroadcastDone}
+                      class="text-[#01c0a4] focus:ring-[#01c0a4] disabled:opacity-50"
+                    />
+                    <span class="text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-700'}">{choice}</span>
+                  </label>
+                {/each}
               </div>
-              <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
-              <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+              <div class="flex justify-end">
+                <button
+                  onclick={() => handleChoiceResponse(broadcast.id, selectedChoice)}
+                  class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isBroadcastDone || (hasResponded ? !hasChoiceChanged || !selectedChoice : !selectedChoice)}
+                >
+                  {hasResponded ? 'Update Choice' : 'Submit Choice'}
+                </button>
+              </div>
             </div>
-          {/if}
-          
-          <label for="text-response" class="text-sm font-medium text-gray-700">
-            {hasResponded ? 'Update your response:' : 'Enter your response:'}
-          </label>
-          <textarea
-            id="text-response"
-            bind:value={textResponse}
-            placeholder="Type your response here..."
-            rows="3"
-            disabled={isBroadcastDone}
-            class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-          ></textarea>
-          <div class="flex justify-end">
-            <button
-              onclick={() => handleTextResponse(selectedBroadcast.id, textResponse)}
-              class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isBroadcastDone || (hasResponded ? !hasTextChanged : !textResponse.trim())}
-            >
-              {hasResponded ? 'Update Response' : 'Submit Response'}
-            </button>
+        {:else if broadcast.responseType === 'textbox'}
+          <!-- Text response -->
+          <div class="flex flex-col space-y-3 w-full">
+            {#if hasResponded}
+              <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+                <div class="flex items-center space-x-2 mb-2">
+                  <CheckCircle class="w-4 h-4 text-green-600" />
+                  <span class="text-sm font-medium text-green-800">Current Response:</span>
+                </div>
+                <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+                <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+              </div>
+            {/if}
+            
+            <label for="text-response" class="text-sm font-medium text-gray-700">
+              {hasResponded ? 'Update your response:' : 'Enter your response:'}
+            </label>
+            <textarea
+              id="text-response"
+              bind:value={textResponse}
+              placeholder="Type your response here..."
+              rows="3"
+              disabled={isBroadcastDone}
+              class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+            ></textarea>
+            <div class="flex justify-end">
+              <button
+                onclick={() => handleTextResponse(broadcast.id, textResponse)}
+                class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isBroadcastDone || (hasResponded ? !hasTextChanged : !textResponse.trim())}
+              >
+                {hasResponded ? 'Update Response' : 'Submit Response'}
+              </button>
+            </div>
           </div>
-        </div>
+        {/if}
       {/if}
     {/if}
   {:else}
+  {#if selectedBroadcast}
+    {@const broadcast = selectedBroadcast as Broadcast}
     <!-- My Broadcasts - Mark as Done functionality -->
-    {#if selectedBroadcast.isActive && canSendBroadcasts}
-      <button
-        onclick={() => markBroadcastAsDone(selectedBroadcast.id)}
-        class="secondary-button"
-      >
-        Mark as Done
-      </button>
-    {:else if !selectedBroadcast.isActive}
-      <div class="text-sm text-gray-500 italic">This broadcast has been completed</div>
+      {#if broadcast.isActive && canSendBroadcasts}
+        <button
+          onclick={() => markBroadcastAsDone(broadcast.id)}
+          class="secondary-button"
+        >
+          Mark as Done
+        </button>
+      {:else if !broadcast.isActive}
+        <div class="text-sm text-gray-500 italic">This broadcast has been completed</div>
+      {/if}
     {/if}
   {/if}
 </div>
@@ -2211,6 +2308,167 @@ onMount(async () => {
       }}
     />
   {/if}
+
+  <!-- Broadcast Report Modal -->
+{#if showReportModal && reportBroadcast}
+  <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+      <!-- Modal Header -->
+      <div class="border-b border-gray-200 p-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-bold text-gray-800">Broadcast Response Report</h2>
+          <button
+            onclick={() => showReportModal = false}
+            class="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      
+      <div class="p-6">
+        <!-- Broadcast Info Section -->
+        <div class="bg-gray-50 rounded-lg p-5 mb-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Broadcast Details</h3>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <span class="block text-sm font-medium text-gray-500 mb-1">Title</span>
+              <div class="text-gray-800 font-medium">{reportBroadcast.title}</div>
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-500 mb-1">Priority</span>
+              <div class="flex items-center">
+                <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(reportBroadcast.priority)}">
+                  {reportBroadcast.priority.toUpperCase()}
+                </span>
+              </div>
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-500 mb-1">Date Sent</span>
+              <div class="text-gray-800">{formatDate(reportBroadcast.createdAt)}</div>
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-500 mb-1">Response Type</span>
+              <div class="text-gray-800">
+                {#if reportBroadcast.responseType === 'none'}
+                  No response required
+                {:else if reportBroadcast.responseType === 'required'}
+                  Acknowledgment required
+                {:else if reportBroadcast.responseType === 'preferred-date'}
+                  Preferred date selection
+                {:else if reportBroadcast.responseType === 'choices'}
+                  Multiple choice
+                {:else if reportBroadcast.responseType === 'textbox'}
+                  Text response
+                {/if}
+              </div>
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-500 mb-1">Target Roles</span>
+              <div class="flex flex-wrap gap-1">
+                {#each reportBroadcast.targetRoles as role}
+                  <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                    {role}
+                  </span>
+                {/each}
+              </div>
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-500 mb-1">Target Units</span>
+              <div class="flex flex-wrap gap-1">
+                {#each reportBroadcast.targetOUs as ou}
+                  <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                    {ou}
+                  </span>
+                {/each}
+              </div>
+            </div>
+            <div class="sm:col-span-2">
+              <span class="block text-sm font-medium text-gray-500 mb-1">Response Statistics</span>
+              <div class="flex items-center space-x-2 text-gray-800">
+                <CheckCircle class="w-4 h-4 text-green-600" />
+                <span>{reportBroadcast.acknowledgments.length} responses</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Responses Section -->
+        <div>
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">User Responses</h3>
+          
+          {#if isLoadingReport}
+            <div class="text-center py-8">
+              <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-[#01c0a4] mx-auto mb-4"></div>
+              <p class="text-gray-500">Loading responses...</p>
+            </div>
+          {:else if reportResponses.length === 0}
+            <div class="text-center py-8 bg-gray-50 rounded-lg">
+              <User class="h-12 w-12 text-gray-300 mx-auto mb-2" />
+              <p class="text-gray-600 font-medium">No responses yet</p>
+              <p class="text-sm text-gray-500 mt-1">No users have responded to this broadcast.</p>
+            </div>
+          {:else}
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  {#each reportResponses as response}
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                          <div class="flex-shrink-0 h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-semibold uppercase">
+                            {response.user ? response.user.name?.[0] || '?' : '?'}
+                          </div>
+                          <div class="ml-3">
+                            <div class="text-sm font-medium text-gray-900">
+                              {response.user ? response.user.name : 'Unknown User'}
+                            </div>
+                            <div class="text-sm text-gray-500">
+                              {response.user?.email || ''}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">
+                          {formatResponse(response.responseData)}
+                        </div>
+                      </td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(response.acknowledgedAt)}
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="mt-4 flex justify-between items-center">
+              <div class="text-sm text-gray-500">
+                Showing {reportResponses.length} response{reportResponses.length !== 1 ? 's' : ''}
+              </div>
+              <button 
+                onclick={() => reportBroadcast && exportCSV(reportBroadcast)}
+                class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
+              >
+                <Download class="w-4 h-4" />
+                <span>Export to CSV</span>
+              </button>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 
 </div>

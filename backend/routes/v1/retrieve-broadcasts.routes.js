@@ -6,11 +6,11 @@ const RetrieveBroadcastController = require('../../controllers/retrieve-broadcas
 // Get user's broadcasts - now uses database
 router.get('/my-broadcasts', requireAuth, RetrieveBroadcastController.getMyBroadcasts);
 
+// Stats endpoint should come BEFORE the parameterized route
+router.get('/my-broadcasts/stats', requireAuth, RetrieveBroadcastController.getUserBroadcastStats);
+
 // Get specific broadcast by ID
 router.get('/my-broadcasts/:id', requireAuth, RetrieveBroadcastController.getMyBroadcastById);
-
-// Get broadcast statistics
-router.get('/my-broadcasts/stats', requireAuth, RetrieveBroadcastController.getMyBroadcastStats);
 
 // Create new broadcast
 router.post('/', requireAuth, RetrieveBroadcastController.createBroadcast);

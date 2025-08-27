@@ -75,5 +75,21 @@ export const responseBroadcastAPI = {
     );
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();
+  },
+
+  async getResponseStats(broadcastId: string) {
+    const response = await makeAuthenticatedRequest(
+      `${API_CONFIG.baseUrl}/api/v1/broadcast-responses/${broadcastId}/stats`
+    );
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  },
+
+  async getBroadcastResponses(broadcastId: string) {
+    const response = await makeAuthenticatedRequest(
+      `${API_CONFIG.baseUrl}/api/v1/broadcast-responses/${broadcastId}/responses`
+    );
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
   }
 };

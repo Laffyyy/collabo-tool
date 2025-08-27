@@ -200,8 +200,8 @@ class RetrieveBroadcastModel {
       reportedAt: broadcast.treportedat,
 
       // Frontend compatibility fields (using defaults since not in current schema)
-      targetRoles: ['admin', 'manager', 'supervisor'],
-      targetOUs: ['All'],
+      targetRoles: [],
+      targetOUs: [],
       acknowledgments: [],
       isActive,
       isCompleted // <-- Add this field for frontend to easily filter completed broadcasts
@@ -300,53 +300,184 @@ class RetrieveBroadcastModel {
    * @param {string} [options.priority]
    * @returns {Promise<Array>}
    */
-  async getReceivedBroadcasts({ userRoleId, userOuId, limit = 50, offset = 0, status, priority }) {
-  const params = [userRoleId, userOuId];
-  let paramIndex = 3;
-  let whereConditions = [];
+  async getReceivedBroadcasts({ userRoleId, userOuId, userId, limit = 50, offset = 0, status, priority, includeTargets = false }) {
+    const params = [userRoleId, userOuId];
+    let paramIndex = 3;
+    let whereConditions = [];
 
-  if (status && status !== 'all') {
-    whereConditions.push(`b.dstatus = $${paramIndex++}`);
-    params.push(status);
+    // Add condition to exclude broadcasts created by the current user
+    params.push(userId);
+    whereConditions.push(`b.dcreatedby != $${paramIndex++}`);
+
+    if (status && status !== 'all') {
+      whereConditions.push(`b.dstatus = $${paramIndex++}`);
+      params.push(status);
+    }
+    if (priority && priority !== 'all') {
+      whereConditions.push(`b.dpriority = $${paramIndex++}`);
+      params.push(priority);
+    }
+
+    const whereClause = (whereConditions.length > 0 ? `AND ${whereConditions.join(' AND ')}` : '');
+
+    const query = `
+      SELECT b.*
+      FROM tblbroadcasts b
+      WHERE EXISTS (
+        SELECT 1 FROM tblbroadcasttargets t
+        WHERE t.dbroadcastid = b.did
+          AND t.dtargettype = 'role'
+          AND t.dtargetid = $1
+      )
+      AND EXISTS (
+        SELECT 1 FROM tblbroadcasttargets t
+        WHERE t.dbroadcastid = b.did
+          AND t.dtargettype = 'ou'
+          AND t.dtargetid = $2
+      )
+      ${whereClause}
+      ORDER BY b.tcreatedat DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex}
+    `;
+    
+    params.push(limit, offset);
+
+    const { rows } = await this.pool.query(query, params);
+    
+    // Get broadcast targets for all fetched broadcasts
+    const broadcasts = this.formatBroadcasts(rows);
+    
+    // If includeTargets flag is true, fetch the target details for each broadcast
+    if (includeTargets && broadcasts.length > 0) {
+      await this.attachTargetsToManyBroadcasts(broadcasts);
+    }
+    
+    return broadcasts;
   }
-  if (priority && priority !== 'all') {
-    whereConditions.push(`b.dpriority = $${paramIndex++}`);
-    params.push(priority);
+
+  async attachTargetsToManyBroadcasts(broadcasts) {
+    if (!broadcasts || broadcasts.length === 0) return;
+    
+    const broadcastIds = broadcasts.map(b => b.id);
+    
+    // Query to get all role targets with names
+    const roleQuery = `
+      SELECT bt.dbroadcastid, r.dname, bt.dtargetid
+      FROM tblbroadcasttargets bt
+      JOIN tblroles r ON bt.dtargetid = r.did
+      WHERE bt.dbroadcastid = ANY($1) AND bt.dtargettype = 'role'
+    `;
+    
+    // Query to get all OU targets with names
+    const ouQuery = `
+      SELECT bt.dbroadcastid, ou.dname, bt.dtargetid
+      FROM tblbroadcasttargets bt
+      JOIN tblorganizationalunits ou ON bt.dtargetid = ou.did
+      WHERE bt.dbroadcastid = ANY($1) AND bt.dtargettype = 'ou'
+    `;
+    
+    const [roleResult, ouResult] = await Promise.all([
+      this.pool.query(roleQuery, [broadcastIds]),
+      this.pool.query(ouQuery, [broadcastIds])
+    ]);
+    
+    // Create lookup maps for roles and OUs by broadcast ID
+    const roleLookup = {};
+    const ouLookup = {};
+    
+    roleResult.rows.forEach(row => {
+      if (!roleLookup[row.dbroadcastid]) roleLookup[row.dbroadcastid] = [];
+      roleLookup[row.dbroadcastid].push(row.dname);
+    });
+    
+    ouResult.rows.forEach(row => {
+      if (!ouLookup[row.dbroadcastid]) ouLookup[row.dbroadcastid] = [];
+      ouLookup[row.dbroadcastid].push(row.dname);
+    });
+    
+    // Attach the target names to each broadcast
+    broadcasts.forEach(broadcast => {
+      broadcast.targetRoles = roleLookup[broadcast.id] || [];
+      broadcast.targetOUs = ouLookup[broadcast.id] || [];
+      
+      // Only use 'All' if no targets were found
+      if (broadcast.targetRoles.length === 0) broadcast.targetRoles = ['All'];
+      if (broadcast.targetOUs.length === 0) broadcast.targetOUs = ['All'];
+    });
+    
+    return broadcasts;
   }
 
-  const whereClause =
-    (whereConditions.length > 0 ? `AND ${whereConditions.join(' AND ')}` : '');
-
-  const query = `
-    SELECT b.*
-    FROM tblbroadcasts b
-    WHERE EXISTS (
-      SELECT 1 FROM tblbroadcasttargets t
-      WHERE t.dbroadcastid = b.did
-        AND t.dtargettype = 'role'
-        AND t.dtargetid = $1
-    )
-    AND EXISTS (
-      SELECT 1 FROM tblbroadcasttargets t
-      WHERE t.dbroadcastid = b.did
-        AND t.dtargettype = 'ou'
-        AND t.dtargetid = $2
-    )
-    ${whereClause}
-    ORDER BY b.tcreatedat DESC
-    LIMIT $${paramIndex++} OFFSET $${paramIndex}
-  `;
-  params.push(limit, offset);
-
-  // Log the actual parameters for debugging
-  console.log('getReceivedBroadcasts params:', { userRoleId, userOuId, limit, offset, status, priority });
-  console.log('Final SQL params:', params);
-
-  const { rows } = await this.pool.query(query, params);
-  console.log('Retrieved broadcasts from DB:', rows);
-  return this.formatBroadcasts(rows);
-}
-
+  /**
+   * Get broadcast statistics for a user from tblbroadcasts
+   * @param {string} userId - UUID of the user
+   * @returns {Promise<Object>} Statistics object from database
+   */
+  async getBroadcastStatsByUser(userId) {
+    try {
+      // First, get overall broadcast statistics
+      const overallStatsQuery = `
+        SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN dstatus != 'deleted' THEN 1 END) as active,
+          COUNT(CASE WHEN dpriority = 'high' THEN 1 END) as high_priority,
+          COUNT(CASE WHEN dpriority = 'medium' THEN 1 END) as medium_priority,
+          COUNT(CASE WHEN dpriority = 'low' THEN 1 END) as low_priority,
+          COUNT(CASE WHEN dstatus = 'sent' THEN 1 END) as sent,
+          COUNT(CASE WHEN dstatus = 'scheduled' THEN 1 END) as scheduled,
+          COUNT(CASE WHEN dstatus = 'draft' THEN 1 END) as draft
+        FROM tblbroadcasts 
+        WHERE dcreatedby = $1
+      `;
+      
+      // Next, get acknowledgment counts for each broadcast
+      const acknowledgementsQuery = `
+        SELECT 
+          b.did as broadcast_id,
+          COUNT(a.did) as ack_count
+        FROM tblbroadcasts b
+        LEFT JOIN tblbroadcastacknowledgments a ON b.did = a.dbroadcastid
+        WHERE b.dcreatedby = $1
+        GROUP BY b.did
+      `;
+      
+      const [statsResult, ackResult] = await Promise.all([
+        this.pool.query(overallStatsQuery, [userId]),
+        this.pool.query(acknowledgementsQuery, [userId])
+      ]);
+      
+      const stats = statsResult.rows[0];
+      
+      // Create a map of broadcast ID to acknowledgment count
+      const broadcastAcknowledgments = {};
+      ackResult.rows.forEach(row => {
+        broadcastAcknowledgments[row.broadcast_id] = parseInt(row.ack_count);
+      });
+      
+      return {
+        total: parseInt(stats.total),
+        active: parseInt(stats.active),
+        acknowledged: 0, // Overall acknowledgment count if needed
+        byPriority: {
+          high: parseInt(stats.high_priority),
+          medium: parseInt(stats.medium_priority),
+          low: parseInt(stats.low_priority)
+        },
+        byStatus: {
+          sent: parseInt(stats.sent),
+          scheduled: parseInt(stats.scheduled),
+          draft: parseInt(stats.draft),
+          archived: 0, // Add when needed
+          deleted: parseInt(stats.total) - parseInt(stats.active)
+        },
+        // Add broadcast-specific acknowledgment counts
+        broadcastAcknowledgments: broadcastAcknowledgments
+      };
+    } catch (error) {
+      console.error('Database error in getBroadcastStatsByUser:', error);
+      throw new Error(`Failed to fetch broadcast statistics: ${error.message}`);
+    }
+  }
 }
 
 module.exports = RetrieveBroadcastModel;

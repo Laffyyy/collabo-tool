@@ -24,7 +24,8 @@ class RetrieveBroadcastService {
       status,
       priority,
       search,
-      includeDeleted = false
+      includeDeleted = false,
+      includeTargets = false
     } = filters;
 
     const offset = (page - 1) * limit;
@@ -39,7 +40,7 @@ class RetrieveBroadcastService {
         includeDeleted
       });
 
-      // Apply search filter (done in-memory for now, can be moved to SQL later)
+      // Apply search filter if needed
       let filteredBroadcasts = broadcasts;
       if (search && search.trim()) {
         const searchTerm = search.toLowerCase().trim();
@@ -48,9 +49,25 @@ class RetrieveBroadcastService {
           broadcast.content.toLowerCase().includes(searchTerm)
         );
       }
-
-      // Get statistics from database
+      
+      // Get statistics including acknowledgment counts
       const stats = await this.broadcastModel.getBroadcastStatsByUser(userId);
+      
+      // Merge acknowledgment counts with broadcasts
+      if (stats.broadcastAcknowledgments) {
+        filteredBroadcasts.forEach(broadcast => {
+          const ackCount = stats.broadcastAcknowledgments[broadcast.id] || 0;
+          broadcast.acknowledgments = Array(ackCount).fill({ 
+            userId: '', 
+            acknowledgedAt: new Date() 
+          });
+        });
+      }
+      
+      // Get targets if requested
+      if (includeTargets && filteredBroadcasts.length > 0) {
+        await this.broadcastModel.attachTargetsToManyBroadcasts(filteredBroadcasts);
+      }
 
       return {
         broadcasts: filteredBroadcasts,
@@ -137,13 +154,14 @@ class RetrieveBroadcastService {
     }
   }
 
-  async getReceivedBroadcasts({ userRoleId, userOuId, page = 1, limit = 50, status, priority, search }) {
+  async getReceivedBroadcasts({ userRoleId, userOuId, userId, page = 1, limit = 50, status, priority, search }) {
   const offset = (page - 1) * limit;
 
   try {
     const broadcasts = await this.broadcastModel.getReceivedBroadcasts({
       userRoleId,
       userOuId,
+      userId,
       limit: parseInt(limit),
       offset: parseInt(offset),
       status,
