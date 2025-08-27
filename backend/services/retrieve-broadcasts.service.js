@@ -208,13 +208,15 @@ class RetrieveBroadcastService {
       includeDeleted
     });
 
-    // Batch recipient count query for all broadcasts
+    // Batch recipient and acknowledgment count queries for all broadcasts
     const broadcastIds = broadcasts.map(b => b.id);
     const recipientCounts = await this.broadcastModel.getRecipientCounts(broadcastIds);
+    const acknowledgmentCounts = await this.broadcastModel.getAcknowledgmentCounts(broadcastIds);
 
-    // Attach recipient count to each broadcast
+    // Attach counts to each broadcast
     for (const broadcast of broadcasts) {
       broadcast.totalRecipients = recipientCounts[broadcast.id] || 0;
+      broadcast.acknowledgmentCount = acknowledgmentCounts[broadcast.id] || 0;
     }
 
     // Apply search filter (in-memory for now)

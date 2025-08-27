@@ -441,6 +441,29 @@ async getRecipientCounts(broadcastIds) {
   return result;
 }
 
+/**
+ * Get acknowledgment counts for multiple broadcasts in one query
+ * @param {string[]} broadcastIds
+ * @returns {Promise<Object>} { [broadcastId]: count }
+ */
+async getAcknowledgmentCounts(broadcastIds) {
+  if (!broadcastIds.length) return {};
+
+  const query = `
+    SELECT
+      dbroadcastid,
+      COUNT(*) AS acknowledgment_count
+    FROM tblbroadcastacknowledgments
+    WHERE dbroadcastid = ANY($1)
+    GROUP BY dbroadcastid
+  `;
+  const { rows } = await this.pool.query(query, [broadcastIds]);
+  const result = {};
+  for (const row of rows) {
+    result[row.dbroadcastid] = parseInt(row.acknowledgment_count, 10);
+  }
+  return result;
+}
 
 
 }

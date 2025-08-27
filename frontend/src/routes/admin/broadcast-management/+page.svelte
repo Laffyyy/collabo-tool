@@ -70,7 +70,7 @@ async function fetchAllBroadcasts() {
       sentAt: b.sentAt ? new Date(b.sentAt) : undefined,
       status: b.status,
       acknowledgmentRequired: b.requiresAcknowledgment,
-      acknowledgmentCount: 0, // leave as 0 for now
+      acknowledgmentCount: b.acknowledgmentCount, 
       totalRecipients: b.totalRecipients,
       eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
       isReported: b.isReported,
@@ -183,8 +183,8 @@ const filteredBroadcasts = $derived(() => {
   };
 
   const getAnsweredCount = (broadcast: Broadcast) => {
-    if (!broadcast.acknowledgmentRequired) return 'N/A';
-    return `${broadcast.acknowledgmentCount}/${broadcast.totalRecipients}`;
+    if (!broadcast.acknowledgmentRequired) return `${broadcast.acknowledgmentCount ?? 0}`;
+    return `${broadcast.acknowledgmentCount}`;
   };
 
   const getAcknowledgmentRate = (broadcast: Broadcast) => {
