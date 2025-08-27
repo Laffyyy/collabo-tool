@@ -572,65 +572,135 @@ class UserModel {
    * @returns {Promise<Object>} Updated user
    */
   async updateUser(id, updates) {
-    const updateFields = [];
-    const values = [];
-    let paramIndex = 1;
-
-    if (updates.name) {
-      const nameParts = updates.name.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+    const client = await this.pool.connect();
+    
+    try {
+      await client.query('BEGIN');
       
-      updateFields.push(`dfirstname = $${paramIndex++}`, `dlastname = $${paramIndex++}`);
-      values.push(firstName, lastName);
+      // Update basic user info in tblusers table
+      const userUpdateFields = [];
+      const userValues = [];
+      let userParamIndex = 1;
+
+      if (updates.name) {
+        const nameParts = updates.name.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        
+        userUpdateFields.push(`dfirstname = $${userParamIndex++}`, `dlastname = $${userParamIndex++}`);
+        userValues.push(firstName, lastName);
+      }
+
+      if (updates.email) {
+        userUpdateFields.push(`demail = $${userParamIndex++}`, `dusername = $${userParamIndex++}`);
+        userValues.push(updates.email, updates.email);
+      }
+
+      if (updates.status) {
+        userUpdateFields.push(`daccountstatus = $${userParamIndex++}`);
+        userValues.push(updates.status);
+      }
+
+      // Update basic user info if there are fields to update
+      if (userUpdateFields.length > 0) {
+        userUpdateFields.push(`tupdatedat = NOW()`);
+        userValues.push(id);
+        
+        const userUpdateQuery = `
+          UPDATE tblusers 
+          SET ${userUpdateFields.join(', ')}
+          WHERE did = $${userParamIndex}
+        `;
+        
+        await client.query(userUpdateQuery, userValues);
+      }
+
+      // Handle role, OU, and hierarchy updates in tbluserroles table
+      if (updates.role || updates.ou !== undefined || updates.supervisorId !== undefined || updates.managerId !== undefined) {
+        // Get role ID if role is being updated
+        let roleId = null;
+        if (updates.role) {
+          const roleResult = await client.query('SELECT did FROM tblroles WHERE dname = $1', [updates.role]);
+          if (roleResult.rows.length === 0) {
+            throw new Error('Invalid role specified');
+          }
+          roleId = roleResult.rows[0].did;
+        }
+
+        // Get OU ID if OU is being updated
+        let ouId = null;
+        if (updates.ou !== undefined) {
+          if (updates.ou) {
+            const ouResult = await client.query('SELECT did FROM tblorganizationalunits WHERE dname = $1', [updates.ou]);
+            if (ouResult.rows.length === 0) {
+              throw new Error('Invalid organizational unit specified');
+            }
+            ouId = ouResult.rows[0].did;
+          }
+        }
+
+        // Check if user has existing role assignment
+        const existingRoleResult = await client.query(
+          'SELECT * FROM tbluserroles WHERE duserid = $1',
+          [id]
+        );
+
+        if (existingRoleResult.rows.length > 0) {
+          // Update existing role assignment
+          const roleUpdateFields = [];
+          const roleValues = [];
+          let roleParamIndex = 1;
+
+          if (roleId) {
+            roleUpdateFields.push(`droleid = $${roleParamIndex++}`);
+            roleValues.push(roleId);
+          }
+
+          if (updates.ou !== undefined) {
+            roleUpdateFields.push(`douid = $${roleParamIndex++}`);
+            roleValues.push(ouId);
+          }
+
+          if (updates.supervisorId !== undefined) {
+            roleUpdateFields.push(`dsupervisorid = $${roleParamIndex++}`);
+            roleValues.push(updates.supervisorId);
+          }
+
+          if (updates.managerId !== undefined) {
+            roleUpdateFields.push(`dmanagerid = $${roleParamIndex++}`);
+            roleValues.push(updates.managerId);
+          }
+
+          if (roleUpdateFields.length > 0) {
+            roleValues.push(id);
+            const roleUpdateQuery = `
+              UPDATE tbluserroles 
+              SET ${roleUpdateFields.join(', ')}
+              WHERE duserid = $${roleParamIndex}
+            `;
+            await client.query(roleUpdateQuery, roleValues);
+          }
+        } else if (roleId) {
+          // Create new role assignment
+          await client.query(
+            `INSERT INTO tbluserroles (duserid, droleid, douid, dsupervisorid, dmanagerid) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [id, roleId, ouId, updates.supervisorId || null, updates.managerId || null]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      
+      // Return updated user
+      return await this.getUserById(id);
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    if (updates.email) {
-      updateFields.push(`demail = $${paramIndex++}`, `dusername = $${paramIndex++}`);
-      values.push(updates.email, updates.email);
-    }
-
-    if (updates.ou !== undefined) {
-      updateFields.push(`dou = $${paramIndex++}`);
-      values.push(updates.ou);
-    }
-
-    if (updates.role) {
-      updateFields.push(`drole = $${paramIndex++}`);
-      values.push(updates.role);
-    }
-
-    if (updates.supervisorId !== undefined) {
-      updateFields.push(`dsupervisorid = $${paramIndex++}`);
-      values.push(updates.supervisorId);
-    }
-
-    if (updates.managerId !== undefined) {
-      updateFields.push(`dmanagerid = $${paramIndex++}`);
-      values.push(updates.managerId);
-    }
-
-    if (updates.status) {
-      updateFields.push(`daccountstatus = $${paramIndex++}`);
-      values.push(updates.status);
-    }
-
-    if (updateFields.length === 0) {
-      throw new Error('No valid fields to update');
-    }
-
-    updateFields.push(`tupdatedat = NOW()`);
-    values.push(id);
-
-    const query = `
-      UPDATE tblusers 
-      SET ${updateFields.join(', ')}
-      WHERE did = $${paramIndex}
-      RETURNING *
-    `;
-
-    const result = await this.pool.query(query, values);
-    return result.rows.length > 0 ? this.formatUserForManagement(result.rows[0]) : null;
   }
 
   /**

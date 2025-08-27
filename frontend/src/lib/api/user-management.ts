@@ -31,10 +31,10 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   name?: string;
   email?: string;
-  ou?: string;
+  ou?: string | null;
   role?: string;
-  supervisorId?: string;
-  managerId?: string;
+  supervisorId?: string | null;
+  managerId?: string | null;
   status?: string;
 }
 
@@ -76,11 +76,6 @@ export async function getUsers(params: {
   sortOrder?: 'asc' | 'desc';
 } = {}): Promise<UsersResponse> {
   const searchParams = new URLSearchParams();
-  
-  // If no pagination is specified, get all users
-  if (!params.page && !params.limit) {
-    params.limit = 1000; // Set a high limit to get all users
-  }
   
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {

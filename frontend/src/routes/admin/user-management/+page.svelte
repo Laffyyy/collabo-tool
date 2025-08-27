@@ -684,39 +684,29 @@
 		}, 1000);
 	};
 
-	const processBulkUpload = () => {
-		// TODO: Replace with actual API call to create users in bulk
-		// Example:
-		// try {
-		//   const result = await createUsersInBulk(bulkData.valid);
-		//   users = [...users, ...result];
-		//   loadUsers();
-		//   showBulkPreview = false;
-		//   showAddUserModal = false;
-		//   uploadedFile = null;
-		//   bulkData = { valid: [], invalid: [] };
-		//   alert(`${result.length} users added successfully!`);
-		// } catch (error) {
-		//   console.error('Bulk upload failed:', error);
-		// }
-
-		// Temporary placeholder - remove when implementing real backend
-		const newUsers: UserData[] = bulkData.valid.map(user => ({
-			id: Date.now().toString() + Math.random(),
-			...user,
-			status: 'Active',
-			type: user.role === 'Admin' ? 'admin' : 'user'
-		}));
-
-		users = [...users, ...newUsers];
-		loadUsers();
-		
-		showBulkPreview = false;
-		showAddUserModal = false;
-		uploadedFile = null;
-		bulkData = { valid: [], invalid: [] };
-		
-		alert(`${newUsers.length} users added successfully!`);
+	const processBulkUpload = async () => {
+		try {
+			const result = await bulkCreateUsers(bulkData.valid);
+			await loadUsers();
+			showBulkPreview = false;
+			showAddUserModal = false;
+			uploadedFile = null;
+			bulkData = { valid: [], invalid: [] };
+			
+			const { successful, failed } = result.data;
+			const successCount = successful.length;
+			const failedCount = failed.length;
+			
+			if (failedCount > 0) {
+				alert(`Bulk upload completed. ${successCount} users created successfully, ${failedCount} failed. Check console for details.`);
+				console.log('Failed users:', failed);
+			} else {
+				alert(`${successCount} users added successfully!`);
+			}
+		} catch (error) {
+			console.error('Bulk upload failed:', error);
+			alert('Failed to upload users. Please try again.');
+		}
 	};
 
 	const downloadTemplate = () => {
@@ -765,7 +755,7 @@
 		showEditUserModal = true;
 	};
 
-	const saveEditUser = () => {
+	const saveEditUser = async () => {
 		const isAdmin = selectedUser?.type === 'admin';
 		
 		// For admin users, OU is not required and role cannot be changed
@@ -792,32 +782,44 @@
 			return;
 		}
 
-		// Auto-assign manager for Frontline/Support based on supervisor selection
-		let finalManagerId = editForm.managerId;
-		if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
-			const supervisor = getUserById(editForm.supervisorId);
-			if (supervisor && supervisor.managerId) {
-				finalManagerId = supervisor.managerId;
+		try {
+			// Auto-assign manager for Frontline/Support based on supervisor selection
+			let finalManagerId = editForm.managerId;
+			if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
+				const supervisor = getUserById(editForm.supervisorId);
+				if (supervisor && supervisor.managerId) {
+					finalManagerId = supervisor.managerId;
+				}
 			}
-		}
 
-		const updatedUsers = users.map(u => 
-			u.id === selectedUser!.id ? { 
-				...u, 
+			const updateData: UpdateUserRequest = {
 				name: editForm.name,
 				email: editForm.email,
-				ou: isAdmin ? u.ou : editForm.ou, // Keep existing OU for admin users
-				role: isAdmin ? u.role : editForm.role, // Keep existing role for admin users
-				type: (isAdmin ? 'admin' : (editForm.role === 'Admin' ? 'admin' : 'user')) as 'admin' | 'user',
-				supervisorId: isAdmin ? undefined : (editForm.supervisorId || undefined),
-				managerId: isAdmin ? undefined : (finalManagerId || undefined)
-			} : u
-		);
-		users = updatedUsers;
-		loadUsers();
-		showEditUserModal = false;
-		selectedUser = null;
-		alert('User updated successfully!');
+				ou: isAdmin ? undefined : editForm.ou,
+				role: isAdmin ? undefined : editForm.role,
+				supervisorId: isAdmin ? undefined : (editForm.supervisorId || null),
+				managerId: isAdmin ? undefined : (finalManagerId || null)
+			};
+
+			// Remove undefined values and convert empty strings to null
+			Object.keys(updateData).forEach(key => {
+				const value = updateData[key as keyof UpdateUserRequest];
+				if (value === undefined) {
+					delete updateData[key as keyof UpdateUserRequest];
+				} else if (value === '') {
+					updateData[key as keyof UpdateUserRequest] = null as any;
+				}
+			});
+
+			await updateUser(selectedUser.id, updateData);
+			await loadUsers();
+			showEditUserModal = false;
+			selectedUser = null;
+			alert('User updated successfully!');
+		} catch (error) {
+			console.error('Failed to update user:', error);
+			alert('Failed to update user. Please try again.');
+		}
 	};
 
 	// Password management functions
@@ -853,20 +855,33 @@
 		return true;
 	};
 
-	const changePassword = () => {
+	const changePassword = async () => {
 		if (!validatePassword()) return;
 		
-		// In a real app, this would make an API call
-		alert(`Password changed successfully for ${selectedUser?.name}${passwordForm.requirePasswordChange ? '. User will be required to change password on next login.' : ''}`);
-		resetPasswordForm();
-		showPasswordSection = false;
+		try {
+			await changeUserPassword(selectedUser!.id, {
+				newPassword: passwordForm.newPassword,
+				requirePasswordChange: passwordForm.requirePasswordChange
+			});
+			alert(`Password changed successfully for ${selectedUser?.name}${passwordForm.requirePasswordChange ? '. User will be required to change password on next login.' : ''}`);
+			resetPasswordForm();
+			showPasswordSection = false;
+		} catch (error) {
+			console.error('Failed to change password:', error);
+			alert('Failed to change password. Please try again.');
+		}
 	};
 
-	const handlePasswordReset = () => {
+	const handlePasswordReset = async () => {
 		if (!selectedUser) return;
 		
-		// In a real app, this would send a password reset email
-		alert(`Password reset email sent to ${selectedUser.email}`);
+		try {
+			await sendPasswordReset(selectedUser.id);
+			alert(`Password reset email sent to ${selectedUser.email}`);
+		} catch (error) {
+			console.error('Failed to send password reset:', error);
+			alert('Failed to send password reset email. Please try again.');
+		}
 	};
 
 	const confirmAction = (user: UserData, action: string) => {
@@ -955,28 +970,32 @@
 		showConfirmationModal = true;
 	};
 
-	const handleBulkLockUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Locked' } : u
-		);
-		users = updatedUsers;
-		loadUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been locked successfully!`);
+	const handleBulkLockUsers = async () => {
+		try {
+			const userIds = Array.from(selectedRows);
+			await bulkLockUsers(userIds, true);
+			await loadUsers();
+			selectedRows = new Set();
+			selectAll = false;
+			alert(`${userIds.length} users have been locked successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk lock users:', error);
+			alert('Failed to lock users. Please try again.');
+		}
 	};
 
-	const handleBulkDeactivateUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Deactivated' } : u
-		);
-		users = updatedUsers;
-		loadUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been deactivated successfully!`);
+	const handleBulkDeactivateUsers = async () => {
+		try {
+			const userIds = Array.from(selectedRows);
+			await bulkActivateUsers(userIds, false);
+			await loadUsers();
+			selectedRows = new Set();
+			selectAll = false;
+			alert(`${userIds.length} users have been deactivated successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk deactivate users:', error);
+			alert('Failed to deactivate users. Please try again.');
+		}
 	};
 
 	const confirmBulkUnlockUsers = () => {
@@ -993,28 +1012,32 @@
 		showConfirmationModal = true;
 	};
 
-	const bulkUnlockUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
-		);
-		users = updatedUsers;
-		loadUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been unlocked successfully!`);
+	const bulkUnlockUsers = async () => {
+		try {
+			const userIds = Array.from(selectedRows);
+			await bulkLockUsers(userIds, false);
+			await loadUsers();
+			selectedRows = new Set();
+			selectAll = false;
+			alert(`${userIds.length} users have been unlocked successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk unlock users:', error);
+			alert('Failed to unlock users. Please try again.');
+		}
 	};
 
-	const bulkReactivateUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
-		);
-		users = updatedUsers;
-		loadUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been reactivated successfully!`);
+	const bulkReactivateUsers = async () => {
+		try {
+			const userIds = Array.from(selectedRows);
+			await bulkActivateUsers(userIds, true);
+			await loadUsers();
+			selectedRows = new Set();
+			selectAll = false;
+			alert(`${userIds.length} users have been reactivated successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk reactivate users:', error);
+			alert('Failed to reactivate users. Please try again.');
+		}
 	};
 
 	const getConfirmationMessage = () => {
@@ -1042,20 +1065,26 @@
 		}
 	};
 
-	const lockUser = (user: UserData) => {
-		const updatedUsers = users.map(u => 
-			u.id === user.id ? { ...u, status: u.status === 'Locked' ? 'Active' : 'Locked' } : u
-		);
-		users = updatedUsers;
-		loadUsers();
+	const lockUser = async (user: UserData) => {
+		try {
+			const isLocked = user.status === 'Locked';
+			await toggleUserLock(user.id, !isLocked);
+			await loadUsers();
+		} catch (error) {
+			console.error('Failed to toggle user lock status:', error);
+			alert('Failed to update user lock status. Please try again.');
+		}
 	};
 
-	const deactivateUser = (user: UserData) => {
-		const updatedUsers = users.map(u => 
-			u.id === user.id ? { ...u, status: u.status === 'Deactivated' ? 'Active' : 'Deactivated' } : u
-		);
-		users = updatedUsers;
-		loadUsers();
+	const deactivateUser = async (user: UserData) => {
+		try {
+			const isActive = user.status === 'Active' || user.status === 'First-time';
+			await toggleUserActivation(user.id, !isActive);
+			await loadUsers();
+		} catch (error) {
+			console.error('Failed to toggle user activation status:', error);
+			alert('Failed to update user activation status. Please try again.');
+		}
 	};
 
 	const goToPage = async (page: number) => {
