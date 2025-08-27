@@ -1,42 +1,27 @@
 const { Router } = require('express');
 const OUmanagerController = require('../../controllers/oumanegament.controller');
 const { validate } = require('../../utils/validate');
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 
 const router = Router();
 
+
 router.get(
-    '/active',
+    '/list',
     [
+        query('start').optional().isInt({ min: 0 }).withMessage('start must be a non-negative integer'),
+        query('isactive').optional().isIn(['true', 'false']).withMessage('isactive must be true or false'),
+        query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit must be an integer between 1 and 100'),
+        query('sort').optional().isIn(['ASC', 'DESC']).withMessage('sort must be ASC or DESC'),
+        query('sortby').optional().isIn(['dname', 'ddescription', 'tcreatedat']).withMessage('sortby must be one of: dname, ddescription, tcreatedat'),
+        query('search').optional().isIn(['true', 'false']).withMessage('search must be true or false'),
+        query('searchby').optional().isIn(['dname', 'ddescription']).withMessage('searchby must be one of: dname, ddescription'),
+        query('searchvalue').optional().isString().withMessage('searchvalue must be a string'),
     ],
     validate,
     OUmanagerController.getOU
 )
 
-router.get(
-    '/active/list',
-    [
-        body('range').isString().notEmpty(),
-    ],
-    validate,
-    OUmanagerController.getOU
-)
-
-router.get(
-    '/deactive',
-    [],
-    validate,
-    OUmanagerController.getDeactiveOU
-)
-
-router.get(
-    '/deactive/list',
-    [
-
-    ],
-    validate,
-    OUmanagerController.getDeactiveOU
-)
 
 router.post(
     '/create',
@@ -79,12 +64,7 @@ router.post(
     OUmanagerController.createOUmanager
 )
 
-router.post(
-    '/deactive',
-    [body('id').isString().notEmpty()],
-    validate,
-    OUmanagerController.deactiveOU
-)
+
 
 router.post(
     '/update',

@@ -3,8 +3,8 @@ const { transformSettingsToOUSettings, validateSettings, transformSettingsToJSSe
 
 async function getOU(req, res, next) {
     try {
-        const { howmany, page, sort } = req.query;
-        const result = await oumanegamentService.getOU(howmany, page, sort);
+        const { start, limit, sort, sortby, search, searchby, searchvalue, isactive } = req.query;
+        const result = await oumanegamentService.getOU(start, limit, sort, sortby, search, searchby, searchvalue, isactive);
         res.status(200).json({ ok: true, ...result });
     } catch (err) {
         next(err);
