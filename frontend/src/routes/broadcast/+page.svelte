@@ -173,19 +173,32 @@
   let hasChoiceChanged = $derived(selectedChoice !== originalSelectedChoice);
   let hasTextChanged = $derived(textResponse.trim() !== originalTextResponse);
 
+  // Track previous filter states to detect changes
+  let prevSearchQuery = $state('');
+  let prevPriorityFilter = $state('all');
+
     const loadMyBroadcasts = async () => {
     console.log('🔄 Loading user broadcasts from API...');
     isLoading = true;
     error = null;
 
     try {
-      const searchFilters = {
-        search: searchQuery.trim() || undefined,
-        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+      // Prepare filters - only send non-default values to API
+      const searchFilters: any = {
         limit: 50,
         page: 1,
         includeDeleted: false
       };
+
+      // Only add search filter if there's actually a search term
+      if (searchQuery.trim() !== '') {
+        searchFilters.search = searchQuery.trim();
+      }
+
+      // Only add priority filter if it's not 'all'
+      if (priorityFilter !== 'all') {
+        searchFilters.priority = priorityFilter;
+      }
 
       console.log('📤 API Request filters:', searchFilters);
       const response = await broadcastAPI.getMyBroadcasts(searchFilters);
@@ -230,9 +243,14 @@
   };
 
   onMount(() => {
-  console.log('🔄 Component mounted, activeTab:', activeTab);
-  loadMyBroadcasts();
-  loadReceivedBroadcasts();
+    console.log('🔄 Component mounted, activeTab:', activeTab);
+    
+    // Initialize previous filter states
+    prevSearchQuery = searchQuery.trim();
+    prevPriorityFilter = priorityFilter;
+    
+    loadMyBroadcasts();
+    loadReceivedBroadcasts();
 });
 
   // FIXED: Effect for tab switching (separate from mount)
@@ -246,10 +264,26 @@
 
   // FIXED: Effect for filter changes (only reload if we have data and filters change)
   $effect(() => {
-    console.log('🔄 Filters changed - search:', searchQuery, 'priority:', priorityFilter);
-    // Only reload if we're on "My Broadcasts", have existing data, and filters changed
-    if (activeTab === 'My Broadcasts' && broadcasts.length > 0 && (searchQuery.trim() || priorityFilter !== 'all')) {
+    console.log('🔍 Filter effect - search:', searchQuery, 'priority:', priorityFilter, 'responseStatus:', responseStatusFilter);
+    
+    // Check if filters actually changed
+    const searchChanged = searchQuery.trim() !== prevSearchQuery.trim();
+    const priorityChanged = priorityFilter !== prevPriorityFilter;
+    
+    if (activeTab === 'Received Broadcasts' && (searchChanged || priorityChanged)) {
+      console.log('🔄 Reloading received broadcasts due to filter change');
+      loadReceivedBroadcasts();
+      
+      // Update previous values
+      prevSearchQuery = searchQuery.trim();
+      prevPriorityFilter = priorityFilter;
+    } else if (activeTab === 'My Broadcasts' && (searchChanged || priorityChanged)) {
+      console.log('🔄 Reloading my broadcasts due to filter change');
       loadMyBroadcasts();
+      
+      // Update previous values
+      prevSearchQuery = searchQuery.trim();
+      prevPriorityFilter = priorityFilter;
     }
   });
 
@@ -257,14 +291,25 @@
   const loadReceivedBroadcasts = async () => {
     isLoadingReceived = true;
     try {
-      const response = await receivedBroadcastAPI.getReceivedBroadcasts({
-        search: searchQuery.trim() || undefined,
-        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+      // Prepare filters - only send non-default values to API
+      const filters: any = {
         limit: 50,
         page: 1
-      });
+      };
 
-      const userRole = currentUser?.role || '';
+      // Only add search filter if there's actually a search term
+      if (searchQuery.trim() !== '') {
+        filters.search = searchQuery.trim();
+      }
+
+      // Only add priority filter if it's not 'all'
+      if (priorityFilter !== 'all') {
+        filters.priority = priorityFilter;
+      }
+
+      console.log('📤 Loading received broadcasts with filters:', filters);
+      
+      const response = await receivedBroadcastAPI.getReceivedBroadcasts(filters);
 
       receivedBroadcasts = response.broadcasts
         .map(b => ({
@@ -279,6 +324,8 @@
       for (const broadcast of receivedBroadcasts) {
         await checkExistingResponse(broadcast.id);
       }
+
+      console.log('✅ Received broadcasts loaded:', receivedBroadcasts.length);
 
     } catch (err) {
       console.error('Error loading received broadcasts:', err);
@@ -480,6 +527,31 @@ let prevTab = $state(activeTab);
   }
   prevTab = activeTab;
 });
+
+ $effect(() => {
+    const handleClickOutside = (event: Event) => {
+      // Close filter dropdown if clicking outside
+      if (showFilterDropdown) {
+        const target = event.target as Element;
+        if (!target.closest('.relative')) {
+          showFilterDropdown = false;
+        }
+      }
+      
+      // Close response status dropdown if clicking outside
+      if (showResponseStatusDropdown) {
+        const target = event.target as Element;
+        if (!target.closest('.relative')) {
+          showResponseStatusDropdown = false;
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  });
 
 const exportCSV = (broadcast: Broadcast) => {
     alert('CSV export functionality would be implemented here.');
@@ -1430,46 +1502,95 @@ onMount(async () => {
       </div>
       
       <!-- Priority Filter Dropdown -->
-      <div class="relative">
+<div class="relative">
+  <button
+    onclick={() => showFilterDropdown = !showFilterDropdown}
+    class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+  >
+    <Filter class="h-4 w-4 mr-2" />
+    {priorityFilter === 'all' ? 'All Priorities' : priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1) + ' Priority'}
+    <ChevronDown class="h-4 w-4 ml-2 {showFilterDropdown ? 'rotate-180' : ''} transition-transform" />
+  </button>
+  
+  {#if showFilterDropdown}
+    <!-- Add backdrop to close dropdown when clicking outside -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div 
+      class="fixed inset-0 z-10" 
+      onclick={() => showFilterDropdown = false}
+    ></div>
+    
+    <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+      <div class="py-1">
         <button
-          onclick={() => showFilterDropdown = !showFilterDropdown}
-          class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+          onclick={(e) => { 
+            e.stopPropagation(); 
+            priorityFilter = 'all'; 
+            showFilterDropdown = false; 
+          }}
+          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'all' ? 'bg-gray-100 font-medium' : ''}"
         >
-          <Filter class="h-4 w-4 mr-2" />
-          {priorityFilter === 'all' ? 'All Priorities' : priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
-        </button>
-        
-        {#if showFilterDropdown}
-          <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-            <div class="py-1">
-              <button
-                onclick={() => { priorityFilter = 'all'; showFilterDropdown = false; }}
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'all' ? 'bg-gray-100' : ''}"
-              >
-                All Priorities
-              </button>
-              <button
-                onclick={() => { priorityFilter = 'high'; showFilterDropdown = false; }}
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'high' ? 'bg-gray-100' : ''}"
-              >
-                High Priority
-              </button>
-              <button
-                onclick={() => { priorityFilter = 'medium'; showFilterDropdown = false; }}
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'medium' ? 'bg-gray-100' : ''}"
-              >
-                Medium Priority
-              </button>
-              <button
-                onclick={() => { priorityFilter = 'low'; showFilterDropdown = false; }}
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'low' ? 'bg-gray-100' : ''}"
-              >
-                Low Priority
-              </button>
-            </div>
+          <div class="flex items-center space-x-2">
+            <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
+            <span>All Priorities</span>
+            {#if priorityFilter === 'all'}
+              <CheckCircle class="w-4 h-4 ml-auto text-[#01c0a4]" />
+            {/if}
           </div>
-        {/if}
+        </button>
+        <button
+          onclick={(e) => { 
+            e.stopPropagation(); 
+            priorityFilter = 'high'; 
+            showFilterDropdown = false; 
+          }}
+          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'high' ? 'bg-red-50 font-medium' : ''}"
+        >
+          <div class="flex items-center space-x-2">
+            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+            <span>High Priority</span>
+            {#if priorityFilter === 'high'}
+              <CheckCircle class="w-4 h-4 ml-auto text-[#01c0a4]" />
+            {/if}
+          </div>
+        </button>
+        <button
+          onclick={(e) => { 
+            e.stopPropagation(); 
+            priorityFilter = 'medium'; 
+            showFilterDropdown = false; 
+          }}
+          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'medium' ? 'bg-yellow-50 font-medium' : ''}"
+        >
+          <div class="flex items-center space-x-2">
+            <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <span>Medium Priority</span>
+            {#if priorityFilter === 'medium'}
+              <CheckCircle class="w-4 h-4 ml-auto text-[#01c0a4]" />
+            {/if}
+          </div>
+        </button>
+        <button
+          onclick={(e) => { 
+            e.stopPropagation(); 
+            priorityFilter = 'low'; 
+            showFilterDropdown = false; 
+          }}
+          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'low' ? 'bg-green-50 font-medium' : ''}"
+        >
+          <div class="flex items-center space-x-2">
+            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span>Low Priority</span>
+            {#if priorityFilter === 'low'}
+              <CheckCircle class="w-4 h-4 ml-auto text-[#01c0a4]" />
+            {/if}
+          </div>
+        </button>
       </div>
+    </div>
+  {/if}
+</div>
 
       <!-- Response Status Filter Dropdown (only show for Received Broadcasts tab) -->
       {#if activeTab === 'Received Broadcasts'}
