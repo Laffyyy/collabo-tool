@@ -105,10 +105,43 @@
 	let selectedUser = $state<UserData | null>(null);
 	let teamModalUser = $state<UserData | null>(null);
 	
-	// Team modal navigation
+	// Team modal navigation and data
 	let teamViewStack = $state<UserData[]>([]); // Stack for navigation
 	let currentTeamView = $state<UserData | null>(null);
 	let selectedSupervisorView = $state<UserData | null>(null); // Which supervisor's team we're viewing
+	let teamData = $state<any>(null);
+	
+	// Data caching for performance - tab-specific caching
+	let cachedUsersByTab = $state<Record<string, UserData[]>>({});
+	let cachedPaginationByTab = $state<Record<string, { totalPages: number; totalUsers: number }>>({});
+	let cachedHierarchy = $state<any>(null);
+	let cachedOUs = $state<any[]>([]);
+	let lastFetchTimeByTab = $state<Record<string, number>>({});
+	let lastHierarchyFetchTime = $state<number>(0);
+	let lastOUFetchTime = $state<number>(0);
+	let cacheExpiry = 5 * 60 * 1000; // 5 minutes cache
+
+	// Clear all cached data (used after create/edit/delete operations)
+	function clearAllCache() {
+		cachedUsersByTab = {};
+		cachedPaginationByTab = {};
+		lastFetchTimeByTab = {};
+		cachedHierarchy = null;
+		cachedOUs = [];
+		lastHierarchyFetchTime = 0;
+		lastOUFetchTime = 0;
+	}
+
+	// Loading states
+	let loadingUsers = $state<boolean>(false);
+	let loadingCreate = $state<boolean>(false);
+	let loadingEdit = $state<boolean>(false);
+	let loadingPassword = $state<boolean>(false);
+	let loadingLock = $state<boolean>(false);
+	let loadingBulk = $state<boolean>(false);
+	let loadingTeamData = $state<boolean>(false);
+	let loadingHierarchy = $state<boolean>(false);
+	let loadingOUs = $state<boolean>(false);
 	
 	// Individual add form
 	let individualForm = $state<IndividualFormData>({
@@ -226,27 +259,53 @@
 		}
 	}
 
-	// Load organizational units
+	// Load organizational units with caching
 	async function loadOUs() {
 		try {
+			// Use cached data if available and not expired
+			const now = Date.now();
+			if (cachedOUs.length > 0 && (now - lastOUFetchTime) < cacheExpiry) {
+				ouOptions = cachedOUs;
+				return;
+			}
+
+			loadingOUs = true;
 			const response = await getOrganizationalUnits();
 			if (response.ok) {
 				ouOptions = response.data.ous.map((ou: any) => ou.name);
+				cachedOUs = [...ouOptions]; // Cache the data
+				lastOUFetchTime = now;
 			}
 		} catch (err) {
 			console.error('Failed to load organizational units:', err);
+		} finally {
+			loadingOUs = false;
 		}
 	}
 
-	// Load hierarchy options (supervisors and managers)
+	// Load hierarchy options (supervisors and managers) with caching
 	async function loadHierarchyOptions(filters = {}) {
 		try {
+			// Use cached data if available and not expired
+			const now = Date.now();
+			if (cachedHierarchy && (now - lastHierarchyFetchTime) < cacheExpiry && Object.keys(filters).length === 0) {
+				hierarchyOptions = cachedHierarchy;
+				return;
+			}
+
+			loadingHierarchy = true;
 			const response = await getHierarchyOptions(filters);
 			if (response.ok) {
 				hierarchyOptions = response.data;
+				if (Object.keys(filters).length === 0) {
+					cachedHierarchy = response.data; // Only cache unfiltered data
+					lastHierarchyFetchTime = now;
+				}
 			}
 		} catch (err) {
 			console.error('Failed to load hierarchy options:', err);
+		} finally {
+			loadingHierarchy = false;
 		}
 	}
 
@@ -424,10 +483,32 @@
 
 
 
-	// Load users from API
-	async function loadUsers() {
+	// Load users from API with tab-specific caching for performance
+	async function loadUsers(forceRefresh = false) {
 		try {
-			loading = true;
+			// Create cache key based on current tab and filters (excluding page for status-based filtering)
+			const statusFilter = getStatusFilter();
+			const cacheKey = `${currentTab}_${currentPage}_${itemsPerPage}_${searchQuery}_${selectedOU}_${selectedRole}_${statusFilter}_${sortColumn}_${sortDirection}`;
+			console.log('Cache key:', cacheKey); // Debug log
+			
+			// Check tab-specific cache first
+			const now = Date.now();
+			if (!forceRefresh && 
+				cachedUsersByTab[cacheKey] && 
+				cachedPaginationByTab[cacheKey] &&
+				lastFetchTimeByTab[cacheKey] && 
+				(now - lastFetchTimeByTab[cacheKey]) < cacheExpiry) {
+				console.log('Using cached data for:', cacheKey, 'Users count:', users.length, 'Page:', currentPage); // Debug log
+				users = cachedUsersByTab[cacheKey];
+				const cachedPagination = cachedPaginationByTab[cacheKey];
+				totalPages = cachedPagination.totalPages;
+				totalUsers = cachedPagination.totalUsers;
+				filteredUsers = users;
+				return;
+			}
+
+			console.log('Fetching fresh data for:', cacheKey); // Debug log
+			loadingUsers = true;
 			
 			const params = {
 				page: currentPage,
@@ -444,9 +525,25 @@
 			
 			if (response.ok) {
 				users = response.data.users.map((apiUser: ApiUser) => transformApiUser(apiUser));
+				// Cache the data with tab-specific key
+				cachedUsersByTab[cacheKey] = [...users];
+				cachedPaginationByTab[cacheKey] = {
+					totalPages: response.data.pagination.totalPages,
+					totalUsers: response.data.pagination.totalUsers
+				};
+				lastFetchTimeByTab[cacheKey] = now;
+				console.log('Fresh data loaded for:', cacheKey, 'Users count:', users.length, 'Page:', currentPage); // Debug log
 				totalPages = response.data.pagination.totalPages;
 				totalUsers = response.data.pagination.totalUsers;
 				filteredUsers = users; // API already filters, so set filtered to all users
+				
+				// If current page is greater than total pages, reset to page 1
+				if (currentPage > totalPages && totalPages > 0) {
+					currentPage = 1;
+					// Re-fetch with corrected page
+					await loadUsers(true);
+					return;
+				}
 			} else {
 				throw new Error('Failed to load users');
 			}
@@ -454,7 +551,7 @@
 			console.error('Failed to load users:', err);
 			error = err instanceof Error ? err.message : 'Failed to load users';
 		} finally {
-			loading = false;
+			loadingUsers = false;
 		}
 	}
 
@@ -604,6 +701,8 @@
 
 	const addIndividualUser = async () => {
 		try {
+			loadingCreate = true;
+			
 			// For Admin users, OU is not required
 			const isAdmin = individualForm.role === 'Admin';
 			const requiredFields = isAdmin 
@@ -633,8 +732,10 @@
 			const response = await createUser(userData);
 			
 			if (response.ok) {
+				// Clear cache to ensure fresh data
+				clearAllCache();
 				// Reload users to get the updated list
-				await loadUsers();
+				await loadUsers(true); // Force refresh
 				// Reload tab counts to update the numbers
 				await loadTabCounts();
 				
@@ -657,6 +758,8 @@
 		} catch (err) {
 			console.error('Failed to add user:', err);
 			alert(err instanceof Error ? err.message : 'Failed to add user');
+		} finally {
+			loadingCreate = false;
 		}
 	};
 
@@ -686,8 +789,11 @@
 
 	const processBulkUpload = async () => {
 		try {
+			loadingBulk = true;
 			const result = await bulkCreateUsers(bulkData.valid);
-			await loadUsers();
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
 			showBulkPreview = false;
 			showAddUserModal = false;
 			uploadedFile = null;
@@ -706,6 +812,8 @@
 		} catch (error) {
 			console.error('Bulk upload failed:', error);
 			alert('Failed to upload users. Please try again.');
+		} finally {
+			loadingBulk = false;
 		}
 	};
 
@@ -783,6 +891,8 @@
 		}
 
 		try {
+			loadingEdit = true;
+			
 			// Auto-assign manager for Frontline/Support based on supervisor selection
 			let finalManagerId = editForm.managerId;
 			if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
@@ -812,13 +922,17 @@
 			});
 
 			await updateUser(selectedUser.id, updateData);
-			await loadUsers();
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
 			showEditUserModal = false;
 			selectedUser = null;
 			alert('User updated successfully!');
 		} catch (error) {
 			console.error('Failed to update user:', error);
 			alert('Failed to update user. Please try again.');
+		} finally {
+			loadingEdit = false;
 		}
 	};
 
@@ -859,6 +973,7 @@
 		if (!validatePassword()) return;
 		
 		try {
+			loadingPassword = true;
 			await changeUserPassword(selectedUser!.id, {
 				newPassword: passwordForm.newPassword,
 				requirePasswordChange: passwordForm.requirePasswordChange
@@ -869,6 +984,8 @@
 		} catch (error) {
 			console.error('Failed to change password:', error);
 			alert('Failed to change password. Please try again.');
+		} finally {
+			loadingPassword = false;
 		}
 	};
 
@@ -890,22 +1007,42 @@
 		showConfirmationModal = true;
 	};
 
-	const showTeamInfo = (user: UserData) => {
+	const showTeamInfo = async (user: UserData) => {
 		teamModalUser = user;
 		currentTeamView = user;
 		selectedSupervisorView = null; // Reset supervisor view
 		teamViewStack = [user]; // Initialize with the root user
 		showTeamModal = true;
+		
+		// Fetch team data from API
+		await loadTeamData(user.id);
+	};
+
+	const loadTeamData = async (userId: string) => {
+		try {
+			loadingTeamData = true;
+			const response = await getUserTeam(userId);
+			teamData = response.data;
+		} catch (error) {
+			console.error('Failed to load team data:', error);
+			alert('Failed to load team information. Please try again.');
+		} finally {
+			loadingTeamData = false;
+		}
 	};
 
 	// Team navigation functions
-	const navigateToSupervisor = (supervisor: UserData) => {
+	const navigateToSupervisor = async (supervisor: UserData) => {
 		selectedSupervisorView = supervisor;
-		// Don't change currentTeamView, keep the manager as the main view
+		// Load supervisor's team data
+		await loadTeamData(supervisor.id);
 	};
 
-	const navigateBack = () => {
+	const navigateBack = async () => {
 		selectedSupervisorView = null; // Go back to manager's overview
+		if (teamModalUser) {
+			await loadTeamData(teamModalUser.id);
+		}
 	};
 
 	const resetToRootView = () => {
@@ -915,45 +1052,72 @@
 		}
 	};
 
-	// Get direct supervisors under a manager
-	const getDirectSupervisors = (managerId: string) => {
-		return users.filter(u => u.managerId === managerId && u.role === 'Supervisor' && u.status === 'Active');
+	// Get direct supervisors under a manager (from API data)
+	const getDirectSupervisors = () => {
+		if (!teamData?.teamMembers) return [];
+		return teamData.teamMembers.filter((member: any) => member.role === 'Supervisor');
 	};
 
-	// Get team members under a supervisor
-	const getSupervisorTeam = (supervisorId: string) => {
-		return users.filter(u => u.supervisorId === supervisorId && (u.role === 'Frontline' || u.role === 'Support') && u.status === 'Active');
+	// Get team members under a supervisor (from API data) 
+	const getSupervisorTeam = () => {
+		if (!teamData?.teamMembers) return [];
+		return teamData.teamMembers.filter((member: any) => member.role === 'Frontline' || member.role === 'Support');
 	};
 
-	const executeConfirmedAction = () => {
+	const executeConfirmedAction = async () => {
 		if (!selectedUser || !confirmationAction) return;
 
-		switch (confirmationAction) {
-			case 'lock':
-			case 'unlock':
-				lockUser(selectedUser);
-				break;
-			case 'activate':
-			case 'deactivate':
-				deactivateUser(selectedUser);
-				break;
-			case 'bulk-lock':
-				handleBulkLockUsers();
-				break;
-			case 'bulk-deactivate':
-				handleBulkDeactivateUsers();
-				break;
-			case 'bulk-unlock':
-				bulkUnlockUsers();
-				break;
-			case 'bulk-reactivate':
-				bulkReactivateUsers();
-				break;
+		try {
+			switch (confirmationAction) {
+				case 'lock':
+					await toggleUserLock(selectedUser.id, true);
+					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been locked successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'unlock':
+					await toggleUserLock(selectedUser.id, false);
+					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been unlocked successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'activate':
+					await toggleUserActivation(selectedUser.id, true);
+					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been activated successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'deactivate':
+					await toggleUserActivation(selectedUser.id, false);
+					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been deactivated successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'bulk-lock':
+					await handleBulkLockUsers();
+					break;
+				case 'bulk-deactivate':
+					await handleBulkDeactivateUsers();
+					break;
+				case 'bulk-unlock':
+					await bulkUnlockUsers();
+					break;
+				case 'bulk-reactivate':
+					await bulkReactivateUsers();
+					break;
+			}
+			
+			if (confirmationAction.startsWith('bulk-')) {
+				// Bulk operations handle their own success messages
+			} else {
+				clearAllCache();
+				await loadUsers();
+			}
+		} catch (error) {
+			console.error(`Failed to ${confirmationAction}:`, error);
+			errorMessage = `Failed to ${confirmationAction} user. Please try again.`;
+			showErrorModal = true;
+		} finally {
+			showConfirmationModal = false;
+			selectedUser = null;
+			confirmationAction = '';
 		}
-		
-		showConfirmationModal = false;
-		selectedUser = null;
-		confirmationAction = '';
 	};
 
 	const confirmBulkLockUsers = () => {
@@ -972,29 +1136,39 @@
 
 	const handleBulkLockUsers = async () => {
 		try {
+			loadingLock = true;
 			const userIds = Array.from(selectedRows);
 			await bulkLockUsers(userIds, true);
-			await loadUsers();
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
 			alert(`${userIds.length} users have been locked successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk lock users:', error);
 			alert('Failed to lock users. Please try again.');
+		} finally {
+			loadingLock = false;
 		}
 	};
 
 	const handleBulkDeactivateUsers = async () => {
 		try {
+			loadingBulk = true;
 			const userIds = Array.from(selectedRows);
 			await bulkActivateUsers(userIds, false);
-			await loadUsers();
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
 			alert(`${userIds.length} users have been deactivated successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk deactivate users:', error);
 			alert('Failed to deactivate users. Please try again.');
+		} finally {
+			loadingBulk = false;
 		}
 	};
 
@@ -1014,29 +1188,39 @@
 
 	const bulkUnlockUsers = async () => {
 		try {
+			loadingLock = true;
 			const userIds = Array.from(selectedRows);
 			await bulkLockUsers(userIds, false);
-			await loadUsers();
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
 			alert(`${userIds.length} users have been unlocked successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk unlock users:', error);
 			alert('Failed to unlock users. Please try again.');
+		} finally {
+			loadingLock = false;
 		}
 	};
 
 	const bulkReactivateUsers = async () => {
 		try {
+			loadingBulk = true;
 			const userIds = Array.from(selectedRows);
 			await bulkActivateUsers(userIds, true);
-			await loadUsers();
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
 			alert(`${userIds.length} users have been reactivated successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk reactivate users:', error);
 			alert('Failed to reactivate users. Please try again.');
+		} finally {
+			loadingBulk = false;
 		}
 	};
 
@@ -1065,32 +1249,63 @@
 		}
 	};
 
-	const lockUser = async (user: UserData) => {
-		try {
-			const isLocked = user.status === 'Locked';
-			await toggleUserLock(user.id, !isLocked);
-			await loadUsers();
-		} catch (error) {
-			console.error('Failed to toggle user lock status:', error);
-			alert('Failed to update user lock status. Please try again.');
+	// Modal close protection
+	const isAnyLoading = () => {
+		return loadingUsers || loadingCreate || loadingEdit || loadingPassword || loadingLock || loadingBulk;
+	};
+
+	const closeModal = (modalType: string) => {
+		if (isAnyLoading()) {
+			return; // Prevent closing during loading
+		}
+		
+		switch (modalType) {
+			case 'add':
+				showAddUserModal = false;
+				break;
+			case 'edit':
+				showEditUserModal = false;
+				selectedUser = null;
+				break;
+			case 'team':
+				showTeamModal = false;
+				teamModalUser = null;
+				break;
+			case 'confirmation':
+				showConfirmationModal = false;
+				selectedUser = null;
+				confirmationAction = '';
+				break;
 		}
 	};
 
-	const deactivateUser = async (user: UserData) => {
-		try {
-			const isActive = user.status === 'Active' || user.status === 'First-time';
-			await toggleUserActivation(user.id, !isActive);
-			await loadUsers();
-		} catch (error) {
-			console.error('Failed to toggle user activation status:', error);
-			alert('Failed to update user activation status. Please try again.');
+	// Keyboard event handler for modal closing
+	const handleKeydown = (event: KeyboardEvent) => {
+		if (event.key === 'Escape' && !isAnyLoading()) {
+			if (showConfirmationModal) closeModal('confirmation');
+			else if (showEditUserModal) closeModal('edit');
+			else if (showTeamModal) closeModal('team');
+			else if (showAddUserModal) closeModal('add');
 		}
+	};
+
+
+
+	const lockUser = (user: UserData) => {
+		const isLocked = user.status === 'Locked';
+		confirmAction(user, isLocked ? 'unlock' : 'lock');
+	};
+
+	const deactivateUser = (user: UserData) => {
+		const isActive = user.status === 'Active' || user.status === 'First-time';
+		confirmAction(user, isActive ? 'deactivate' : 'activate');
 	};
 
 	const goToPage = async (page: number) => {
 		if (page >= 1 && page <= totalPages) {
+			console.log(`Navigating from page ${currentPage} to page ${page}`); // Debug log
 			currentPage = page;
-			await loadUsers();
+			await loadUsers(true); // Force refresh to ensure new page data is fetched
 		}
 	};
 
@@ -1150,13 +1365,6 @@
 	$effect(() => {
 		const currentPageUserIds = new Set(paginatedUsers().map(user => user.id));
 		selectAll = currentPageUserIds.size > 0 && [...currentPageUserIds].every(id => selectedRows.has(id));
-	});
-
-	// Reactive effect to filter users when dropdown selections change
-	$effect(() => {
-		// This effect runs whenever selectedOU, selectedRole, selectedStatus, or searchQuery changes
-		selectedOU; selectedRole; selectedStatus; searchQuery;
-		loadUsers();
 	});
 </script>
 
@@ -1373,19 +1581,29 @@
 								{:else}
 									<button
 										onclick={() => confirmBulkLockUsers()}
-										class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										disabled={loadingLock}
+										class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
 										title="Lock selected users"
 									>
-										<Shield class="w-3.5 h-3.5" />
-										<span>Lock</span>
+										{#if loadingLock}
+											<div class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-700"></div>
+										{:else}
+											<Shield class="w-3.5 h-3.5" />
+										{/if}
+										<span>{loadingLock ? 'Locking...' : 'Lock'}</span>
 									</button>
 									<button
 										onclick={() => confirmBulkDeactivateUsers()}
-										class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										disabled={loadingBulk}
+										class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
 										title="Deactivate selected users"
 									>
-										<X class="w-3.5 h-3.5" />
-										<span>Deactivate</span>
+										{#if loadingBulk}
+											<div class="animate-spin rounded-full h-3 w-3 border-b-2 border-red-700"></div>
+										{:else}
+											<X class="w-3.5 h-3.5" />
+										{/if}
+										<span>{loadingBulk ? 'Deactivating...' : 'Deactivate'}</span>
 									</button>
 								{/if}
 							</div>
@@ -1394,7 +1612,17 @@
 				{/if}
 
 				<!-- Table -->
-				<div class="w-full overflow-x-auto flex-1 min-h-0">
+				<div class="w-full overflow-x-auto flex-1 min-h-0 relative">
+					<!-- Loading Overlay -->
+					{#if loadingUsers}
+						<div class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+							<div class="text-center">
+								<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+								<p class="text-gray-500">Loading users...</p>
+							</div>
+						</div>
+					{/if}
+					
 					<div class="h-full overflow-y-auto">
 					<table class="w-full table-fixed min-w-[1400px]">
 						<thead class="bg-gray-50">
@@ -1658,7 +1886,7 @@
 				{#if totalPages > 1}
 					<div class="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
 						<div class="text-sm text-gray-700">
-							Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} results
+							Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalUsers)} of {totalUsers} results
 						</div>
 						<div class="flex items-center space-x-2">
 							<button
@@ -1707,8 +1935,8 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showEditUserModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showEditUserModal = false)}
+		onclick={() => closeModal('edit')}
+		onkeydown={(e) => e.key === 'Escape' && closeModal('edit')}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1964,9 +2192,15 @@
 									</button>
 									<button
 										onclick={changePassword}
-										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium"
+										disabled={loadingPassword}
+										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
 									>
-										Update Password
+										{#if loadingPassword}
+											<div class="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+											Updating...
+										{:else}
+											Update Password
+										{/if}
 									</button>
 								</div>
 							</div>
@@ -1978,16 +2212,23 @@
 			<!-- Footer -->
 			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
 				<button
-					onclick={() => showEditUserModal = false}
+					onclick={() => closeModal('edit')}
 					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+					disabled={isAnyLoading()}
 				>
 					Cancel
 				</button>
 				<button
 					onclick={saveEditUser}
-					class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+					disabled={loadingEdit}
+					class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 				>
-					Save Changes
+					{#if loadingEdit}
+						<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+						Saving...
+					{:else}
+						Save Changes
+					{/if}
 				</button>
 			</div>
 		</div>
@@ -2011,7 +2252,7 @@
 				: 'primary'
 		}
 		onConfirm={executeConfirmedAction}
-		onCancel={() => { showConfirmationModal = false; selectedUser = null; confirmationAction = ''; }}
+		onCancel={() => closeModal('confirmation')}
 	/>
 {/if}
 
@@ -2022,8 +2263,8 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showTeamModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showTeamModal = false)}
+		onclick={() => closeModal('team')}
+		onkeydown={(e) => e.key === 'Escape' && closeModal('team')}
 	>
 		<div 
 			class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto" 
@@ -2061,9 +2302,17 @@
 
 			<!-- Content -->
 			<div class="p-6">
-				{#if selectedSupervisorView}
+				{#if loadingTeamData}
+					<!-- Loading State -->
+					<div class="flex items-center justify-center py-12">
+						<div class="text-center">
+							<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+							<p class="text-gray-500">Loading team information...</p>
+						</div>
+					</div>
+				{:else if selectedSupervisorView}
 					<!-- Supervisor's Team View -->
-					{@const supervisorTeam = getSupervisorTeam(selectedSupervisorView.id)}
+					{@const supervisorTeam = getSupervisorTeam()}
 					
 					<!-- Supervisor Card -->
 					<div class="mb-6">
@@ -2126,7 +2375,7 @@
 					{/if}
 				{:else if teamModalUser?.role === 'Supervisor'}
 					<!-- Supervisor's Own Team View (when supervisor is the root user) -->
-					{@const supervisorTeam = getSupervisorTeam(teamModalUser.id)}
+					{@const supervisorTeam = getSupervisorTeam()}
 					
 					<!-- Team Summary at Top -->
 					{#if supervisorTeam.length > 0}
@@ -2210,7 +2459,7 @@
 					{/if}
 				{:else}
 					<!-- Manager's Organization Overview -->
-					{@const directSupervisors = getDirectSupervisors(teamModalUser.id)}
+					{@const directSupervisors = getDirectSupervisors()}
 					
 					<!-- Manager Team Summary moved to top -->
 					<div class="mb-8 bg-gray-50 rounded-lg p-4">
@@ -2222,13 +2471,13 @@
 							</div>
 							<div class="bg-white rounded p-3">
 								<div class="text-2xl font-bold text-green-600">
-									{directSupervisors.reduce((total, sup) => total + getSupervisorTeam(sup.id).length, 0)}
+									{teamData?.teamMembers ? teamData.teamMembers.filter((m: any) => m.role === 'Frontline' || m.role === 'Support').length : 0}
 								</div>
 								<div class="text-xs text-gray-600">Team Members</div>
 							</div>
 							<div class="bg-white rounded p-3">
 								<div class="text-2xl font-bold text-purple-600">
-									{directSupervisors.length + directSupervisors.reduce((total, sup) => total + getSupervisorTeam(sup.id).length, 0) + 1}
+									{teamData?.teamMembers ? teamData.teamMembers.length + 1 : 1}
 								</div>
 								<div class="text-xs text-gray-600">Total People</div>
 							</div>
@@ -2267,7 +2516,7 @@
 							<div class="flex justify-center">
 								<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 max-w-6xl">
 								{#each directSupervisors as supervisor}
-									{@const supervisorTeamCount = getSupervisorTeam(supervisor.id).length}
+									{@const supervisorTeamCount = teamData?.teamMembers ? teamData.teamMembers.filter((m: any) => m.supervisorId === supervisor.id).length : 0}
 									<button
 										onclick={() => navigateToSupervisor(supervisor)}
 										class="bg-emerald-100 border border-emerald-300 rounded-lg p-3 text-center hover:bg-emerald-200 transition-colors cursor-pointer group min-w-[180px]"
@@ -2305,7 +2554,7 @@
 			<!-- Footer -->
 			<div class="flex justify-end p-6 border-t border-gray-200">
 				<button
-					onclick={() => showTeamModal = false}
+					onclick={() => closeModal('team')}
 					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
 				>
 					Close
@@ -2322,8 +2571,8 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showAddUserModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showAddUserModal = false)}
+		onclick={() => closeModal('add')}
+		onkeydown={(e) => e.key === 'Escape' && closeModal('add')}
 	>
 		<div 
 			class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" 
@@ -2486,16 +2735,23 @@
 					<!-- Individual Add Footer -->
 					<div class="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
 						<button
-							onclick={() => showAddUserModal = false}
+							onclick={() => closeModal('add')}
 							class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+							disabled={isAnyLoading()}
 						>
 							Cancel
 						</button>
 						<button
 							onclick={addIndividualUser}
-							class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+							disabled={loadingCreate}
+							class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 						>
-							Add User
+							{#if loadingCreate}
+								<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+								Creating...
+							{:else}
+								Add User
+							{/if}
 						</button>
 					</div>
 				{:else}
@@ -2654,9 +2910,15 @@
 				{#if bulkData.valid.length > 0}
 					<button
 						onclick={processBulkUpload}
-						class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+						disabled={loadingBulk}
+						class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 					>
-						Add {bulkData.valid.length} Valid Users
+						{#if loadingBulk}
+							<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+							Creating {bulkData.valid.length} Users...
+						{:else}
+							Add {bulkData.valid.length} Valid Users
+						{/if}
 					</button>
 				{/if}
 			</div>
@@ -2665,3 +2927,5 @@
 {/if}
 
 </div>
+
+<svelte:window onkeydown={handleKeydown} />

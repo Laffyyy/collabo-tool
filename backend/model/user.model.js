@@ -825,11 +825,11 @@ class UserModel {
       LEFT JOIN tblusers s ON ur.dsupervisorid = s.did
       LEFT JOIN tblusers m ON ur.dmanagerid = m.did
       LEFT JOIN tblorganizationalunits ou ON ur.douid = ou.did
-      WHERE ur.dmanagerid = $1 AND u.daccountstatus = $2
+      WHERE ur.dmanagerid = $1 AND u.daccountstatus != $2
       ORDER BY r.dname DESC, u.dfirstname, u.dlastname
     `;
 
-    const result = await this.pool.query(query, [managerId, 'active']);
+    const result = await this.pool.query(query, [managerId, 'deleted']);
     return result.rows.map(user => this.formatUserForManagement(user));
   }
 
@@ -856,11 +856,11 @@ class UserModel {
       LEFT JOIN tblusers s ON ur.dsupervisorid = s.did
       LEFT JOIN tblusers m ON ur.dmanagerid = m.did
       LEFT JOIN tblorganizationalunits ou ON ur.douid = ou.did
-      WHERE ur.dsupervisorid = $1 AND u.daccountstatus = $2
+      WHERE ur.dsupervisorid = $1 AND u.daccountstatus != $2
       ORDER BY r.dname, u.dfirstname, u.dlastname
     `;
 
-    const result = await this.pool.query(query, [supervisorId, 'active']);
+    const result = await this.pool.query(query, [supervisorId, 'deleted']);
     return result.rows.map(user => this.formatUserForManagement(user));
   }
 
