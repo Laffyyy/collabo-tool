@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Radio, Search, Eye, Trash2, Clock, Users, BarChart3, Calendar, Send, CheckCircle, Archive, TrendingUp, AlertTriangle, Ban, Flag, Undo2, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+  import { API_CONFIG } from '$lib/api/config';
+  import { onMount } from 'svelte';
 
   interface Broadcast {
     id: string;
@@ -9,7 +11,7 @@
     priority: 'low' | 'medium' | 'high';
     targetRoles: string[];
     targetOUs: string[];
-    createdBy: string;
+    createdByEmail: string;
     createdAt: Date;
     scheduledFor?: Date;
     sentAt?: Date;
@@ -40,222 +42,60 @@
     action: () => void;
   } | null>(null);
 
-  // Mock broadcast data
-  const mockBroadcasts: Broadcast[] = [
-    // Sent broadcasts
-    {
-      id: '1',
-      title: 'Emergency Maintenance Notice',
-      content: 'System maintenance will be performed tonight from 11 PM to 3 AM. Please save your work and log out before 11 PM to avoid data loss.',
-      priority: 'high',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'admin@company.com',
-      createdAt: new Date('2024-01-15T14:30:00'),
-      sentAt: new Date('2024-01-15T14:35:00'),
-      status: 'sent',
-      acknowledgmentRequired: true,
-      acknowledgmentCount: 145,
-      totalRecipients: 200,
-      broadcastStatus: 'done',
-    },
-    {
-      id: '7',
-      title: 'Security Policy Update',
-      content: 'New security protocols are now in effect. All employees must use two-factor authentication for system access.',
-      priority: 'high',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'security@company.com',
-      createdAt: new Date('2024-01-14T09:00:00'),
-      sentAt: new Date('2024-01-14T09:15:00'),
-      status: 'sent',
-      acknowledgmentRequired: true,
-      acknowledgmentCount: 180,
-      totalRecipients: 200,
-      broadcastStatus: 'active',
-    },
-    {
-      id: '8',
-      title: 'Team Lunch Announcement',
-      content: 'Join us for the monthly team lunch this Friday at 12:30 PM in the cafeteria. RSVP by Thursday.',
-      priority: 'low',
-      targetRoles: ['all'],
-      targetOUs: ['Engineering', 'Sales'],
-      createdBy: 'hr@company.com',
-      createdAt: new Date('2024-01-13T11:00:00'),
-      sentAt: new Date('2024-01-13T11:05:00'),
-      status: 'sent',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 75,
-      totalRecipients: 120,
-      broadcastStatus: 'done',
-    },
-    // Scheduled broadcasts
-    {
-      id: '2',
-      title: 'Q1 Team Meeting',
-      content: 'All hands meeting scheduled for next Friday at 2 PM in the main conference room. We will discuss quarterly goals and project updates.',
-      priority: 'medium',
-      targetRoles: ['manager', 'supervisor'],
-      targetOUs: ['Engineering', 'Sales'],
-      createdBy: 'manager@company.com',
-      createdAt: new Date('2024-01-15T10:00:00'),
-      scheduledFor: new Date('2024-01-20T14:00:00'),
-      status: 'scheduled',
-      acknowledgmentRequired: true,
-      acknowledgmentCount: 0,
-      totalRecipients: 45,
-      eventDate: new Date('2024-01-26T14:00:00'),
-      broadcastStatus: 'active',
-    },
-    {
-      id: '9',
-      title: 'Performance Review Reminder',
-      content: 'Annual performance reviews are scheduled to begin next month. Please prepare your self-assessments and goal documentation.',
-      priority: 'medium',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'hr@company.com',
-      createdAt: new Date('2024-01-15T15:00:00'),
-      scheduledFor: new Date('2024-01-22T09:00:00'),
-      status: 'scheduled',
-      acknowledgmentRequired: true,
-      acknowledgmentCount: 0,
-      totalRecipients: 200,
-      broadcastStatus: 'active',
-    },
-    {
-      id: '10',
-      title: 'Holiday Schedule Update',
-      content: 'Updated holiday schedule for 2024 has been published. Please review the calendar and plan your time off accordingly.',
-      priority: 'low',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'hr@company.com',
-      createdAt: new Date('2024-01-16T10:00:00'),
-      scheduledFor: new Date('2024-01-25T08:00:00'),
-      status: 'scheduled',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 0,
-      totalRecipients: 200,
-      broadcastStatus: 'active',
-    },
-    // Archived broadcasts
-    {
-      id: '5',
-      title: 'Old Company Announcement',
-      content: 'This is an old announcement that has been archived. Previous quarter results and achievements were discussed.',
-      priority: 'low',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'admin@company.com',
-      createdAt: new Date('2023-12-01T12:00:00'),
-      sentAt: new Date('2023-12-01T12:05:00'),
-      status: 'archived',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 180,
-      totalRecipients: 200,
-      broadcastStatus: 'done',
-    },
-    {
-      id: '11',
-      title: 'Completed Project Milestone',
-      content: 'Phase 1 of the digital transformation project has been successfully completed. Thank you to all team members for their hard work.',
-      priority: 'medium',
-      targetRoles: ['all'],
-      targetOUs: ['Engineering', 'Product'],
-      createdBy: 'project@company.com',
-      createdAt: new Date('2023-11-15T14:00:00'),
-      sentAt: new Date('2023-11-15T14:05:00'),
-      status: 'archived',
-      acknowledgmentRequired: true,
-      acknowledgmentCount: 95,
-      totalRecipients: 100,
-      broadcastStatus: 'done',
-    },
-    {
-      id: '12',
-      title: 'Office Relocation Notice',
-      content: 'The Marketing department has successfully relocated to the new building. All meetings will now be held in the new conference rooms.',
-      priority: 'medium',
-      targetRoles: ['all'],
-      targetOUs: ['Marketing', 'Sales'],
-      createdBy: 'facilities@company.com',
-      createdAt: new Date('2023-10-20T09:00:00'),
-      sentAt: new Date('2023-10-20T09:15:00'),
-      status: 'archived',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 67,
-      totalRecipients: 80,
-      broadcastStatus: 'done',
-    },
-    // Reported broadcasts
-    {
-      id: '4',
-      title: 'Inappropriate Content Broadcast',
-      content: 'This broadcast contains inappropriate content that violates company policy and professional communication standards.',
-      priority: 'medium',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'user@company.com',
-      createdAt: new Date('2024-01-10T16:00:00'),
-      sentAt: new Date('2024-01-10T16:05:00'),
-      status: 'sent',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 15,
-      totalRecipients: 200,
-      isReported: true,
-      reportReason: 'Contains inappropriate language and violates company communication policy. The message includes unprofessional content that is not suitable for workplace communication.',
-      reportedBy: 'supervisor@company.com',
-      reportedAt: new Date('2024-01-10T17:00:00'),
-      broadcastStatus: 'active',
-    },
-    {
-      id: '13',
-      title: 'Misleading Information Alert',
-      content: 'False information about company layoffs was shared in this broadcast, causing unnecessary panic among employees.',
-      priority: 'high',
-      targetRoles: ['all'],
-      targetOUs: ['all'],
-      createdBy: 'unknown@company.com',
-      createdAt: new Date('2024-01-12T13:00:00'),
-      sentAt: new Date('2024-01-12T13:05:00'),
-      status: 'sent',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 50,
-      totalRecipients: 200,
-      isReported: true,
-      reportReason: 'Spreading false information about company layoffs, causing employee distress and misinformation. Content is factually incorrect and damaging to company morale.',
-      reportedBy: 'hr@company.com',
-      reportedAt: new Date('2024-01-12T14:30:00'),
-      broadcastStatus: 'active',
-    },
-    {
-      id: '14',
-      title: 'Spam Content Broadcast',
-      content: 'This message contains repeated promotional content that is not relevant to company operations and clutters employee communications.',
-      priority: 'low',
-      targetRoles: ['frontline', 'support'],
-      targetOUs: ['Support', 'Operations'],
-      createdBy: 'external@company.com',
-      createdAt: new Date('2024-01-11T10:30:00'),
-      sentAt: new Date('2024-01-11T10:35:00'),
-      status: 'sent',
-      acknowledgmentRequired: false,
-      acknowledgmentCount: 5,
-      totalRecipients: 75,
-      isReported: true,
-      reportReason: 'Spam content that is irrelevant to company operations. The message appears to be promotional material that does not belong in our internal communication system.',
-      reportedBy: 'admin@company.com',
-      reportedAt: new Date('2024-01-11T12:00:00'),
-      broadcastStatus: 'active',
-    }
-  ];
+
+
+  let broadcasts = $state<Broadcast[]>([]);
+  let isLoading = $state(true);
+  let error = $state<string | null>(null);
+
+  let currentPage = $state(1);
+  const rowsPerPage = 6;
+
+async function fetchAllBroadcasts() {
+  isLoading = true;
+  try {
+    const res = await fetch(`${API_CONFIG.baseUrl}/api/v1/broadcasts/all`, { credentials: 'include' });
+    const data = await res.json();
+    if (!data.success) throw new Error('Failed to load broadcasts');
+    broadcasts = data.broadcasts.map((b: any) => ({
+      id: b.id,
+      title: b.title,
+      content: b.content,
+      priority: b.priority,
+      targetRoles: b.targetRoles || [],
+      targetOUs: b.targetOUs || [],
+      createdByEmail: b.createdByEmail || b.createdByEmail,
+      createdAt: new Date(b.createdAt),
+      scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
+      sentAt: b.sentAt ? new Date(b.sentAt) : undefined,
+      status: b.status,
+      acknowledgmentRequired: b.requiresAcknowledgment,
+      acknowledgmentCount: 0, // leave as 0 for now
+      totalRecipients: 0,     // leave as 0 for now
+      eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
+      isReported: b.isReported,
+      reportReason: b.reportReason,
+      reportedBy: b.reportedBy,
+      reportedAt: b.reportedAt ? new Date(b.reportedAt) : undefined,
+      broadcastStatus: b.isActive ? 'active' : 'done'
+    }));
+    error = null;
+  } catch (e: any) {
+    error = e.message;
+    broadcasts = [];
+  } finally {
+    isLoading = false;
+  }
+}
+
+// Call fetchAllBroadcasts when the page loads
+onMount(() => {
+  fetchAllBroadcasts();
+});
 
   // Computed values
   const filteredBroadcasts = $derived(() => {
-    return mockBroadcasts.filter(broadcast => {
+    return broadcasts.filter(broadcast => {
       const matchesTab = broadcast.status === activeTab || 
         (activeTab === 'sent' && broadcast.status === 'sent' && !broadcast.isReported) ||
         (activeTab === 'scheduled' && broadcast.status === 'scheduled') ||
@@ -265,7 +105,7 @@
       const matchesSearch = searchQuery === '' || 
         broadcast.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         broadcast.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        broadcast.createdBy.toLowerCase().includes(searchQuery.toLowerCase());
+        broadcast.createdByEmail.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesPriority = selectedPriority === 'all' || broadcast.priority === selectedPriority;
       const matchesStatus = selectedStatus === 'all' || broadcast.status === selectedStatus;
@@ -275,11 +115,11 @@
   });
 
   const tabCounts = $derived(() => {
-    const allFilteredBroadcasts = mockBroadcasts.filter(broadcast => {
+    const allFilteredBroadcasts = broadcasts.filter(broadcast => {
       const matchesSearch = searchQuery === '' || 
         broadcast.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         broadcast.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        broadcast.createdBy.toLowerCase().includes(searchQuery.toLowerCase());
+        broadcast.createdByEmail.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesPriority = selectedPriority === 'all' || broadcast.priority === selectedPriority;
       const matchesStatus = selectedStatus === 'all' || broadcast.status === selectedStatus;
@@ -363,9 +203,9 @@
 
   const archiveBroadcast = (broadcast: Broadcast) => {
     // In a real app, this would make an API call
-    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    const index = broadcasts.findIndex(b => b.id === broadcast.id);
     if (index !== -1) {
-      mockBroadcasts[index].status = 'archived';
+      broadcasts[index].status = 'archived';
     }
     showConfirmModal = false;
     alert('Broadcast archived successfully');
@@ -384,9 +224,9 @@
 
   const deleteBroadcast = (broadcast: Broadcast) => {
     // In a real app, this would make an API call
-    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    const index = broadcasts.findIndex(b => b.id === broadcast.id);
     if (index !== -1) {
-      mockBroadcasts.splice(index, 1);
+      broadcasts.splice(index, 1);
     }
     showConfirmModal = false;
     alert('Broadcast deleted successfully');
@@ -405,15 +245,15 @@
 
   const restoreBroadcast = (broadcast: Broadcast) => {
     // In a real app, this would make an API call
-    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    const index = broadcasts.findIndex(b => b.id === broadcast.id);
     if (index !== -1) {
       if (broadcast.isReported) {
-        mockBroadcasts[index].isReported = false;
-        mockBroadcasts[index].reportReason = undefined;
-        mockBroadcasts[index].reportedBy = undefined;
-        mockBroadcasts[index].reportedAt = undefined;
+        broadcasts[index].isReported = false;
+        broadcasts[index].reportReason = undefined;
+        broadcasts[index].reportedBy = undefined;
+        broadcasts[index].reportedAt = undefined;
       } else {
-        mockBroadcasts[index].status = 'sent';
+        broadcasts[index].status = 'sent';
       }
     }
     showConfirmModal = false;
@@ -433,9 +273,9 @@
 
   const permanentlyDeleteBroadcast = (broadcast: Broadcast) => {
     // In a real app, this would make an API call
-    const index = mockBroadcasts.findIndex(b => b.id === broadcast.id);
+    const index = broadcasts.findIndex(b => b.id === broadcast.id);
     if (index !== -1) {
-      mockBroadcasts.splice(index, 1);
+      broadcasts.splice(index, 1);
     }
     showConfirmModal = false;
     alert('Broadcast permanently deleted');
@@ -454,6 +294,22 @@
   const exportAnalytics = () => {
     alert('Exporting analytics data...');
   };
+
+
+
+  const paginatedBroadcasts = $derived(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredBroadcasts().slice(start, start + rowsPerPage);
+  });
+
+  const totalPages = $derived(() => Math.ceil(filteredBroadcasts().length / rowsPerPage));
+
+  function goToPage(page: number) {
+    if (page >= 1 && page <= totalPages()) {
+      currentPage = page;
+    }
+  }
+
 </script>
 
 <svelte:head>
@@ -583,7 +439,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                {#each paginatedBroadcasts() as broadcast (broadcast.id)}
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -592,7 +448,7 @@
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {broadcast.createdBy}
+                      {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
@@ -635,6 +491,38 @@
                 {/each}
               </tbody>
             </table>
+
+            {#if totalPages() > 1}
+            <div class="flex items-center justify-between mt-4">
+              <div class="text-sm text-gray-600">
+                Page {currentPage} of {totalPages()}
+              </div>
+              <div class="flex space-x-2">
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                {#each Array(totalPages()) as _, i}
+                  <button
+                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
+                    onclick={() => goToPage(i + 1)}
+                  >
+                    {i + 1}
+                  </button>
+                {/each}
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages()}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          {/if}
           </div>
         {:else if activeTab === 'scheduled'}
           <!-- Scheduled Tab -->
@@ -653,7 +541,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                {#each paginatedBroadcasts() as broadcast (broadcast.id)}
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -662,7 +550,7 @@
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {broadcast.createdBy}
+                      {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
@@ -712,6 +600,37 @@
                 {/each}
               </tbody>
             </table>
+            {#if totalPages() > 1}
+            <div class="flex items-center justify-between mt-4">
+              <div class="text-sm text-gray-600">
+                Page {currentPage} of {totalPages()}
+              </div>
+              <div class="flex space-x-2">
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                {#each Array(totalPages()) as _, i}
+                  <button
+                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
+                    onclick={() => goToPage(i + 1)}
+                  >
+                    {i + 1}
+                  </button>
+                {/each}
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages()}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          {/if}
           </div>
         {:else if activeTab === 'archived'}
           <!-- Archived Tab -->
@@ -730,7 +649,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                {#each paginatedBroadcasts() as broadcast (broadcast.id)}
                   <tr class="hover:bg-gray-50 bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -739,7 +658,7 @@
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {broadcast.createdBy}
+                      {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
@@ -782,6 +701,37 @@
                 {/each}
               </tbody>
             </table>
+            {#if totalPages() > 1}
+            <div class="flex items-center justify-between mt-4">
+              <div class="text-sm text-gray-600">
+                Page {currentPage} of {totalPages()}
+              </div>
+              <div class="flex space-x-2">
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                {#each Array(totalPages()) as _, i}
+                  <button
+                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
+                    onclick={() => goToPage(i + 1)}
+                  >
+                    {i + 1}
+                  </button>
+                {/each}
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages()}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          {/if}
           </div>
         {:else if activeTab === 'reported'}
           <!-- Reported Tab -->
@@ -801,7 +751,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredBroadcasts() as broadcast (broadcast.id)}
+                {#each paginatedBroadcasts() as broadcast (broadcast.id)}
                   <tr class="hover:bg-gray-50 bg-red-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -810,7 +760,7 @@
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {broadcast.createdBy}
+                      {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(broadcast.priority)}">
@@ -866,11 +816,42 @@
                 {/each}
               </tbody>
             </table>
+            {#if totalPages() > 1}
+            <div class="flex items-center justify-between mt-4">
+              <div class="text-sm text-gray-600">
+                Page {currentPage} of {totalPages()}
+              </div>
+              <div class="flex space-x-2">
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                {#each Array(totalPages()) as _, i}
+                  <button
+                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
+                    onclick={() => goToPage(i + 1)}
+                  >
+                    {i + 1}
+                  </button>
+                {/each}
+                <button
+                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
+                  onclick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages()}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          {/if}
           </div>
         {/if}
 
         <!-- Empty State -->
-        {#if filteredBroadcasts().length === 0}
+        {#if paginatedBroadcasts().length === 0}
           <div class="text-center py-12">
             <Radio class="mx-auto h-12 w-12 text-gray-400" />
             <h3 class="mt-2 text-sm font-medium text-gray-900">No broadcasts found</h3>
@@ -884,11 +865,15 @@
 {#if showBroadcastDetails && selectedBroadcast}
   <div 
     class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    tabindex="0"
     onclick={closeBroadcastDetails}
+    onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { closeBroadcastDetails(); } }}
   >
     <div 
       class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-      onclick={(e) => e.stopPropagation()}
+      role="document"
     >
       <!-- Modal Header -->
       <div class="flex items-center justify-between p-6 border-b border-gray-200">
@@ -909,12 +894,19 @@
         <!-- Title and Basic Info -->
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
-            <div class="text-lg font-semibold text-gray-900">{selectedBroadcast.title}</div>
+            <label for="broadcast-title" class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <input
+              id="broadcast-title"
+              type="text"
+              class="text-lg font-semibold text-gray-900 bg-transparent border-none p-0 m-0 focus:ring-0 focus:outline-none"
+              value={selectedBroadcast.title}
+              readonly
+              tabindex="-1"
+              aria-readonly="true"
+            />
           </div>
-          
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Content</label>
+            <span class="block text-sm font-medium text-gray-700 mb-2">Content</span>
             <div class="bg-gray-50 rounded-lg p-4 text-gray-900 leading-relaxed">
               {selectedBroadcast.content}
             </div>
@@ -924,42 +916,42 @@
         <!-- Broadcast Info Grid -->
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Created By</label>
-            <div class="text-gray-900">{selectedBroadcast.createdBy}</div>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Created By</span>
+            <div class="text-gray-900">{selectedBroadcast.createdByEmail}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Priority</span>
             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(selectedBroadcast.priority)}">
               {selectedBroadcast.priority}
             </span>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Status</span>
             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(selectedBroadcast.broadcastStatus || 'active')}">
               {selectedBroadcast.broadcastStatus || 'Active'}
             </span>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Recipients</label>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Recipients</span>
             <div class="text-gray-900">{selectedBroadcast.totalRecipients}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Acknowledgment Required</label>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Acknowledgment Required</span>
             <div class="text-gray-900">{selectedBroadcast.acknowledgmentRequired ? 'Yes' : 'No'}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Responses</label>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Responses</span>
             <div class="text-gray-900">{getAnsweredCount(selectedBroadcast)}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Created Date</label>
+            <span class="block text-sm font-medium text-gray-700 mb-1">Created Date</span>
             <div class="text-gray-900">{formatTimestamp(selectedBroadcast.createdAt)}</div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
+            <span class="block text-sm font-medium text-gray-700 mb-1">
               {selectedBroadcast.status === 'sent' ? 'Sent Date' : 
                selectedBroadcast.status === 'scheduled' ? 'Scheduled Date' : 'Status Date'}
-            </label>
+            </span>
             <div class="text-gray-900">
               {selectedBroadcast.sentAt ? formatTimestamp(selectedBroadcast.sentAt) :
                selectedBroadcast.scheduledFor ? formatTimestamp(selectedBroadcast.scheduledFor) :
@@ -971,7 +963,7 @@
         <!-- Target Information -->
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Target Roles</label>
+            <span class="block text-sm font-medium text-gray-700 mb-2">Target Roles</span>
             <div class="flex flex-wrap gap-2">
               {#each selectedBroadcast.targetRoles as role}
                 <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
@@ -981,7 +973,7 @@
             </div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Target Organization Units</label>
+            <span class="block text-sm font-medium text-gray-700 mb-2">Target Organization Units</span>
             <div class="flex flex-wrap gap-2">
               {#each selectedBroadcast.targetOUs as ou}
                 <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
@@ -1003,15 +995,15 @@
             <div class="bg-red-50 border border-red-200 rounded-lg p-4">
               <div class="grid grid-cols-1 gap-3">
                 <div>
-                  <label class="block text-sm font-medium text-red-700 mb-1">Reported By</label>
+                  <span class="block text-sm font-medium text-red-700 mb-1">Reported By</span>
                   <div class="text-red-900">{selectedBroadcast.reportedBy}</div>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-red-700 mb-1">Report Date</label>
+                  <span class="block text-sm font-medium text-red-700 mb-1">Report Date</span>
                   <div class="text-red-900">{selectedBroadcast.reportedAt ? formatTimestamp(selectedBroadcast.reportedAt) : 'N/A'}</div>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-red-700 mb-1">Report Reason</label>
+                  <span class="block text-sm font-medium text-red-700 mb-1">Report Reason</span>
                   <div class="text-red-900 bg-red-100 rounded-lg p-3 leading-relaxed">
                     {selectedBroadcast.reportReason || 'No reason provided'}
                   </div>
@@ -1024,7 +1016,6 @@
     </div>
   </div>
 {/if}
-
 <!-- Confirmation Modal -->
 {#if confirmAction}
   <ConfirmationModal

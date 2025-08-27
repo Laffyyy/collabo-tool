@@ -170,6 +170,29 @@ class RetrieveBroadcastController {
   }
 }
 
+async getAllBroadcasts(req, res, next) {
+  try {
+    const filters = {
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 50,
+      status: req.query.status,
+      priority: req.query.priority,
+      search: req.query.search,
+      includeDeleted: req.query.includeDeleted === 'true'
+    };
+    const result = await RetrieveBroadcastService.getAllBroadcasts(filters);
+    res.status(200).json({
+      success: true,
+      broadcasts: result.broadcasts,
+      statistics: result.statistics,
+      pagination: result.pagination
+    });
+  } catch (error) {
+    console.error('Controller error in getAllBroadcasts:', error);
+    next(error);
+  }
+}
+
 }
 
 module.exports = new RetrieveBroadcastController();

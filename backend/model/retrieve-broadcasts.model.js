@@ -185,7 +185,7 @@ class RetrieveBroadcastModel {
       title: broadcast.dtitle,
       content: broadcast.dcontent,
       priority: broadcast.dpriority,
-      createdBy: broadcast.dcreatedby,
+      createdByEmail: broadcast.createdby_email,
       requiresAcknowledgment: broadcast.drequiresacknowledgment || false,
       responseType: broadcast.dresponsetype || 'none',
       status: broadcast.dstatus || 'draft',
@@ -345,6 +345,71 @@ class RetrieveBroadcastModel {
   const { rows } = await this.pool.query(query, params);
   console.log('Retrieved broadcasts from DB:', rows);
   return this.formatBroadcasts(rows);
+}
+
+/**
+   * Get all broadcasts (admin)
+   * @param {Object} options - Query options (limit, offset, status, priority, includeDeleted)
+   * @returns {Promise<Array>} Array of broadcasts from database
+   */
+  async getAllBroadcasts(options = {}) {
+  const {
+    limit = 50,
+    offset = 0,
+    status = null,
+    priority = null,
+    includeDeleted = false
+  } = options;
+
+  try {
+    const whereConditions = [];
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (!includeDeleted) {
+      whereConditions.push(`b.dstatus != $${paramIndex}`);
+      queryParams.push('deleted');
+      paramIndex++;
+    }
+
+    if (status && status !== 'all') {
+      whereConditions.push(`b.dstatus = $${paramIndex}`);
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    if (priority && priority !== 'all') {
+      whereConditions.push(`b.dpriority = $${paramIndex}`);
+      queryParams.push(priority);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Join with tblusers to get the sender's email
+    const query = `
+      SELECT 
+        b.did, b.dtitle, b.dcontent, b.dpriority, b.dcreatedby, 
+        b.drequiresacknowledgment, b.dresponsetype, b.dstatus, b.dchoices,
+        b.tcreatedat, b.tscheduledfor, b.tsentat, b.teventdate, b.tenddate,
+        b.dreportreason, b.dreportedby, b.treportedat,
+        u.demail AS createdby_email
+      FROM tblbroadcasts b
+      LEFT JOIN tblusers u ON b.dcreatedby = u.did
+      ${whereClause}
+      ORDER BY b.tcreatedat DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    queryParams.push(limit, offset);
+
+    const result = await this.pool.query(query, queryParams);
+
+    return this.formatBroadcasts(result.rows);
+  } catch (error) {
+    console.error('Database error in getAllBroadcasts:', error);
+    throw new Error(`Failed to fetch all broadcasts: ${error.message}`);
+  }
 }
 
 }

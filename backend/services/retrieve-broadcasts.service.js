@@ -181,6 +181,73 @@ class RetrieveBroadcastService {
   }
 }
 
+  /**
+   * Get all broadcasts (admin)
+   * @param {Object} filters - Filter options
+   * @returns {Promise<Object>} Broadcasts and metadata
+   */
+  async getAllBroadcasts(filters = {}) {
+    const {
+      page = 1,
+      limit = 50,
+      status,
+      priority,
+      search,
+      includeDeleted = false
+    } = filters;
+
+    const offset = (page - 1) * limit;
+
+    try {
+      // Get all broadcasts from database
+      const broadcasts = await this.broadcastModel.getAllBroadcasts({
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        status,
+        priority,
+        includeDeleted
+      });
+
+      // Apply search filter (in-memory for now)
+      let filteredBroadcasts = broadcasts;
+      if (search && search.trim()) {
+        const searchTerm = search.toLowerCase().trim();
+        filteredBroadcasts = broadcasts.filter(broadcast =>
+          broadcast.title.toLowerCase().includes(searchTerm) ||
+          broadcast.content.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // Pagination info (for now, just use filtered count)
+      const totalItems = filteredBroadcasts.length;
+      const totalPages = Math.ceil(totalItems / limit);
+
+      // Statistics (optional, can be expanded)
+      const statistics = {
+        total: totalItems
+      };
+
+      return {
+        broadcasts: filteredBroadcasts,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalItems,
+          itemsPerPage: parseInt(limit)
+        },
+        statistics,
+        filters: {
+          status,
+          priority,
+          search
+        }
+      };
+    } catch (error) {
+      console.error('Service error in getAllBroadcasts:', error);
+      throw new Error(`Failed to retrieve all broadcasts: ${error.message}`);
+    }
+  }
+
 }
 
 module.exports = new RetrieveBroadcastService();
