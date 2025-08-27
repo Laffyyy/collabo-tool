@@ -2,10 +2,10 @@
   import { toastStore } from '$lib/stores/toast.svelte';
   import Toast from '$lib/components/Toast.svelte';
   
-  let currentToast = $derived($toastStore.currentToast);
+  let currentToast = $derived(toastStore.currentToast);
   
   function handleDismiss(id: string) {
-    $toastStore.dismiss(id);
+    toastStore.dismiss(id);
   }
 </script>
 

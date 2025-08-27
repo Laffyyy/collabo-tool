@@ -1,0 +1,315 @@
+{
+  "info": {
+    "name": "Collabo Tool Backend API Tests - NoAuth",
+    "description": "Testing collection without authentication to debug server errors",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has ok field', function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property('ok', true);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Users (No Auth)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test('Response contains users array', function () {",
+              "        const responseJson = pm.response.json();",
+              "        pm.expect(responseJson.data).to.have.property('users');",
+              "        pm.expect(responseJson.data.users).to.be.an('array');",
+              "    });",
+              "",
+              "    pm.test('Response contains pagination', function () {",
+              "        const responseJson = pm.response.json();",
+              "        pm.expect(responseJson.data).to.have.property('pagination');",
+              "    });",
+              "} else {",
+              "    console.log('Error response:', pm.response.text());",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users?page=1&limit=10&status=first-time&sortOrder=asc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "users"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "status",
+              "value": "first-time"
+            },
+            {
+              "key": "sortOrder",
+              "value": "asc"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Users (Active Status)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test('Response contains users array', function () {",
+              "        const responseJson = pm.response.json();",
+              "        pm.expect(responseJson.data).to.have.property('users');",
+              "        pm.expect(responseJson.data.users).to.be.an('array');",
+              "    });",
+              "} else {",
+              "    console.log('Error response:', pm.response.text());",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users?page=1&limit=10&status=active&sortOrder=asc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "users"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "status",
+              "value": "active"
+            },
+            {
+              "key": "sortOrder",
+              "value": "asc"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Users (No Filters)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test('Response contains users array', function () {",
+              "        const responseJson = pm.response.json();",
+              "        pm.expect(responseJson.data).to.have.property('users');",
+              "        pm.expect(responseJson.data.users).to.be.an('array');",
+              "    });",
+              "",
+              "    console.log('Users found:', responseJson.data.users.length);",
+              "    console.log('Sample user:', responseJson.data.users[0]);",
+              "} else {",
+              "    console.log('Error response:', pm.response.text());",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users?page=1&limit=5",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "users"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Organizational Units (No Auth)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test('Response contains ous array', function () {",
+              "        const responseJson = pm.response.json();",
+              "        pm.expect(responseJson.data).to.have.property('ous');",
+              "        pm.expect(responseJson.data.ous).to.be.an('array');",
+              "    });",
+              "",
+              "    console.log('OUs found:', responseJson.data.ous.length);",
+              "} else {",
+              "    console.log('Error response:', pm.response.text());",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users/reference/ous",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "users",
+            "reference",
+            "ous"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Hierarchy Options (No Auth)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "    pm.test('Response contains supervisors and managers', function () {",
+              "        const responseJson = pm.response.json();",
+              "        pm.expect(responseJson.data).to.have.property('supervisors');",
+              "        pm.expect(responseJson.data).to.have.property('managers');",
+              "    });",
+              "} else {",
+              "    console.log('Error response:', pm.response.text());",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users/reference/hierarchy",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "users",
+            "reference",
+            "hierarchy"
+          ]
+        }
+      }
+    }
+  ]
+}

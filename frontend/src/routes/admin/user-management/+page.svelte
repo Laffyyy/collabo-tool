@@ -8,6 +8,26 @@
 		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key,
 		UserPlus, Activity, Headphones, Crown, LockKeyhole, ArrowUpDown, ArrowUp, ArrowDown
 	} from 'lucide-svelte';
+	
+	// Import API functions
+	import {
+		getUsers,
+		createUser,
+		updateUser,
+		changeUserPassword,
+		toggleUserLock,
+		toggleUserActivation,
+		bulkLockUsers,
+		bulkActivateUsers,
+		bulkCreateUsers,
+		getOrganizationalUnits,
+		getHierarchyOptions,
+		getUserTeam,
+		sendPasswordReset,
+		type CreateUserRequest,
+		type UpdateUserRequest
+	} from '$lib/api/user-management';
+	import type { ApiUser } from '$lib/api/types';
 
 	// TypeScript interfaces
 	interface UserData {
@@ -21,6 +41,8 @@
 		type: 'user' | 'admin';
 		supervisorId?: string;
 		managerId?: string;
+		supervisorName?: string;
+		managerName?: string;
 	}
 
 	interface BulkUserData {
@@ -57,6 +79,10 @@
 	let selectedStatus = $state<string>('all');
 	let currentPage = $state<number>(1);
 	let itemsPerPage = 10;
+	let totalUsers = $state<number>(0);
+	let totalPages = $state<number>(1);
+	let loading = $state<boolean>(false);
+	let error = $state<string>('');
 	
 	// Sorting states
 	let sortColumn = $state<string>('');
@@ -120,15 +146,23 @@
 	let showPasswordFields = $state<boolean>(false);
 	
 	// Options
-	const ouOptions = [
-		'Engineering',
-		'Marketing', 
-		'Sales',
-		'Support',
-		'HR',
-		'Finance',
-		'IT'
-	];
+	let ouOptions = $state<string[]>([]);
+	let hierarchyOptions = $state<{ supervisors: ApiUser[]; managers: ApiUser[] }>({
+		supervisors: [],
+		managers: []
+	});
+	
+	// Tab counts - loaded independently for each tab
+	let tabCounts = $state({
+		frontline: 0,
+		support: 0,
+		supervisor: 0,
+		manager: 0,
+		admin: 0,
+		deactivated: 0,
+		locked: 0,
+		firstTime: 0
+	});
 	
 	const roleOptions = [
 		'Manager',
@@ -148,308 +182,338 @@
 
 	// Sample data
 	onMount(() => {
-		// Base users
-		const baseUsers: UserData[] = [
-			// Admin
-			{
-				id: '1',
-				employeeId: 'EMP001',
-				name: 'Alice Johnson',
-				email: 'alice.johnson@company.com',
-				ou: 'N/A',
-				role: 'Admin',
-				status: 'Active',
-				type: 'admin'
-			},
-			// Managers
-			{
-				id: '2',
-				employeeId: 'EMP002',
-				name: 'John Doe',
-				email: 'john.doe@company.com',
-				ou: 'Engineering',
-				role: 'Manager',
-				status: 'Active',
-				type: 'user'
-			},
-			{
-				id: '3',
-				employeeId: 'EMP003',
-				name: 'Sarah Wilson',
-				email: 'sarah.wilson@company.com',
-				ou: 'Sales',
-				role: 'Manager',
-				status: 'Active',
-				type: 'user'
-			}
-		];
-
-		// Generate hierarchical users
-		const generatedUsers: UserData[] = [];
-		let currentId = 4;
-		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance'];
-		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time', 'Locked', 'Deactivated']; // Added more variety
-		const frontlineRoles = ['Frontline', 'Support'];
-		
-		// Names for variety
-		const firstNames = ['Michael', 'Jennifer', 'David', 'Lisa', 'Robert', 'Karen', 'James', 'Susan', 'William', 'Jessica', 
-			'Thomas', 'Nancy', 'Daniel', 'Betty', 'Matthew', 'Helen', 'Anthony', 'Sandra', 'Mark', 'Donna',
-			'Donald', 'Carol', 'Steven', 'Ruth', 'Paul', 'Sharon', 'Andrew', 'Michelle', 'Joshua', 'Laura',
-			'Kenneth', 'Sarah', 'Kevin', 'Kimberly', 'Brian', 'Deborah', 'George', 'Dorothy', 'Edward', 'Lisa',
-			'Ronald', 'Nancy', 'Timothy', 'Karen', 'Jason', 'Betty', 'Jeffrey', 'Helen', 'Ryan', 'Sandra'];
-		
-		const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
-			'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
-			'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson',
-			'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores'];
-
-		// Get managers for supervisor assignment
-		const managers = baseUsers.filter(u => u.role === 'Manager');
-		
-		// Add some specific locked and deactivated users for demo purposes
-		const lockedAndDeactivatedUsers: UserData[] = [
-			{
-				id: 'locked-1',
-				employeeId: 'EMP900',
-				name: 'Michael Thompson',
-				email: 'michael.thompson@company.com',
-				ou: 'Engineering',
-				role: 'Frontline',
-				status: 'Locked',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[0]?.id
-			},
-			{
-				id: 'locked-2',
-				employeeId: 'EMP901',
-				name: 'Sarah Davis',
-				email: 'sarah.davis@company.com',
-				ou: 'Sales',
-				role: 'Support',
-				status: 'Locked',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[1]?.id
-			},
-			{
-				id: 'deactivated-1',
-				employeeId: 'EMP950',
-				name: 'Robert Johnson',
-				email: 'robert.johnson@company.com',
-				ou: 'Marketing',
-				role: 'Supervisor',
-				status: 'Deactivated',
-				type: 'user',
-				managerId: managers[0]?.id
-			},
-			{
-				id: 'deactivated-2',
-				employeeId: 'EMP951',
-				name: 'Lisa Wilson',
-				email: 'lisa.wilson@company.com',
-				ou: 'HR',
-				role: 'Frontline',
-				status: 'Deactivated',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[0]?.id
-			},
-			{
-				id: 'deactivated-3',
-				employeeId: 'EMP952',
-				name: 'David Brown',
-				email: 'david.brown@company.com',
-				ou: 'Finance',
-				role: 'Support',
-				status: 'Deactivated',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[0]?.id
-			}
-		];
-		
-		generatedUsers.push(...lockedAndDeactivatedUsers);
-		
-		// Generate supervisors (5 per manager)
-		const supervisors: UserData[] = [];
-		managers.forEach((manager, managerIndex) => {
-			for (let i = 0; i < 5; i++) {
-				const firstName = firstNames[currentId % firstNames.length];
-				const lastName = lastNames[(currentId + managerIndex * 5 + i) % lastNames.length];
-				
-				const supervisor: UserData = {
-					id: currentId.toString(),
-					employeeId: `SUP${String(currentId).padStart(3, '0')}`,
-					name: `${firstName} ${lastName}`,
-					email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
-					ou: manager.ou,
-					role: 'Supervisor',
-					status: sampleStatuses[currentId % sampleStatuses.length],
-					type: 'user',
-					managerId: manager.id
-				};
-				
-				supervisors.push(supervisor);
-				generatedUsers.push(supervisor);
-				currentId++;
-			}
-		});
-
-		// Generate frontline/support users (20 per supervisor)
-		supervisors.forEach((supervisor, supervisorIndex) => {
-			for (let i = 0; i < 20; i++) {
-				const firstName = firstNames[(currentId + i) % firstNames.length];
-				const lastName = lastNames[(currentId + supervisorIndex * 20 + i) % lastNames.length];
-				const role = frontlineRoles[i % frontlineRoles.length];
-				
-				const frontlineUser: UserData = {
-					id: currentId.toString(),
-					employeeId: `EMP${String(currentId).padStart(3, '0')}`,
-					name: `${firstName} ${lastName}`,
-					email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
-					ou: supervisor.ou,
-					role: role,
-					status: sampleStatuses[currentId % sampleStatuses.length],
-					type: 'user',
-					supervisorId: supervisor.id,
-					managerId: supervisor.managerId
-				};
-				
-				generatedUsers.push(frontlineUser);
-				currentId++;
-			}
-		});
-
-		// Combine base users with generated users
-		users = [...baseUsers, ...generatedUsers];
-		
-		filterUsers();
+		loadUsers();
+		loadOUs();
+		loadHierarchyOptions();
+		loadTabCounts();
 	});
 
-	// Computed values - Dynamic tab counts based on current filters
-	const tabCounts = $derived({
-		frontline: (() => {
-			if (currentTab === 'frontline') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Frontline' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+	// Load all tab counts
+	async function loadTabCounts() {
+		try {
+			// Load counts for each tab by making separate API calls
+			const [
+				frontlineResponse,
+				supportResponse,
+				supervisorResponse,
+				managerResponse,
+				adminResponse,
+				deactivatedResponse,
+				lockedResponse,
+				firstTimeResponse
+			] = await Promise.all([
+				getUsers({ role: 'Frontline', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Support', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Supervisor', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Manager', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Admin', status: 'active', limit: 1, page: 1 }),
+				getUsers({ status: 'deactivated', limit: 1, page: 1 }),
+				getUsers({ status: 'locked', limit: 1, page: 1 }),
+				getUsers({ status: 'first-time', limit: 1, page: 1 })
+			]);
+
+			// Update tab counts with total user counts from pagination
+			tabCounts.frontline = frontlineResponse.ok ? frontlineResponse.data.pagination.totalUsers : 0;
+			tabCounts.support = supportResponse.ok ? supportResponse.data.pagination.totalUsers : 0;
+			tabCounts.supervisor = supervisorResponse.ok ? supervisorResponse.data.pagination.totalUsers : 0;
+			tabCounts.manager = managerResponse.ok ? managerResponse.data.pagination.totalUsers : 0;
+			tabCounts.admin = adminResponse.ok ? adminResponse.data.pagination.totalUsers : 0;
+			tabCounts.deactivated = deactivatedResponse.ok ? deactivatedResponse.data.pagination.totalUsers : 0;
+			tabCounts.locked = lockedResponse.ok ? lockedResponse.data.pagination.totalUsers : 0;
+			tabCounts.firstTime = firstTimeResponse.ok ? firstTimeResponse.data.pagination.totalUsers : 0;
+		} catch (err) {
+			console.error('Failed to load tab counts:', err);
+		}
+	}
+
+	// Load organizational units
+	async function loadOUs() {
+		try {
+			const response = await getOrganizationalUnits();
+			if (response.ok) {
+				ouOptions = response.data.ous.map((ou: any) => ou.name);
 			}
-			return filtered.length;
-		})(),
-		support: (() => {
-			if (currentTab === 'support') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Support' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		} catch (err) {
+			console.error('Failed to load organizational units:', err);
+		}
+	}
+
+	// Load hierarchy options (supervisors and managers)
+	async function loadHierarchyOptions(filters = {}) {
+		try {
+			const response = await getHierarchyOptions(filters);
+			if (response.ok) {
+				hierarchyOptions = response.data;
 			}
-			return filtered.length;
-		})(),
-		supervisor: (() => {
-			if (currentTab === 'supervisor') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Supervisor' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		} catch (err) {
+			console.error('Failed to load hierarchy options:', err);
+		}
+	}
+
+	// Get available supervisors based on current form role and selected manager (for OU filtering)
+	function getAvailableSupervisors() {
+		if (individualForm.role === 'Frontline' || individualForm.role === 'Support') {
+			// For Frontline/Support, filter supervisors by manager's OUs if manager is selected
+			if (individualForm.managerId) {
+				const selectedManager = hierarchyOptions.managers.find(m => m.id === individualForm.managerId);
+				if (selectedManager) {
+					// Return supervisors that work under this manager
+					return hierarchyOptions.supervisors.filter(s => s.managerId === individualForm.managerId);
+				}
 			}
-			return filtered.length;
-		})(),
-		manager: (() => {
-			if (currentTab === 'manager') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Manager' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+			// If no manager selected, return all supervisors
+			return hierarchyOptions.supervisors;
+		}
+		return [];
+	}
+
+	// Get available managers based on current form role
+	function getAvailableManagers() {
+		if (individualForm.role === 'Supervisor') {
+			return hierarchyOptions.managers;
+		}
+		return [];
+	}
+
+	// Get available OUs based on role and selected supervisor/manager
+	function getAvailableOUs() {
+		if (individualForm.role === 'Manager' || individualForm.role === 'Admin') {
+			// Managers and Admins can select any OU
+			return ouOptions;
+		}
+		
+		if (individualForm.role === 'Supervisor' && individualForm.managerId) {
+			// Supervisors can only select OUs that their manager manages
+			const selectedManager = hierarchyOptions.managers.find(m => m.id === individualForm.managerId);
+			if (selectedManager && selectedManager.ou) {
+				// Return OUs managed by the selected manager (for now, just their OU)
+				return ouOptions.filter(ou => ou === selectedManager.ou);
 			}
-			return filtered.length;
-		})(),
-		admin: (() => {
-			if (currentTab === 'admin') return filteredUsers.length;
-			let filtered = users.filter(u => u.type === 'admin' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		}
+		
+		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
+			// Frontline/Support can only select OUs that their supervisor manages
+			const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.ou) {
+				return ouOptions.filter(ou => ou === selectedSupervisor.ou);
 			}
-			return filtered.length;
-		})(),
-		deactivated: (() => {
-			if (currentTab === 'deactivated') return filteredUsers.length;
-			let filtered = users.filter(u => u.status === 'Deactivated');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		}
+		
+		return ouOptions; // Default to all OUs if no constraints
+	}
+
+	// Handle role change to reset dependent fields and load appropriate options
+	function handleRoleChange() {
+		// Reset dependent fields when role changes
+		individualForm.supervisorId = '';
+		individualForm.managerId = '';
+		individualForm.ou = '';
+		
+		// Load hierarchy options if needed
+		if (individualForm.role === 'Frontline' || individualForm.role === 'Support' || individualForm.role === 'Supervisor') {
+			loadHierarchyOptions();
+		}
+	}
+
+	// Handle manager selection change (for supervisor role)
+	function handleManagerChange() {
+		// Reset OU when manager changes
+		individualForm.ou = '';
+		
+		// For Frontline/Support, reset supervisor when manager changes
+		if (individualForm.role === 'Frontline' || individualForm.role === 'Support') {
+			individualForm.supervisorId = '';
+		}
+	}
+
+	// Handle supervisor selection change (for frontline/support roles)
+	function handleSupervisorChange() {
+		// Reset OU when supervisor changes
+		individualForm.ou = '';
+		
+		// Auto-assign manager based on supervisor selection
+		if (individualForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.managerId) {
+				individualForm.managerId = selectedSupervisor.managerId;
 			}
-			return filtered.length;
-		})(),
-		locked: (() => {
-			if (currentTab === 'locked') return filteredUsers.length;
-			let filtered = users.filter(u => u.status === 'Locked');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		} else {
+			individualForm.managerId = '';
+		}
+	}
+
+	// Similar functions for edit form
+	function getAvailableSupervisorsEdit() {
+		if (editForm.role === 'Frontline' || editForm.role === 'Support') {
+			if (editForm.managerId) {
+				const selectedManager = hierarchyOptions.managers.find(m => m.id === editForm.managerId);
+				if (selectedManager) {
+					return hierarchyOptions.supervisors.filter(s => s.managerId === editForm.managerId);
+				}
 			}
-			return filtered.length;
-		})(),
-		firstTime: (() => {
-			if (currentTab === 'first-time') return filteredUsers.length;
-			let filtered = users.filter(u => u.status === 'First-time');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+			return hierarchyOptions.supervisors;
+		}
+		return [];
+	}
+
+	function getAvailableManagersEdit() {
+		if (editForm.role === 'Supervisor') {
+			return hierarchyOptions.managers;
+		}
+		return [];
+	}
+
+	function getAvailableOUsEdit() {
+		if (editForm.role === 'Manager' || editForm.role === 'Admin') {
+			return ouOptions;
+		}
+		
+		if (editForm.role === 'Supervisor' && editForm.managerId) {
+			const selectedManager = hierarchyOptions.managers.find(m => m.id === editForm.managerId);
+			if (selectedManager && selectedManager.ou) {
+				return ouOptions.filter(ou => ou === selectedManager.ou);
 			}
-			return filtered.length;
-		})()
+		}
+		
+		if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisorsEdit().find(s => s.id === editForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.ou) {
+				return ouOptions.filter(ou => ou === selectedSupervisor.ou);
+			}
+		}
+		
+		return ouOptions;
+	}
+
+	function handleRoleChangeEdit() {
+		editForm.supervisorId = '';
+		editForm.managerId = '';
+		editForm.ou = '';
+		
+		if (editForm.role === 'Frontline' || editForm.role === 'Support' || editForm.role === 'Supervisor') {
+			loadHierarchyOptions();
+		}
+	}
+
+	function handleManagerChangeEdit() {
+		editForm.ou = '';
+		if (editForm.role === 'Frontline' || editForm.role === 'Support') {
+			editForm.supervisorId = '';
+		}
+	}
+
+	function handleSupervisorChangeEdit() {
+		editForm.ou = '';
+		if (editForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisorsEdit().find(s => s.id === editForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.managerId) {
+				editForm.managerId = selectedSupervisor.managerId;
+			}
+		} else {
+			editForm.managerId = '';
+		}
+	}
+
+	// Reactive statements for filters
+	$effect(() => {
+		if (searchQuery !== undefined || selectedOU !== undefined || selectedRole !== undefined || selectedStatus !== undefined) {
+			currentPage = 1; // Reset to first page when filtering
+			loadUsers();
+		}
 	});
+
+
+
+	// Load users from API
+	async function loadUsers() {
+		try {
+			loading = true;
+			
+			const params = {
+				page: currentPage,
+				limit: itemsPerPage,
+				search: searchQuery || undefined,
+				ou: selectedOU !== 'all' ? selectedOU : undefined,
+				role: getRoleFilter() || (selectedRole !== 'all' ? selectedRole : undefined),
+				status: getStatusFilter(),
+				sortBy: sortColumn || undefined,
+				sortOrder: sortDirection
+			};
+
+			const response = await getUsers(params);
+			
+			if (response.ok) {
+				users = response.data.users.map((apiUser: ApiUser) => transformApiUser(apiUser));
+				totalPages = response.data.pagination.totalPages;
+				totalUsers = response.data.pagination.totalUsers;
+				filteredUsers = users; // API already filters, so set filtered to all users
+			} else {
+				throw new Error('Failed to load users');
+			}
+		} catch (err) {
+			console.error('Failed to load users:', err);
+			error = err instanceof Error ? err.message : 'Failed to load users';
+		} finally {
+			loading = false;
+		}
+	}
+
+	// Transform API user to frontend user format
+	function transformApiUser(apiUser: ApiUser): UserData {
+		return {
+			id: apiUser.id,
+			employeeId: apiUser.employeeId,
+			name: apiUser.name,
+			email: apiUser.email,
+			ou: apiUser.ou || '',
+			role: apiUser.role,
+			status: apiUser.status,
+			type: apiUser.type,
+			supervisorId: apiUser.supervisorId,
+			managerId: apiUser.managerId,
+			supervisorName: apiUser.supervisorName || '',
+			managerName: apiUser.managerName || ''
+		};
+	}
+
+	// Get status filter based on current tab
+	function getStatusFilter(): string | undefined {
+		switch (currentTab) {
+			case 'first-time':
+				return 'first-time';
+			case 'locked':
+				return 'locked';
+			case 'deactivated':
+				return 'deactivated';
+			case 'frontline':
+			case 'support':
+			case 'supervisor':
+			case 'manager':
+			case 'admin':
+				// For role-based tabs, exclude status-based users (first-time, locked, deactivated)
+				return 'active';
+			default:
+				return selectedStatus !== 'all' ? selectedStatus : undefined;
+		}
+	}
+
+	// Get role filter based on current tab
+	function getRoleFilter(): string | undefined {
+		switch (currentTab) {
+			case 'frontline':
+				return 'Frontline';
+			case 'support':
+				return 'Support';
+			case 'supervisor':
+				return 'Supervisor';
+			case 'manager':
+				return 'Manager';
+			case 'admin':
+				return 'Admin';
+			default:
+				return selectedRole !== 'all' ? selectedRole : undefined;
+		}
+	}
 
 	// Helper functions for hierarchy
 	const getUserById = (id: string) => users.find(u => u.id === id);
@@ -492,66 +556,11 @@
 		return [];
 	};
 
-	const totalPages = () => Math.ceil(filteredUsers.length / itemsPerPage);
-	const paginatedUsers = () => filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+	const paginatedUsers = () => filteredUsers;
 
 	// Functions
-	const filterUsers = () => {
-		let filtered = users;
 
-		// Filter by tab
-		switch (currentTab) {
-			case 'frontline':
-				filtered = filtered.filter(u => u.role === 'Frontline' && u.status === 'Active');
-				break;
-			case 'support':
-				filtered = filtered.filter(u => u.role === 'Support' && u.status === 'Active');
-				break;
-			case 'supervisor':
-				filtered = filtered.filter(u => u.role === 'Supervisor' && u.status === 'Active');
-				break;
-			case 'manager':
-				filtered = filtered.filter(u => u.role === 'Manager' && u.status === 'Active');
-				break;
-			case 'admin':
-				filtered = filtered.filter(u => u.type === 'admin' && u.status === 'Active');
-				break;
-			case 'deactivated':
-				filtered = filtered.filter(u => u.status === 'Deactivated');
-				break;
-			case 'locked':
-				filtered = filtered.filter(u => u.status === 'Locked');
-				break;
-			case 'first-time':
-				filtered = filtered.filter(u => u.status === 'First-time');
-				break;
-		}
-
-		// Apply search
-		if (searchQuery) {
-			filtered = filtered.filter(u => 
-				u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-			);
-		}
-
-		// Apply filters
-		if (selectedOU !== 'all') {
-			filtered = filtered.filter(u => u.ou === selectedOU);
-		}
-		if (selectedRole !== 'all') {
-			filtered = filtered.filter(u => u.role === selectedRole);
-		}
-		if (selectedStatus !== 'all') {
-			filtered = filtered.filter(u => u.status === selectedStatus);
-		}
-
-		filteredUsers = filtered;
-		currentPage = 1; // Reset to first page when filtering
-	};
-
-	const handleSort = (column: string) => {
+	const handleSort = async (column: string) => {
 		if (sortColumn === column) {
 			// Three-state toggle: asc → desc → reset
 			if (sortDirection === 'asc') {
@@ -560,7 +569,7 @@
 				// Reset sorting
 				sortColumn = '';
 				sortDirection = 'asc';
-				filterUsers(); // Re-filter to get original order
+				await loadUsers(); // Re-load to get original order
 				return;
 			}
 		} else {
@@ -569,52 +578,7 @@
 			sortDirection = 'asc';
 		}
 		
-		// Sort filteredUsers
-		filteredUsers.sort((a, b) => {
-			let aValue: string | number;
-			let bValue: string | number;
-			
-			switch (column) {
-				case 'employeeId':
-					aValue = a.employeeId;
-					bValue = b.employeeId;
-					break;
-				case 'name':
-					aValue = a.name;
-					bValue = b.name;
-					break;
-				case 'email':
-					aValue = a.email;
-					bValue = b.email;
-					break;
-				case 'ou':
-					aValue = a.ou;
-					bValue = b.ou;
-					break;
-				case 'role':
-					// Custom role hierarchy for sorting
-					const roleOrder = { 'Admin': 5, 'Manager': 4, 'Supervisor': 3, 'Support': 2, 'Frontline': 1 };
-					aValue = roleOrder[a.role as keyof typeof roleOrder] || 0;
-					bValue = roleOrder[b.role as keyof typeof roleOrder] || 0;
-					break;
-				case 'status':
-					aValue = a.status;
-					bValue = b.status;
-					break;
-				default:
-					return 0;
-			}
-			
-			if (typeof aValue === 'string' && typeof bValue === 'string') {
-				const comparison = aValue.localeCompare(bValue);
-				return sortDirection === 'asc' ? comparison : -comparison;
-			} else if (typeof aValue === 'number' && typeof bValue === 'number') {
-				const comparison = aValue - bValue;
-				return sortDirection === 'asc' ? comparison : -comparison;
-			}
-			
-			return 0;
-		});
+		await loadUsers(); // Re-load with new sort
 	};
 
 	// Helper function to get sort icon
@@ -623,8 +587,9 @@
 		return sortDirection === 'asc' ? ArrowUp : ArrowDown;
 	};
 
-	const changeTab = (tab: string) => {
+	const changeTab = async (tab: string) => {
 		currentTab = tab;
+		currentPage = 1; // Reset to first page when switching tabs
 		// Clear selections when switching tabs
 		selectedRows = new Set();
 		selectAll = false;
@@ -632,59 +597,67 @@
 		// Reset sorting when switching tabs
 		sortColumn = '';
 		sortDirection = 'asc';
-		filterUsers();
+		await loadUsers();
+		// Refresh tab counts to ensure they're up-to-date
+		await loadTabCounts();
 	};
 
-	const addIndividualUser = () => {
-		// For Admin users, OU is not required
-		const isAdmin = individualForm.role === 'Admin';
-		const requiredFields = isAdmin 
-			? [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.role]
-			: [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.ou, individualForm.role];
-		
-		if (requiredFields.some(field => !field)) {
-			alert('Please fill in all required fields');
-			return;
-		}
-
-		// Auto-assign manager for Frontline/Support based on supervisor selection
-		let finalManagerId = individualForm.managerId;
-		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
-			const supervisor = getUserById(individualForm.supervisorId);
-			if (supervisor && supervisor.managerId) {
-				finalManagerId = supervisor.managerId;
+	const addIndividualUser = async () => {
+		try {
+			// For Admin users, OU is not required
+			const isAdmin = individualForm.role === 'Admin';
+			const requiredFields = isAdmin 
+				? [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.role]
+				: [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.ou, individualForm.role];
+			
+			if (requiredFields.some(field => !field)) {
+				alert('Please fill in all required fields');
+				return;
 			}
+
+			// Prepare user data for API
+			const userData = {
+				employeeId: individualForm.employeeId,
+				name: individualForm.name,
+				email: individualForm.email,
+				ou: isAdmin ? undefined : individualForm.ou,
+				role: individualForm.role,
+				supervisorId: individualForm.supervisorId || undefined,
+				managerId: individualForm.managerId || undefined
+			};
+
+			console.log('Sending user data:', userData);
+			console.log('Available managers:', hierarchyOptions.managers);
+
+			// Call API to create user
+			const response = await createUser(userData);
+			
+			if (response.ok) {
+				// Reload users to get the updated list
+				await loadUsers();
+				// Reload tab counts to update the numbers
+				await loadTabCounts();
+				
+				// Reset form
+				individualForm = {
+					employeeId: '',
+					name: '',
+					email: '',
+					ou: '',
+					role: '',
+					supervisorId: '',
+					managerId: ''
+				};
+				
+				showAddUserModal = false;
+				alert('User added successfully!');
+			} else {
+				throw new Error(response.message || 'Failed to create user');
+			}
+		} catch (err) {
+			console.error('Failed to add user:', err);
+			alert(err instanceof Error ? err.message : 'Failed to add user');
 		}
-
-		const newUser: UserData = {
-			id: Date.now().toString(),
-			employeeId: individualForm.employeeId,
-			name: individualForm.name,
-			email: individualForm.email,
-			ou: isAdmin ? 'N/A' : individualForm.ou,
-			role: individualForm.role,
-			status: 'Active',
-			type: individualForm.role === 'Admin' ? 'admin' : 'user',
-			supervisorId: individualForm.supervisorId || undefined,
-			managerId: finalManagerId || undefined
-		};
-
-		users = [...users, newUser];
-		filterUsers();
-		
-		// Reset form
-		individualForm = {
-			employeeId: '',
-			name: '',
-			email: '',
-			ou: '',
-			role: '',
-			supervisorId: '',
-			managerId: ''
-		};
-		
-		showAddUserModal = false;
-		alert('User added successfully!');
 	};
 
 	const handleFileUpload = (event: Event) => {
@@ -694,43 +667,40 @@
 
 		uploadedFile = file;
 		
-		// Simulate file processing
+		// TODO: Replace with actual file upload and processing API
+		// Example:
+		// try {
+		//   const result = await uploadAndProcessFile(file);
+		//   bulkData = result;
+		//   showBulkPreview = true;
+		// } catch (error) {
+		//   console.error('File upload failed:', error);
+		// }
+		
+		// Temporary placeholder - remove when implementing real backend
 		setTimeout(() => {
-			// Mock data for demonstration
-			bulkData = {
-				valid: [
-					{
-						employeeId: 'EMP100',
-						name: 'Test User 1',
-						email: 'test1@company.com',
-						ou: 'Engineering',
-						role: 'Frontline'
-					},
-					{
-						employeeId: 'EMP101',
-						name: 'Test User 2',
-						email: 'test2@company.com',
-						ou: 'Marketing',
-						role: 'Support'
-					}
-				],
-				invalid: [
-					{
-						employeeId: 'EMP102',
-						name: '',
-						email: 'invalid-email',
-						ou: 'Unknown',
-						role: 'Invalid',
-						errors: ['Name is required', 'Invalid email format', 'Unknown OU', 'Invalid role']
-					}
-				]
-			};
+			bulkData = { valid: [], invalid: [] };
 			showBulkPreview = true;
 		}, 1000);
 	};
 
 	const processBulkUpload = () => {
-		// Add valid users
+		// TODO: Replace with actual API call to create users in bulk
+		// Example:
+		// try {
+		//   const result = await createUsersInBulk(bulkData.valid);
+		//   users = [...users, ...result];
+		//   loadUsers();
+		//   showBulkPreview = false;
+		//   showAddUserModal = false;
+		//   uploadedFile = null;
+		//   bulkData = { valid: [], invalid: [] };
+		//   alert(`${result.length} users added successfully!`);
+		// } catch (error) {
+		//   console.error('Bulk upload failed:', error);
+		// }
+
+		// Temporary placeholder - remove when implementing real backend
 		const newUsers: UserData[] = bulkData.valid.map(user => ({
 			id: Date.now().toString() + Math.random(),
 			...user,
@@ -739,7 +709,7 @@
 		}));
 
 		users = [...users, ...newUsers];
-		filterUsers();
+		loadUsers();
 		
 		showBulkPreview = false;
 		showAddUserModal = false;
@@ -844,7 +814,7 @@
 			} : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 		showEditUserModal = false;
 		selectedUser = null;
 		alert('User updated successfully!');
@@ -892,7 +862,7 @@
 		showPasswordSection = false;
 	};
 
-	const sendPasswordReset = () => {
+	const handlePasswordReset = () => {
 		if (!selectedUser) return;
 		
 		// In a real app, this would send a password reset email
@@ -953,10 +923,10 @@
 				deactivateUser(selectedUser);
 				break;
 			case 'bulk-lock':
-				bulkLockUsers();
+				handleBulkLockUsers();
 				break;
 			case 'bulk-deactivate':
-				bulkDeactivateUsers();
+				handleBulkDeactivateUsers();
 				break;
 			case 'bulk-unlock':
 				bulkUnlockUsers();
@@ -985,25 +955,25 @@
 		showConfirmationModal = true;
 	};
 
-	const bulkLockUsers = () => {
+	const handleBulkLockUsers = () => {
 		const selectedCount = selectedRows.size;
 		const updatedUsers = users.map(u => 
 			selectedRows.has(u.id) ? { ...u, status: 'Locked' } : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 		selectedRows = new Set();
 		selectAll = false;
 		alert(`${selectedCount} users have been locked successfully!`);
 	};
 
-	const bulkDeactivateUsers = () => {
+	const handleBulkDeactivateUsers = () => {
 		const selectedCount = selectedRows.size;
 		const updatedUsers = users.map(u => 
 			selectedRows.has(u.id) ? { ...u, status: 'Deactivated' } : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 		selectedRows = new Set();
 		selectAll = false;
 		alert(`${selectedCount} users have been deactivated successfully!`);
@@ -1029,7 +999,7 @@
 			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 		selectedRows = new Set();
 		selectAll = false;
 		alert(`${selectedCount} users have been unlocked successfully!`);
@@ -1041,7 +1011,7 @@
 			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 		selectedRows = new Set();
 		selectAll = false;
 		alert(`${selectedCount} users have been reactivated successfully!`);
@@ -1077,7 +1047,7 @@
 			u.id === user.id ? { ...u, status: u.status === 'Locked' ? 'Active' : 'Locked' } : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 	};
 
 	const deactivateUser = (user: UserData) => {
@@ -1085,12 +1055,13 @@
 			u.id === user.id ? { ...u, status: u.status === 'Deactivated' ? 'Active' : 'Deactivated' } : u
 		);
 		users = updatedUsers;
-		filterUsers();
+		loadUsers();
 	};
 
-	const goToPage = (page: number) => {
-		if (page >= 1 && page <= totalPages()) {
+	const goToPage = async (page: number) => {
+		if (page >= 1 && page <= totalPages) {
 			currentPage = page;
+			await loadUsers();
 		}
 	};
 
@@ -1156,7 +1127,7 @@
 	$effect(() => {
 		// This effect runs whenever selectedOU, selectedRole, selectedStatus, or searchQuery changes
 		selectedOU; selectedRole; selectedStatus; searchQuery;
-		filterUsers();
+		loadUsers();
 	});
 </script>
 
@@ -1471,7 +1442,7 @@
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
-							{#each paginatedUsers() as user, index (user.id)}
+							{#each paginatedUsers() as user, index (user.id || `user-${index}`)}
 								<tr 
 									class="hover:bg-gray-50 {selectedRows.has(user.id) ? 'bg-blue-50' : ''} cursor-pointer" 
 									onclick={(e) => handleRowSelection(user.id, index, e)}
@@ -1655,7 +1626,7 @@
 				</div>
 
 				<!-- Pagination -->
-				{#if totalPages() > 1}
+				{#if totalPages > 1}
 					<div class="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
 						<div class="text-sm text-gray-700">
 							Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} results
@@ -1669,8 +1640,8 @@
 								<ChevronLeft class="w-5 h-5" />
 							</button>
 
-							{#each Array.from({ length: totalPages() }, (_, i) => i + 1) as page}
-								{#if page === 1 || page === totalPages() || (page >= currentPage - 2 && page <= currentPage + 2)}
+							{#each Array.from({ length: totalPages }, (_, i) => i + 1) as page}
+								{#if page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2)}
 									<button
 										onclick={() => goToPage(page)}
 										class="px-3 py-2 text-sm font-medium rounded-lg transition-colors {
@@ -1688,7 +1659,7 @@
 
 							<button
 								onclick={() => goToPage(currentPage + 1)}
-								disabled={currentPage === totalPages()}
+								disabled={currentPage === totalPages}
 								class="p-2 text-gray-500 hover:text-[#01c0a4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 							>
 								<ChevronRight class="w-5 h-5" />
@@ -1763,21 +1734,6 @@
 					</div>
 
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						{#if selectedUser.type !== 'admin'}
-							<div>
-								<label for="editOu" class="block text-sm font-medium text-gray-700 mb-2">Organizational Unit *</label>
-								<select
-									id="editOu"
-									bind:value={editForm.ou}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select OU</option>
-									{#each ouOptions as ou}
-										<option value={ou}>{ou}</option>
-									{/each}
-								</select>
-							</div>
-						{/if}
 						<div>
 							{#if selectedUser.type === 'admin'}
 								<label for="editRole" class="block text-sm font-medium text-gray-700 mb-2">Role</label>
@@ -1790,6 +1746,7 @@
 								<select
 									id="editRole"
 									bind:value={editForm.role}
+									onchange={handleRoleChangeEdit}
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								>
 									<option value="">Select Role</option>
@@ -1802,54 +1759,78 @@
 								<p class="text-xs text-orange-600 mt-1">Non-admin users cannot be changed to Admin role</p>
 							{/if}
 						</div>
-					</div>
 
-					{#if selectedUser.type !== 'admin'}
-						{#if editForm.role === 'Frontline' || editForm.role === 'Support'}
-							<div>
-								<label for="editSupervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
-								<select
-									id="editSupervisor"
-									bind:value={editForm.supervisorId}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select Supervisor</option>
-									{#each users.filter((u: UserData) => u.role === 'Supervisor') as supervisor}
-										<option value={supervisor.id}>{supervisor.name}</option>
-									{/each}
-								</select>
-							</div>
-
-							{#if editForm.supervisorId}
-								{#key editForm.supervisorId}
-									{@const selectedSupervisor = getUserById(editForm.supervisorId)}
-									{#if selectedSupervisor && selectedSupervisor.managerId}
-										<div>
-											<label class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
-												{getManagerName(selectedSupervisor.managerId)}
-											</div>
-										</div>
-									{/if}
-								{/key}
-							{/if}
-						{:else if editForm.role === 'Supervisor'}
+						<!-- Hierarchical Field Selection for Edit Form -->
+						{#if selectedUser.type !== 'admin' && editForm.role === 'Supervisor'}
 							<div>
 								<label for="editManager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
 								<select
 									id="editManager"
 									bind:value={editForm.managerId}
+									onchange={handleManagerChangeEdit}
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								>
 									<option value="">Select Manager</option>
-									{#each users.filter((u: UserData) => u.role === 'Manager') as manager}
-										<option value={manager.id}>{manager.name}</option>
+									{#each getAvailableManagersEdit() as manager}
+										<option value={manager.id}>{manager.name} - {manager.ou}</option>
+									{/each}
+								</select>
+							</div>
+						{:else if selectedUser.type !== 'admin' && (editForm.role === 'Frontline' || editForm.role === 'Support')}
+							<div>
+								<label for="editSupervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+								<select
+									id="editSupervisor"
+									bind:value={editForm.supervisorId}
+									onchange={handleSupervisorChangeEdit}
+									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								>
+									<option value="">Select Supervisor</option>
+									{#each getAvailableSupervisorsEdit() as supervisor}
+										<option value={supervisor.id}>{supervisor.name} - {supervisor.ou}</option>
 									{/each}
 								</select>
 							</div>
 						{/if}
+					</div>
+
+					{#if selectedUser.type !== 'admin' && editForm.supervisorId && (editForm.role === 'Frontline' || editForm.role === 'Support')}
+						{@const selectedSupervisor = getAvailableSupervisorsEdit().find(s => s.id === editForm.supervisorId)}
+						{#if selectedSupervisor && selectedSupervisor.managerId}
+							{@const selectedManager = hierarchyOptions.managers.find(m => m.id === selectedSupervisor.managerId)}
+							<div>
+								<label class="block text-sm font-medium text-gray-700 mb-2">Manager (Auto-assigned)</label>
+								<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+									{selectedManager ? `${selectedManager.name} - ${selectedManager.ou}` : 'Manager not found'}
+								</div>
+							</div>
+						{/if}
 					{/if}
 
+					{#if selectedUser.type !== 'admin'}
+						<div>
+							<label for="editOu" class="block text-sm font-medium text-gray-700 mb-2">
+								Organizational Unit *
+								{#if editForm.role === 'Supervisor' && editForm.managerId}
+									<span class="text-sm text-gray-500">(Based on Manager's OUs)</span>
+								{:else if (editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId}
+									<span class="text-sm text-gray-500">(Based on Supervisor's OU)</span>
+								{/if}
+							</label>
+							<select
+								id="editOu"
+								bind:value={editForm.ou}
+								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+							>
+								<option value="">Select OU</option>
+								{#each getAvailableOUsEdit() as ou}
+									<option value={ou}>{ou}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					<!-- Password Section -->
 					<!-- Current Status Display -->
 					<div>
 						<div class="block text-sm font-medium text-gray-700 mb-2">Current Status</div>
@@ -1884,7 +1865,7 @@
 						{#if !showPasswordSection}
 							<div class="flex space-x-3">
 								<button
-									onclick={sendPasswordReset}
+									onclick={handlePasswordReset}
 									class="flex-1 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
 								>
 									Send Reset Email
@@ -2389,6 +2370,7 @@
 								<select
 									id="role"
 									bind:value={individualForm.role}
+									onchange={handleRoleChange}
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								>
 									<option value="">Select Role</option>
@@ -2397,16 +2379,70 @@
 									{/each}
 								</select>
 							</div>
+
+							<!-- Hierarchical Field Selection -->
+							{#if individualForm.role === 'Supervisor'}
+								<div>
+									<label for="manager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+									<select
+										id="manager"
+										bind:value={individualForm.managerId}
+										onchange={handleManagerChange}
+										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									>
+										<option value="">Select Manager</option>
+										{#each getAvailableManagers() as manager}
+											<option value={manager.id}>{manager.name} - {manager.ou}</option>
+										{/each}
+									</select>
+								</div>
+							{:else if individualForm.role === 'Frontline' || individualForm.role === 'Support'}
+								<div>
+									<label for="supervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+									<select
+										id="supervisor"
+										bind:value={individualForm.supervisorId}
+										onchange={handleSupervisorChange}
+										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									>
+										<option value="">Select Supervisor</option>
+										{#each getAvailableSupervisors() as supervisor}
+											<option value={supervisor.id}>{supervisor.name} - {supervisor.ou}</option>
+										{/each}
+									</select>
+								</div>
+
+								{#if individualForm.supervisorId}
+									{@const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId)}
+									{#if selectedSupervisor && selectedSupervisor.managerId}
+										{@const selectedManager = hierarchyOptions.managers.find(m => m.id === selectedSupervisor.managerId)}
+										<div>
+											<label class="block text-sm font-medium text-gray-700 mb-2">Manager (Auto-assigned)</label>
+											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+												{selectedManager ? `${selectedManager.name} - ${selectedManager.ou}` : 'Manager not found'}
+											</div>
+										</div>
+									{/if}
+								{/if}
+							{/if}
+
 							{#if individualForm.role !== 'Admin'}
 								<div>
-									<label for="ou" class="block text-sm font-medium text-gray-700 mb-2">Organizational Unit</label>
+									<label for="ou" class="block text-sm font-medium text-gray-700 mb-2">
+										Organizational Unit
+										{#if individualForm.role === 'Supervisor' && individualForm.managerId}
+											<span class="text-sm text-gray-500">(Based on Manager's OUs)</span>
+										{:else if (individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId}
+											<span class="text-sm text-gray-500">(Based on Supervisor's OU)</span>
+										{/if}
+									</label>
 									<select
 										id="ou"
 										bind:value={individualForm.ou}
 										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 									>
 										<option value="">Select OU</option>
-										{#each ouOptions as ou}
+										{#each getAvailableOUs() as ou}
 											<option value={ou}>{ou}</option>
 										{/each}
 									</select>
@@ -2414,49 +2450,8 @@
 							{/if}
 						</div>
 
-						{#if individualForm.role === 'Frontline' || individualForm.role === 'Support'}
-							<div>
-								<label for="supervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
-								<select
-									id="supervisor"
-									bind:value={individualForm.supervisorId}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select Supervisor</option>
-									{#each users.filter((u: UserData) => u.role === 'Supervisor') as supervisor}
-										<option value={supervisor.id}>{supervisor.name}</option>
-									{/each}
-								</select>
-							</div>
-
-							{#if individualForm.supervisorId}
-								{#key individualForm.supervisorId}
-									{@const selectedSupervisor = getUserById(individualForm.supervisorId)}
-									{#if selectedSupervisor && selectedSupervisor.managerId}
-										<div>
-											<label class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
-												{getManagerName(selectedSupervisor.managerId)}
-											</div>
-										</div>
-									{/if}
-								{/key}
-							{/if}
-						{:else if individualForm.role === 'Supervisor'}
-							<div>
-								<label for="manager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-								<select
-									id="manager"
-									bind:value={individualForm.managerId}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select Manager</option>
-									{#each users.filter((u: UserData) => u.role === 'Manager') as manager}
-										<option value={manager.id}>{manager.name}</option>
-									{/each}
-								</select>
-							</div>
-						{/if}
+						<!-- Remove old hierarchical sections as they're now integrated above -->
+						<!-- The old sections with manual filtering are replaced by the new functions -->
 					</div>
 
 					<!-- Individual Add Footer -->

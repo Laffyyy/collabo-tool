@@ -111,15 +111,19 @@ const createUser = async (req, res, next) => {
     if (supervisorId) {
       const supervisor = await userModel.getUserById(supervisorId);
       if (!supervisor || supervisor.role !== 'Supervisor') {
-        throw new BadRequestError('Invalid supervisor ID');
+        throw new BadRequestError('Invalid supervisor ID - user must have Supervisor role');
       }
+      // Allow supervisors with any status including 'first-time'
     }
 
     if (managerId) {
+      console.log('Validating manager ID:', managerId);
       const manager = await userModel.getUserById(managerId);
+      console.log('Found manager:', manager);
       if (!manager || manager.role !== 'Manager') {
-        throw new BadRequestError('Invalid manager ID');
+        throw new BadRequestError('Invalid manager ID - user must have Manager role');
       }
+      // Allow managers with any status including 'first-time'
     }
 
     // Validate OU exists (if provided)
@@ -131,7 +135,7 @@ const createUser = async (req, res, next) => {
     }
 
     // Generate default password if not provided
-    const defaultPassword = password || `${employeeId}@2024`;
+    const defaultPassword = password || '12345';
     const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
     const userData = {
@@ -143,7 +147,7 @@ const createUser = async (req, res, next) => {
       supervisorId: supervisorId || null,
       managerId: managerId || null,
       passwordHash: hashedPassword,
-      status: 'First-time',
+      status: 'first-time',
       type: role === 'Admin' ? 'admin' : 'user',
       mustChangePassword: true
     };

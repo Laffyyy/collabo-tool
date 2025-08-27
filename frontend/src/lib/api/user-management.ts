@@ -1,4 +1,5 @@
 import { API_CONFIG } from './config';
+import type { ApiUser, UsersResponse, Role, OrganizationalUnit } from './types';
 
 /**
  * User Management API Service
@@ -14,39 +15,6 @@ function makeAuthenticatedRequest(url: string, options: RequestInit = {}) {
     },
     credentials: 'include'  // Include cookies for authentication
   });
-}
-
-// Types for API responses
-export interface ApiUser {
-  id: string;
-  employeeId: string;
-  name: string;
-  email: string;
-  ou: string | null;
-  role: string;
-  status: string;
-  type: 'admin' | 'user';
-  supervisorId?: string;
-  managerId?: string;
-  mustChangePassword?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaginationInfo {
-  currentPage: number;
-  totalPages: number;
-  totalUsers: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
-}
-
-export interface UsersResponse {
-  ok: boolean;
-  data: {
-    users: ApiUser[];
-    pagination: PaginationInfo;
-  };
 }
 
 export interface CreateUserRequest {
@@ -85,13 +53,6 @@ export interface PasswordChangeRequest {
   requirePasswordChange?: boolean;
 }
 
-export interface OrganizationalUnit {
-  id: string;
-  name: string;
-  description: string;
-  parentId?: string;
-}
-
 export interface HierarchyOptions {
   supervisors: ApiUser[];
   managers: ApiUser[];
@@ -115,6 +76,11 @@ export async function getUsers(params: {
   sortOrder?: 'asc' | 'desc';
 } = {}): Promise<UsersResponse> {
   const searchParams = new URLSearchParams();
+  
+  // If no pagination is specified, get all users
+  if (!params.page && !params.limit) {
+    params.limit = 1000; // Set a high limit to get all users
+  }
   
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
