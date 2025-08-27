@@ -126,7 +126,9 @@
   let viewedBroadcasts = $state<Set<string>>(new Set());
   let searchQuery = $state('');
   let priorityFilter = $state('all');
+  let responseStatusFilter = $state('all');
   let showFilterDropdown = $state(false);
+  let showResponseStatusDropdown = $state(false);
   let newBroadcast = $state({
     title: '',
     content: '',
@@ -297,13 +299,23 @@
     { id: 'Received Broadcasts', label: 'Received Broadcasts' }
   ];
 
-  // Reload when filters change
-  $effect(() => {
-    console.log('🔍 Filter effect - search:', searchQuery, 'priority:', priorityFilter);
-    if (activeTab === 'My Broadcasts') {
+
+$effect(() => {
+  console.log('🔍 Filter effect - search:', searchQuery, 'priority:', priorityFilter, 'responseStatus:', responseStatusFilter);
+  if (activeTab === 'Received Broadcasts') {
+    // Only reload from API if there are actual search or priority filters applied
+    // Don't reload for default states (empty search + 'all' priority)
+    if (searchQuery.trim() !== '' || priorityFilter !== 'all') {
+      loadReceivedBroadcasts();
+    }
+    // Note: responseStatusFilter is client-side only, no API reload needed
+  } else if (activeTab === 'My Broadcasts') {
+    // Only reload for My Broadcasts if there are filters applied
+    if (searchQuery.trim() !== '' || priorityFilter !== 'all') {
       loadMyBroadcasts();
     }
-  });
+  }
+});
 
   // Computed values
   let sortedBroadcasts = $derived(
@@ -340,6 +352,29 @@ let sortedReceivedBroadcasts = $derived(
   isLoadingReceived
     ? []
     : [...receivedBroadcasts]
+        .filter(b => {
+          // Apply search filter - only filter if search query exists
+          if (searchQuery.trim() !== '') {
+            const query = searchQuery.toLowerCase();
+            const matchesTitle = b.title.toLowerCase().includes(query);
+            const matchesContent = b.content.toLowerCase().includes(query);
+            if (!matchesTitle && !matchesContent) return false;
+          }
+          
+          // Apply priority filter - only filter if not 'all'
+          if (priorityFilter !== 'all' && b.priority !== priorityFilter) return false;
+          
+          // Apply response status filter - only filter if not 'all'
+          if (responseStatusFilter !== 'all') {
+            const hasResponded = userResponses.has(b.id);
+            if (responseStatusFilter === 'responded' && !hasResponded) return false;
+            if (responseStatusFilter === 'unresponded' && hasResponded) return false;
+            if (responseStatusFilter === 'done' && b.isActive) return false;
+          }
+          
+          // Always show broadcasts regardless of isActive status (include done broadcasts)
+          return true;
+        })
         .sort((a, b) => {
           // Active first
           if (a.isActive !== b.isActive) {
@@ -1359,84 +1394,149 @@ onMount(async () => {
 
   <!-- Tabs -->
   <div class="border-b border-gray-200 mb-6">
-    <div class="flex items-center justify-between">
-      <nav class="-mb-px flex space-x-8">
-        {#each tabs as tab}
-          <button
-            onclick={() => activeTab = tab.id}
-            class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors relative {activeTab === tab.id
-              ? 'border-[#01c0a4] text-[#01c0a4]'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }"
-          >
-            {tab.label}
-            <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium {activeTab === tab.id
-              ? 'bg-[#01c0a4] text-white'
-              : 'bg-gray-100 text-gray-600'
-            }">
-              {tabCounts()[tab.id] || 0}
-            </span>
-          </button>
-        {/each}
-      </nav>
-      
-      <!-- Search and Filters -->
-      <div class="flex items-center space-x-3 -mb-px">
-        <div class="relative">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search class="h-4 w-4 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            bind:value={searchQuery}
-            placeholder="Search broadcasts..."
-            class="block w-64 pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] text-sm"
-          />
+  <div class="flex items-center justify-between">
+    <nav class="-mb-px flex space-x-8">
+      {#each tabs as tab}
+        <button
+          onclick={() => activeTab = tab.id}
+          class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors relative {activeTab === tab.id
+            ? 'border-[#01c0a4] text-[#01c0a4]'
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }"
+        >
+          {tab.label}
+          <span class="ml-2 py-0.5 px-2 rounded-full text-xs font-medium {activeTab === tab.id
+            ? 'bg-[#01c0a4] text-white'
+            : 'bg-gray-100 text-gray-600'
+          }">
+            {tabCounts()[tab.id] || 0}
+          </span>
+        </button>
+      {/each}
+    </nav>
+    
+    <!-- Search and Filters -->
+    <div class="flex items-center space-x-3 -mb-px">
+      <div class="relative">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search class="h-4 w-4 text-gray-400" />
         </div>
+        <input
+          type="text"
+          bind:value={searchQuery}
+          placeholder="Search broadcasts..."
+          class="block w-64 pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] text-sm"
+        />
+      </div>
+      
+      <!-- Priority Filter Dropdown -->
+      <div class="relative">
+        <button
+          onclick={() => showFilterDropdown = !showFilterDropdown}
+          class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+        >
+          <Filter class="h-4 w-4 mr-2" />
+          {priorityFilter === 'all' ? 'All Priorities' : priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
+        </button>
         
+        {#if showFilterDropdown}
+          <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+            <div class="py-1">
+              <button
+                onclick={() => { priorityFilter = 'all'; showFilterDropdown = false; }}
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'all' ? 'bg-gray-100' : ''}"
+              >
+                All Priorities
+              </button>
+              <button
+                onclick={() => { priorityFilter = 'high'; showFilterDropdown = false; }}
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'high' ? 'bg-gray-100' : ''}"
+              >
+                High Priority
+              </button>
+              <button
+                onclick={() => { priorityFilter = 'medium'; showFilterDropdown = false; }}
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'medium' ? 'bg-gray-100' : ''}"
+              >
+                Medium Priority
+              </button>
+              <button
+                onclick={() => { priorityFilter = 'low'; showFilterDropdown = false; }}
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'low' ? 'bg-gray-100' : ''}"
+              >
+                Low Priority
+              </button>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Response Status Filter Dropdown (only show for Received Broadcasts tab) -->
+      {#if activeTab === 'Received Broadcasts'}
         <div class="relative">
           <button
-            onclick={() => showFilterDropdown = !showFilterDropdown}
+            onclick={() => showResponseStatusDropdown = !showResponseStatusDropdown}
             class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
           >
-            <Filter class="h-4 w-4 mr-2" />
-            {priorityFilter === 'all' ? 'All Priorities' : priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)}
+            <CheckCircle class="h-4 w-4 mr-2" />
+            {#if responseStatusFilter === 'all'}
+              All Status
+            {:else if responseStatusFilter === 'responded'}
+              Responded
+            {:else if responseStatusFilter === 'unresponded'}
+              Unresponded
+            {:else if responseStatusFilter === 'done'}
+              Completed
+            {/if}
           </button>
           
-          {#if showFilterDropdown}
+          {#if showResponseStatusDropdown}
             <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
               <div class="py-1">
                 <button
-                  onclick={() => { priorityFilter = 'all'; showFilterDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'all' ? 'bg-gray-100' : ''}"
+                  onclick={() => { responseStatusFilter = 'all'; showResponseStatusDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'all' ? 'bg-gray-100' : ''}"
                 >
-                  All Priorities
+                  <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
+                    <span>All Status</span>
+                  </div>
                 </button>
                 <button
-                  onclick={() => { priorityFilter = 'high'; showFilterDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'high' ? 'bg-gray-100' : ''}"
+                  onclick={() => { responseStatusFilter = 'responded'; showResponseStatusDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'responded' ? 'bg-gray-100' : ''}"
                 >
-                  High Priority
+                  <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span>Responded</span>
+                  </div>
                 </button>
                 <button
-                  onclick={() => { priorityFilter = 'medium'; showFilterDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'medium' ? 'bg-gray-100' : ''}"
+                  onclick={() => { responseStatusFilter = 'unresponded'; showResponseStatusDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'unresponded' ? 'bg-gray-100' : ''}"
                 >
-                  Medium Priority
+                  <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 bg-orange-500 rounded-full"></div>
+                    <span>Unresponded</span>
+                  </div>
                 </button>
                 <button
-                  onclick={() => { priorityFilter = 'low'; showFilterDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {priorityFilter === 'low' ? 'bg-gray-100' : ''}"
+                  onclick={() => { responseStatusFilter = 'done'; showResponseStatusDropdown = false; }}
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'done' ? 'bg-gray-100' : ''}"
                 >
-                  Low Priority
+                  <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 bg-gray-500 rounded-full"></div>
+                    <span>Completed</span>
+                  </div>
                 </button>
               </div>
             </div>
           {/if}
         </div>
-      </div>
+      {/if}
     </div>
   </div>
+</div>
 
   <!-- Broadcasts List -->
   <div class="space-y-4">
@@ -1623,15 +1723,22 @@ onMount(async () => {
 {#each sortedReceivedBroadcasts as broadcast}
   {@const userResponse = getUserResponseForBroadcast(broadcast.id)}
   {@const hasResponded = !!userResponse}
+  {@const isBroadcastDone = !broadcast.isActive}
   
   <div 
-    class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''} {hasResponded ? 'bg-green-50 border-green-200' : ''}"
+    class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isBroadcastDone ? 'opacity-60 bg-gray-50' : ''}"
     role="button"
     tabindex="0"
     onclick={() => openBroadcastDetails(broadcast)}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
   >
-    {#if hasResponded}
+    {#if isBroadcastDone}
+      <div class="absolute top-2 right-2">
+        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          DONE
+        </span>
+      </div>
+    {:else if hasResponded}
       <div class="absolute top-2 right-2">
         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
           RESPONDED
@@ -1642,16 +1749,16 @@ onMount(async () => {
     <div class="flex items-start justify-between">
       <div class="flex-1 min-w-0">
         <div class="flex items-center space-x-3 mb-2">
-          <h3 class="text-lg font-bold {hasResponded ? 'text-gray-600' : 'text-gray-800'} truncate">{broadcast.title}</h3>
+          <h3 class="text-lg font-bold {isBroadcastDone ? 'text-gray-500' : 'text-gray-800'} truncate">{broadcast.title}</h3>
         </div>
         <div class="flex items-center space-x-3 mb-3">
-          <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
+          <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)} {isBroadcastDone ? 'opacity-75' : ''}">
             {broadcast.priority.toUpperCase()}
           </span>
-          <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
+          <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'} {isBroadcastDone ? 'opacity-60' : ''}"></div>
         </div>
         <div class="mb-3">
-          <p class="text-gray-600 text-sm line-clamp-2 break-words {hasResponded ? 'opacity-75' : ''}">
+          <p class="text-gray-600 text-sm line-clamp-2 break-words {isBroadcastDone ? 'opacity-60' : ''}">
             {#if broadcast.content.length > 120}
               {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
             {:else}
@@ -1661,19 +1768,29 @@ onMount(async () => {
         </div>
         
         <!-- Show user's response if they have responded -->
-        {#if hasResponded}
-          <div class="bg-white rounded border border-green-200 p-3 mb-3">
+        {#if hasResponded && !isBroadcastDone}
+          <div class="bg-green-50 rounded border border-green-200 p-3 mb-3 shadow-sm">
             <div class="flex items-center space-x-2 mb-1">
               <CheckCircle class="w-4 h-4 text-green-600 flex-shrink-0" />
-              <span class="text-sm font-medium text-green-800">Your Response:</span>
+              <span class="text-sm font-medium text-green-700">Your Response:</span>
             </div>
-            <p class="text-sm text-gray-700 break-words">
+            <p class="text-sm text-gray-600 break-words">
+              {formatResponseDisplay(userResponse)}
+            </p>
+          </div>
+        {:else if hasResponded && isBroadcastDone}
+          <div class="bg-gray-100 rounded border border-gray-300 p-3 mb-3 shadow-sm">
+            <div class="flex items-center space-x-2 mb-1">
+              <CheckCircle class="w-4 h-4 text-gray-600 flex-shrink-0" />
+              <span class="text-sm font-medium text-gray-700">Your Response:</span>
+            </div>
+            <p class="text-sm text-gray-500 break-words">
               {formatResponseDisplay(userResponse)}
             </p>
           </div>
         {/if}
         
-        <div class="flex items-center space-x-4 text-sm {hasResponded ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
+        <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
           <div class="flex items-center space-x-1">
             <Calendar class="w-4 h-4 flex-shrink-0" />
             <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
@@ -1690,7 +1807,7 @@ onMount(async () => {
           {/if}
         </div>
       </div>
-      {#if broadcast.requiresAcknowledgment && !hasResponded}
+      {#if broadcast.requiresAcknowledgment && !hasResponded && !isBroadcastDone}
       <div class="text-right flex-shrink-0 ml-4">
         <div class="text-sm text-gray-500 mb-3 whitespace-nowrap">
           {broadcast.acknowledgments.length} acknowledgments
