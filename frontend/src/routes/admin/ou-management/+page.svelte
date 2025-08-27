@@ -39,7 +39,7 @@
       allowEmojis: boolean;
       messageRetentionDays: number;
       maxFileSize: number;
-      allowedFileTypes: string[];
+      allowedFileTypes: boolean;
       maxGroupSize: number;
       messageEditWindow: number;
       pinnedMessages: {
@@ -235,7 +235,7 @@
         allowEmojis: true,
         messageRetentionDays: 365,
         maxFileSize: 10,
-        allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+        allowedFileTypes: false,
         maxGroupSize: 50,
         messageEditWindow: 15,
         pinnedMessages: {
@@ -300,7 +300,8 @@
 
       try {
         // Transform frontend data to backend API format
-        const apiData = transformOUDataForAPI(newOU);
+        // Only send settings for the currently active tab
+        const apiData = transformOUDataForAPI(newOU, activeRulesTab);
         
         // Call the API
         const result = await createOUAPI(apiData);

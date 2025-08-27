@@ -276,60 +276,73 @@ export const updateOU = async (updateData: UpdateOURequest): Promise<APIResponse
 /**
  * Transform frontend OU data to backend API format
  * @param frontendOU - Frontend OU object
+ * @param includeSettings - Which settings to include ('chat', 'broadcast', or 'both')
  * @returns Backend API formatted object
  */
-export const transformOUDataForAPI = (frontendOU: FrontendOU): CreateOURequest => {
+export const transformOUDataForAPI = (
+  frontendOU: FrontendOU, 
+  includeSettings: 'chat' | 'broadcast' | 'both' = 'both'
+): CreateOURequest => {
+  const settings: any = {};
+
+  // Include chat settings if specified
+  if (includeSettings === 'chat' || includeSettings === 'both') {
+    settings.Chat = {
+      General: {
+        FileSharing: frontendOU.rules.chat.allowFileSharing,
+        Emoji: frontendOU.rules.chat.allowEmojis,
+        Retention: frontendOU.rules.chat.messageRetentionDays
+      },
+      Frontline: {
+        Init1v1: frontendOU.rules.chat.frontlineCanInitiate1v1,
+        CreateGroup: frontendOU.rules.chat.frontlineCanCreateGroups,
+        JoinGroupChats: frontendOU.rules.chat.frontlineCanJoinGroups,
+        ShareFiles: frontendOU.rules.chat.frontlineCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.frontlineCanForwardMessages
+      },
+      support: {
+        Init1v1: frontendOU.rules.chat.supportCanInitiate1v1,
+        CreateGroup: frontendOU.rules.chat.supportCanCreateGroups,
+        JoinGroupChats: frontendOU.rules.chat.supportCanJoinGroups,
+        ShareFiles: frontendOU.rules.chat.supportCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.supportCanForwardMessages
+      },
+      supervisor: {
+        CreateGroup: frontendOU.rules.chat.supervisorCanCreateGroups,
+        ShareFiles: frontendOU.rules.chat.supervisorCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
+      }
+    };
+  }
+
+  // Include broadcast settings if specified
+  if (includeSettings === 'broadcast' || includeSettings === 'both') {
+    settings.broadcast = {
+      General: {
+        ApprovalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
+        ScheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
+        PriorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
+        Retention: frontendOU.rules.broadcast.broadcastRetentionDays
+      },
+      Frontline: {
+        CreateBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
+        ReplyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
+      },
+      support: {
+        CreateBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
+        ReplyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
+      },
+      supervisor: {
+        CreateBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
+      }
+    };
+  }
+
   return {
     OrgName: frontendOU.name,
     Description: frontendOU.description,
     Location: frontendOU.location,
-    Settings: {
-      Chat: {
-        General: {
-          FileSharing: frontendOU.rules.chat.allowFileSharing,
-          Emoji: frontendOU.rules.chat.allowEmojis,
-          Retention: frontendOU.rules.chat.messageRetentionDays
-        },
-        Frontline: {
-          Init1v1: frontendOU.rules.chat.frontlineCanInitiate1v1,
-          CreateGroup: frontendOU.rules.chat.frontlineCanCreateGroups,
-          JoinGroupChats: frontendOU.rules.chat.frontlineCanJoinGroups,
-          ShareFiles: frontendOU.rules.chat.frontlineCanShareFiles,
-          ForwardMessage: frontendOU.rules.chat.frontlineCanForwardMessages
-        },
-        support: {
-          Init1v1: frontendOU.rules.chat.supportCanInitiate1v1,
-          CreateGroup: frontendOU.rules.chat.supportCanCreateGroups,
-          JoinGroupChats: frontendOU.rules.chat.supportCanJoinGroups,
-          ShareFiles: frontendOU.rules.chat.supportCanShareFiles,
-          ForwardMessage: frontendOU.rules.chat.supportCanForwardMessages
-        },
-        supervisor: {
-          CreateGroup: frontendOU.rules.chat.supervisorCanCreateGroups,
-          ShareFiles: frontendOU.rules.chat.supervisorCanShareFiles,
-          ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
-        }
-      },
-      broadcast: {
-        General: {
-          ApprovalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
-          ScheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
-          PriorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
-          Retention: frontendOU.rules.broadcast.broadcastRetentionDays
-        },
-        Frontline: {
-          CreateBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
-          ReplyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
-        },
-        support: {
-          CreateBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
-          ReplyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
-        },
-        supervisor: {
-          CreateBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
-        }
-      }
-    }
+    Settings: settings
   };
 };
 
