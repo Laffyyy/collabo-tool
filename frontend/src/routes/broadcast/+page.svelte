@@ -2012,157 +2012,179 @@ onMount(async () => {
   {#if activeTab === 'Received Broadcasts'}
     {@const userResponse = getUserResponseForBroadcast(selectedBroadcast.id)}
     {@const hasResponded = !!userResponse}
+    {@const isBroadcastDone = !selectedBroadcast.isActive}
     
-    <!-- Response options based on responseType -->
-    {#if selectedBroadcast.responseType === 'none'}
-      <div class="text-sm text-gray-500 italic">No response required</div>
-    {:else if selectedBroadcast.responseType === 'required'}
-      <!-- Acknowledgment required -->
-      <div class="flex items-center space-x-3 w-full">
+    <!-- Show completion notice if broadcast is done -->
+    {#if isBroadcastDone}
+      <div class="w-full bg-gray-100 border border-gray-300 rounded p-4">
+        <div class="flex items-center space-x-2 mb-2">
+          <CheckCircle class="w-5 h-5 text-gray-500" />
+          <span class="text-sm font-medium text-gray-700">Broadcast Completed</span>
+        </div>
+        <p class="text-sm text-gray-600 mb-3">This broadcast has been marked as completed. No further responses can be submitted.</p>
+        
         {#if hasResponded}
-          <div class="flex-1 bg-green-50 border border-green-200 rounded p-3">
-            <div class="flex items-center space-x-2 mb-2">
-              <CheckCircle class="w-4 h-4 text-green-600" />
-              <span class="text-sm font-medium text-green-800">Response Status:</span>
+          <div class="bg-white border border-gray-200 rounded p-3">
+            <div class="flex items-center space-x-2 mb-1">
+              <CheckCircle class="w-4 h-4 text-gray-500" />
+              <span class="text-sm font-medium text-gray-600">Your Final Response:</span>
             </div>
-            <p class="text-sm text-gray-700">Acknowledged on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+            <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
           </div>
         {:else}
-          <button
-            onclick={() => handleAcknowledgment(selectedBroadcast.id)}
-            class="primary-button"
-            disabled={isAcknowledged}
-          >
-            {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
-          </button>
+          <p class="text-sm text-gray-500 italic">You did not respond to this broadcast before it was completed.</p>
         {/if}
       </div>
-    {:else if selectedBroadcast.responseType === 'preferred-date'}
-      <!-- Preferred date selection -->
-      <div class="flex flex-col space-y-3 w-full">
-        {#if hasResponded}
-          <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
-            <div class="flex items-center space-x-2 mb-2">
-              <CheckCircle class="w-4 h-4 text-green-600" />
-              <span class="text-sm font-medium text-green-800">Current Response:</span>
+    {:else}
+      <!-- Original response options (only show when broadcast is active) -->
+      {#if selectedBroadcast.responseType === 'none'}
+        <div class="text-sm text-gray-500 italic">No response required</div>
+      {:else if selectedBroadcast.responseType === 'required'}
+        <!-- Acknowledgment required -->
+        <div class="flex items-center space-x-3 w-full">
+          {#if hasResponded}
+            <div class="flex-1 bg-green-50 border border-green-200 rounded p-3">
+              <div class="flex items-center space-x-2 mb-2">
+                <CheckCircle class="w-4 h-4 text-green-600" />
+                <span class="text-sm font-medium text-green-800">Response Status:</span>
+              </div>
+              <p class="text-sm text-gray-700">Acknowledged on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
             </div>
-            <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
-            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
-          </div>
-        {/if}
-        
-        <label for="preferred-date" class="text-sm font-medium text-gray-700">
-          {hasResponded ? 'Update your preferred date:' : 'Select your preferred date:'}
-        </label>
-        <div class="flex items-center space-x-3">
-          <input
-            id="preferred-date"
-            type="datetime-local"
-            bind:value={preferredDate}
-            class="input-field flex-1"
-          />
-          <button
-            onclick={() => handlePreferredDateResponse(selectedBroadcast.id, preferredDate)}
-            class="primary-button"
-            disabled={hasResponded ? !hasPreferredDateChanged || !preferredDate : !preferredDate}
-          >
-            {hasResponded ? 'Update Date' : 'Submit Date'}
-          </button>
+          {:else}
+            <button
+              onclick={() => handleAcknowledgment(selectedBroadcast.id)}
+              class="primary-button"
+              disabled={isAcknowledged}
+            >
+              {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
+            </button>
+          {/if}
         </div>
-        {#if hasResponded && !hasPreferredDateChanged}
-          <p class="text-xs text-gray-500 italic">Select a different date to update your response</p>
-        {/if}
-      </div>
-    {:else if selectedBroadcast.responseType === 'choices' && selectedBroadcast.choices}
-      <!-- Multiple choice options -->
-      <div class="flex flex-col space-y-3 w-full">
-        {#if hasResponded}
-          <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
-            <div class="flex items-center space-x-2 mb-2">
-              <CheckCircle class="w-4 h-4 text-green-600" />
-              <span class="text-sm font-medium text-green-800">Current Response:</span>
+      {:else if selectedBroadcast.responseType === 'preferred-date'}
+        <!-- Preferred date selection -->
+        <div class="flex flex-col space-y-3 w-full">
+          {#if hasResponded}
+            <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+              <div class="flex items-center space-x-2 mb-2">
+                <CheckCircle class="w-4 h-4 text-green-600" />
+                <span class="text-sm font-medium text-green-800">Current Response:</span>
+              </div>
+              <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+              <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
             </div>
-            <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
-            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+          {/if}
+          
+          <label for="preferred-date" class="text-sm font-medium text-gray-700">
+            {hasResponded ? 'Update your preferred date:' : 'Select your preferred date:'}
+          </label>
+          <div class="flex items-center space-x-3">
+            <input
+              id="preferred-date"
+              type="datetime-local"
+              bind:value={preferredDate}
+              class="input-field flex-1"
+              disabled={isBroadcastDone}
+            />
+            <button
+              onclick={() => handlePreferredDateResponse(selectedBroadcast.id, preferredDate)}
+              class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isBroadcastDone || (hasResponded ? !hasPreferredDateChanged || !preferredDate : !preferredDate)}
+            >
+              {hasResponded ? 'Update Date' : 'Submit Date'}
+            </button>
           </div>
-        {/if}
-        
-        <label class="text-sm font-medium text-gray-700">
-          {hasResponded ? 'Update your selection:' : 'Select an option:'}
-        </label>
-        <div class="space-y-2">
-          {#each selectedBroadcast.choices as choice, index}
-            <label class="flex items-center space-x-3">
-              <input
-                type="radio"
-                bind:group={selectedChoice}
-                value={choice}
-                class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-              />
-              <span class="text-sm text-gray-700">{choice}</span>
+        </div>
+        {:else if selectedBroadcast.responseType === 'choices'}
+          <!-- Multiple choice selection -->
+          <div class="flex flex-col space-y-3 w-full">
+            {#if hasResponded}
+              <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+                <div class="flex items-center space-x-2 mb-2">
+                  <CheckCircle class="w-4 h-4 text-green-600" />
+                  <span class="text-sm font-medium text-green-800">Current Response:</span>
+                </div>
+                <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+                <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+              </div>
+            {/if}
+            
+            <label class="text-sm font-medium text-gray-700">
+              {hasResponded ? 'Update your choice:' : 'Select your choice:'}
             </label>
-          {/each}
-        </div>
-        <button
-          onclick={() => handleChoiceResponse(selectedBroadcast.id, selectedChoice)}
-          class="primary-button self-end"
-          disabled={hasResponded ? !hasChoiceChanged || !selectedChoice : !selectedChoice}
-        >
-          {hasResponded ? 'Update Response' : 'Submit Response'}
-        </button>
-        {#if hasResponded && !hasChoiceChanged}
-          <p class="text-xs text-gray-500 italic">Select a different option to update your response</p>
-        {/if}
-      </div>
-    {:else if selectedBroadcast.responseType === 'textbox'}
-      <!-- Text response -->
-      <div class="flex flex-col space-y-3 w-full">
-        {#if hasResponded}
-          <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
-            <div class="flex items-center space-x-2 mb-2">
-              <CheckCircle class="w-4 h-4 text-green-600" />
-              <span class="text-sm font-medium text-green-800">Current Response:</span>
+            <div class="space-y-2">
+              {#each selectedBroadcast.choices || [] as choice}
+                <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-50 {isBroadcastDone ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}">
+                  <input
+                    type="radio"
+                    bind:group={selectedChoice}
+                    value={choice}
+                    disabled={isBroadcastDone}
+                    class="text-[#01c0a4] focus:ring-[#01c0a4] disabled:opacity-50"
+                  />
+                  <span class="text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-700'}">{choice}</span>
+                </label>
+              {/each}
             </div>
-            <p class="text-sm text-gray-700 break-words">{userResponse.responseData.textResponse}</p>
-            <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+            <div class="flex justify-end">
+              <button
+                onclick={() => handleChoiceResponse(selectedBroadcast.id, selectedChoice)}
+                class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isBroadcastDone || (hasResponded ? !hasChoiceChanged || !selectedChoice : !selectedChoice)}
+              >
+                {hasResponded ? 'Update Choice' : 'Submit Choice'}
+              </button>
+            </div>
           </div>
-        {/if}
-        
-        <label for="text-response" class="text-sm font-medium text-gray-700">
-          {hasResponded ? 'Update your response:' : 'Your response:'}
-        </label>
-        <div class="space-y-3">
+      {:else if selectedBroadcast.responseType === 'textbox'}
+        <!-- Text response -->
+        <div class="flex flex-col space-y-3 w-full">
+          {#if hasResponded}
+            <div class="bg-green-50 border border-green-200 rounded p-3 mb-3">
+              <div class="flex items-center space-x-2 mb-2">
+                <CheckCircle class="w-4 h-4 text-green-600" />
+                <span class="text-sm font-medium text-green-800">Current Response:</span>
+              </div>
+              <p class="text-sm text-gray-700">{formatResponseDisplay(userResponse)}</p>
+              <p class="text-xs text-gray-500 mt-1">Submitted on {new Date(userResponse.acknowledgedAt).toLocaleString()}</p>
+            </div>
+          {/if}
+          
+          <label for="text-response" class="text-sm font-medium text-gray-700">
+            {hasResponded ? 'Update your response:' : 'Enter your response:'}
+          </label>
           <textarea
             id="text-response"
             bind:value={textResponse}
-            placeholder="Enter your response..."
+            placeholder="Type your response here..."
             rows="3"
-            class="input-field w-full resize-none"
+            disabled={isBroadcastDone}
+            class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed"
           ></textarea>
-          <button
-            onclick={() => handleTextResponse(selectedBroadcast.id, textResponse)}
-            class="primary-button self-end"
-            disabled={hasResponded ? !hasTextChanged || !textResponse.trim() : !textResponse.trim()}
-          >
-            {hasResponded ? 'Update Response' : 'Submit Response'}
-          </button>
-          {#if hasResponded && !hasTextChanged}
-            <p class="text-xs text-gray-500 italic">Modify your text to update your response</p>
-          {/if}
+          <div class="flex justify-end">
+            <button
+              onclick={() => handleTextResponse(selectedBroadcast.id, textResponse)}
+              class="primary-button disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isBroadcastDone || (hasResponded ? !hasTextChanged : !textResponse.trim())}
+            >
+              {hasResponded ? 'Update Response' : 'Submit Response'}
+            </button>
+          </div>
         </div>
-      </div>
+      {/if}
     {/if}
-  {:else if selectedBroadcast.isActive}
-    <!-- Keep existing "Mark as Done" for My Broadcasts tab -->
-    <div class="flex space-x-3">
-      <button onclick={() => markBroadcastAsDone(selectedBroadcast.id)} class="primary-button">
+  {:else}
+    <!-- My Broadcasts - Mark as Done functionality -->
+    {#if selectedBroadcast.isActive && canSendBroadcasts}
+      <button
+        onclick={() => markBroadcastAsDone(selectedBroadcast.id)}
+        class="secondary-button"
+      >
         Mark as Done
       </button>
-    </div>
-  {:else}
-    <button onclick={() => selectedBroadcast = null} class="secondary-button">
-      Close
-    </button>
+    {:else if !selectedBroadcast.isActive}
+      <div class="text-sm text-gray-500 italic">This broadcast has been completed</div>
+    {/if}
   {/if}
 </div>
         </div>
