@@ -213,14 +213,38 @@ const filteredBroadcasts = $derived(() => {
     showConfirmModal = true;
   };
 
-  const archiveBroadcast = (broadcast: Broadcast) => {
-    // In a real app, this would make an API call
-    const index = broadcasts.findIndex(b => b.id === broadcast.id);
-    if (index !== -1) {
-      broadcasts[index].status = 'archived';
+const archiveBroadcast = async (broadcast: Broadcast) => {
+    try {
+      // Use the correct API path
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/admin/broadcasts/${broadcast.id}/archive`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to archive broadcast');
+      }
+
+      // Update local state
+      const index = broadcasts.findIndex(b => b.id === broadcast.id);
+      if (index !== -1) {
+        broadcasts[index].status = 'archived';
+        broadcasts = [...broadcasts]; // Trigger reactivity
+      }
+
+      showConfirmModal = false;
+      alert('Broadcast archived successfully');
+
+    } catch (error: any) {
+      console.error('Error archiving broadcast:', error);
+      showConfirmModal = false;
+      alert(error.message || 'Failed to archive broadcast');
     }
-    showConfirmModal = false;
-    alert('Broadcast archived successfully');
   };
 
   const confirmDeleteBroadcast = (broadcast: Broadcast) => {
@@ -234,14 +258,34 @@ const filteredBroadcasts = $derived(() => {
     showConfirmModal = true;
   };
 
-  const deleteBroadcast = (broadcast: Broadcast) => {
-    // In a real app, this would make an API call
-    const index = broadcasts.findIndex(b => b.id === broadcast.id);
-    if (index !== -1) {
-      broadcasts.splice(index, 1);
+ const deleteBroadcast = async (broadcast: Broadcast) => {
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/admin/broadcasts/${broadcast.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to delete broadcast');
+      }
+
+      // Remove from local state
+      const index = broadcasts.findIndex(b => b.id === broadcast.id);
+      if (index !== -1) {
+        broadcasts.splice(index, 1);
+        broadcasts = [...broadcasts]; // Trigger reactivity
+      }
+
+      showConfirmModal = false;
+      alert('Broadcast deleted successfully');
+
+    } catch (error: any) {
+      console.error('Error deleting broadcast:', error);
+      showConfirmModal = false;
+      alert(error.message || 'Failed to delete broadcast');
     }
-    showConfirmModal = false;
-    alert('Broadcast deleted successfully');
   };
 
   const confirmRestoreBroadcast = (broadcast: Broadcast) => {
@@ -255,21 +299,44 @@ const filteredBroadcasts = $derived(() => {
     showConfirmModal = true;
   };
 
-  const restoreBroadcast = (broadcast: Broadcast) => {
-    // In a real app, this would make an API call
-    const index = broadcasts.findIndex(b => b.id === broadcast.id);
-    if (index !== -1) {
-      if (broadcast.isReported) {
-        broadcasts[index].isReported = false;
-        broadcasts[index].reportReason = undefined;
-        broadcasts[index].reportedBy = undefined;
-        broadcasts[index].reportedAt = undefined;
-      } else {
-        broadcasts[index].status = 'sent';
+  const restoreBroadcast = async (broadcast: Broadcast) => {
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/admin/broadcasts/${broadcast.id}/restore`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to restore broadcast');
       }
+
+      // Update local state
+      const index = broadcasts.findIndex(b => b.id === broadcast.id);
+      if (index !== -1) {
+        if (broadcast.isReported) {
+          broadcasts[index].isReported = false;
+          broadcasts[index].reportReason = undefined;
+          broadcasts[index].reportedBy = undefined;
+          broadcasts[index].reportedAt = undefined;
+        } else {
+          broadcasts[index].status = 'sent';
+        }
+        broadcasts = [...broadcasts]; // Trigger reactivity
+      }
+
+      showConfirmModal = false;
+      alert('Broadcast restored successfully');
+
+    } catch (error: any) {
+      console.error('Error restoring broadcast:', error);
+      showConfirmModal = false;
+      alert(error.message || 'Failed to restore broadcast');
     }
-    showConfirmModal = false;
-    alert('Broadcast restored successfully');
   };
 
   const confirmPermanentlyDeleteBroadcast = (broadcast: Broadcast) => {
