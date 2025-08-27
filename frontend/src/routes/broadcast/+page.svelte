@@ -177,6 +177,9 @@
   let prevSearchQuery = $state('');
   let prevPriorityFilter = $state('all');
 
+  let hasLoadedEmptyBroadcasts = $state(false);
+  let loadingFailed = $state(false);
+
     const loadMyBroadcasts = async () => {
     console.log('🔄 Loading user broadcasts from API...');
     isLoading = true;
@@ -231,9 +234,16 @@
         };
       });
 
+      // Set this flag when we've successfully loaded broadcasts (even if empty)
+    hasLoadedEmptyBroadcasts = broadcasts.length === 0;
+
+      // Reset failed flag on success
+      loadingFailed = false;
       console.log('✅ Broadcasts loaded successfully:', broadcasts.length);
 
     } catch (err) {
+      // Set failed loading flag to prevent infinite loop
+      loadingFailed = true;
       error = err instanceof Error ? err.message : 'Failed to load broadcasts';
       console.error('❌ Error loading broadcasts:', err);
       broadcasts = [];
@@ -257,9 +267,9 @@
   $effect(() => {
     console.log('🔄 Tab switched to:', activeTab);
     // Only load if we switched TO "My Broadcasts" and don't have data yet
-    if (activeTab === 'My Broadcasts' && broadcasts.length === 0 && !isLoading) {
-      loadMyBroadcasts();
-    }
+    if (activeTab === 'My Broadcasts' && broadcasts.length === 0 && !isLoading && !hasLoadedEmptyBroadcasts) {
+        loadMyBroadcasts();
+      }
   });
 
   // FIXED: Effect for filter changes (only reload if we have data and filters change)
@@ -820,12 +830,6 @@ onMount(async () => {
     isLoadingRoles = false;
     isLoadingTemplates = false;
   }
-  
-  // Test toast functionality after component is mounted
-  setTimeout(() => {
-    console.log('Testing toast system...');
-    $toastStore.success('Component loaded successfully');
-  }, 1000);
 });
 
  // Update response handlers to store responses locally
