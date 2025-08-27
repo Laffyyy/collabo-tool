@@ -15,7 +15,7 @@
     createdAt: Date;
     scheduledFor?: Date;
     sentAt?: Date;
-    status: 'draft' | 'scheduled' | 'sent' | 'archived' | 'deleted';
+    status: 'draft' | 'scheduled' | 'sent' | 'archived' | 'deleted' | 'done';
     acknowledgmentRequired: boolean;
     acknowledgmentCount: number;
     totalRecipients: number;
@@ -93,26 +93,38 @@ onMount(() => {
   fetchAllBroadcasts();
 });
 
-  // Computed values
-  const filteredBroadcasts = $derived(() => {
-    return broadcasts.filter(broadcast => {
-      const matchesTab = broadcast.status === activeTab || 
-        (activeTab === 'sent' && broadcast.status === 'sent' && !broadcast.isReported) ||
-        (activeTab === 'scheduled' && broadcast.status === 'scheduled') ||
-        (activeTab === 'archived' && broadcast.status === 'archived') ||
-        (activeTab === 'reported' && broadcast.isReported === true);
-      
-      const matchesSearch = searchQuery === '' || 
-        broadcast.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        broadcast.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        broadcast.createdByEmail.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesPriority = selectedPriority === 'all' || broadcast.priority === selectedPriority;
-      const matchesStatus = selectedStatus === 'all' || broadcast.status === selectedStatus;
-      
-      return matchesTab && matchesSearch && matchesPriority && matchesStatus;
-    });
+const allowedStatuses = ['sent', 'scheduled', 'archived'];
+
+const filteredBroadcasts = $derived(() => {
+  return broadcasts.filter(broadcast => {
+    const isReported = broadcast.isReported === true;
+
+    if (activeTab === 'reported') {
+      return isReported;
+    }
+    if (activeTab === 'sent') {
+      return (broadcast.status === 'sent' || broadcast.status === 'done') && !isReported;
+    }
+    if (activeTab === 'archived') {
+      return broadcast.status === 'archived';
+    }
+    if (activeTab === 'scheduled') {
+      return broadcast.status === 'scheduled';
+    }
+    return false;
+  }).filter(broadcast => {
+    // Search and filter logic
+    const matchesSearch = searchQuery === '' ||
+      broadcast.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      broadcast.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      broadcast.createdByEmail.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesPriority = selectedPriority === 'all' || broadcast.priority === selectedPriority;
+    const matchesStatus = selectedStatus === 'all' || broadcast.status === selectedStatus;
+
+    return matchesSearch && matchesPriority && matchesStatus;
   });
+});
 
   const tabCounts = $derived(() => {
     const allFilteredBroadcasts = broadcasts.filter(broadcast => {
@@ -393,7 +405,7 @@ onMount(() => {
               <div class="flex items-center space-x-2">
                 <Clock class="w-4 h-4" />
                 <span>Scheduled</span>
-                <span class="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().scheduled}</span>
+                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().scheduled}</span>
               </div>
             </button>
 
@@ -457,7 +469,7 @@ onMount(() => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'active')}">
-                        {broadcast.broadcastStatus || 'Active'}
+                        {broadcast.status}
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -565,7 +577,7 @@ onMount(() => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'active')}">
-                        {broadcast.broadcastStatus || 'Active'}
+                        {broadcast.status}
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -679,7 +691,7 @@ onMount(() => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'done')}">
-                        {broadcast.broadcastStatus || 'Done'}
+                        {broadcast.status}
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
@@ -786,7 +798,7 @@ onMount(() => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(broadcast.broadcastStatus || 'active')}">
-                        {broadcast.broadcastStatus || 'Active'}
+                        {broadcast.status}
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

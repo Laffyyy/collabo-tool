@@ -49,13 +49,15 @@ class RetrieveBroadcastModel {
       // Query using existing tblbroadcasts schema
       const query = `
         SELECT 
-          did, dtitle, dcontent, dpriority, dcreatedby, 
-          drequiresacknowledgment, dresponsetype, dstatus, dchoices,
-          tcreatedat, tscheduledfor, tsentat, teventdate, tenddate,
-          dreportreason, dreportedby, treportedat
-        FROM tblbroadcasts 
+          b.did, b.dtitle, b.dcontent, b.dpriority, b.dcreatedby, 
+          b.drequiresacknowledgment, b.dresponsetype, b.dstatus, b.dchoices,
+          b.tcreatedat, b.tscheduledfor, b.tsentat, b.teventdate, b.tenddate,
+          b.dreportreason, b.dreportedby, b.treportedat,
+          u.demail AS createdby_email
+        FROM tblbroadcasts b
+        LEFT JOIN tblusers u ON b.dcreatedby = u.did
         ${whereClause}
-        ORDER BY tcreatedat DESC
+        ORDER BY b.tcreatedat DESC
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `;
 
@@ -185,10 +187,11 @@ class RetrieveBroadcastModel {
       title: broadcast.dtitle,
       content: broadcast.dcontent,
       priority: broadcast.dpriority,
+      status: broadcast.dstatus, 
       createdByEmail: broadcast.createdby_email,
       requiresAcknowledgment: broadcast.drequiresacknowledgment || false,
       responseType: broadcast.dresponsetype || 'none',
-      status: broadcast.dstatus || 'draft',
+      status: broadcast.dstatus,
       choices: broadcast.dchoices,
       createdAt: broadcast.tcreatedat,
       scheduledFor: broadcast.tscheduledfor,
@@ -411,6 +414,8 @@ class RetrieveBroadcastModel {
     throw new Error(`Failed to fetch all broadcasts: ${error.message}`);
   }
 }
+
+
 
 }
 
