@@ -11,6 +11,16 @@ class OUmodel {
         }
     }
 
+    async getOUById(id) {
+        try {
+            const query = `SELECT * FROM tblorganizationalunits WHERE did = $1`;
+            const result = await db.query(query, [id]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
+
     async createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
         try {
             const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, $5) RETURNING *`;
@@ -138,7 +148,61 @@ class OUmodel {
             throw new Error(error);
         }
     }
+    async updateOU(id, changes) {
+        try {
+            // Build dynamic query based on provided changes
+            const updates = [];
+            const values = [];
+            let paramIndex = 1;
 
+            if (changes.OrgName !== undefined) {
+                updates.push(`dname = $${paramIndex}`);
+                values.push(changes.OrgName);
+                paramIndex++;
+            }
+
+            if (changes.Description !== undefined) {
+                updates.push(`ddescription = $${paramIndex}`);
+                values.push(changes.Description);
+                paramIndex++;
+            }
+
+            if (changes.Location !== undefined) {
+                updates.push(`dparentouid = $${paramIndex}`);
+                values.push(changes.Location);
+                paramIndex++;
+            }
+
+            if (changes.Settings !== undefined) {
+                updates.push(`"jsSettings" = $${paramIndex}`);
+                values.push(JSON.stringify(changes.Settings));
+                paramIndex++;
+            }
+
+            if (changes.isactive !== undefined) {
+                updates.push(`"bisActive" = $${paramIndex}`);
+                values.push(changes.isactive);
+                paramIndex++;
+            }
+
+            if (updates.length === 0) {
+                throw new Error('No valid fields to update');
+            }
+
+            const query = `UPDATE tblorganizationalunits SET ${updates.join(', ')} WHERE did = $${paramIndex} RETURNING *`;
+            values.push(id);
+
+            const result = await db.query(query, values);
+            
+            if (result.rows.length === 0) {
+                throw new Error('OU not found');
+            }
+
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    }
     
 }
 module.exports = OUmodel;

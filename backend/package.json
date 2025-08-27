@@ -9,7 +9,8 @@
     "start": "node server.js",
     "db:check": "node scripts/db-check.js",
     "lint": "echo 'No linter configured for backend' && exit 0",
-    "test": "echo 'No tests yet' && exit 0"
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "engines": {
     "node": ">=18"
@@ -27,6 +28,22 @@
     "postgres": "^3.4.7"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "jest": "^30.1.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.1.4"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+    "collectCoverageFrom": [
+      "**/*.{js,jsx}",
+      "!**/node_modules/**",
+      "!**/coverage/**",
+      "!jest.setup.js"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/*.test.js"
+    ]
   }
 }

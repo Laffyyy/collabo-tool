@@ -343,9 +343,72 @@ function transformSettingsToJSSettings(settings) {
     return jsSettings;
 }
 
+/**
+ * Merges new settings with existing settings, preserving existing data
+ * @param {Object} existingSettings - Current settings from database
+ * @param {Object} newSettings - New settings to merge in
+ * @returns {Object} Merged settings object
+ */
+function mergeSettings(existingSettings, newSettings) {
+    const merged = JSON.parse(JSON.stringify(existingSettings)); // Deep clone
+
+    if (newSettings.Chat) {
+        if (!merged.Chat) merged.Chat = {};
+        
+        // Merge Chat settings
+        if (newSettings.Chat.Frontline) {
+            if (!merged.Chat.Frontline) merged.Chat.Frontline = {};
+            Object.assign(merged.Chat.Frontline, newSettings.Chat.Frontline);
+        }
+        
+        if (newSettings.Chat.support) {
+            if (!merged.Chat.support) merged.Chat.support = {};
+            Object.assign(merged.Chat.support, newSettings.Chat.support);
+        }
+        
+        if (newSettings.Chat.supervisor) {
+            if (!merged.Chat.supervisor) merged.Chat.supervisor = {};
+            Object.assign(merged.Chat.supervisor, newSettings.Chat.supervisor);
+        }
+        
+        if (newSettings.Chat.General) {
+            if (!merged.Chat.General) merged.Chat.General = {};
+            Object.assign(merged.Chat.General, newSettings.Chat.General);
+        }
+    }
+
+    if (newSettings.broadcast) {
+        if (!merged.broadcast) merged.broadcast = {};
+        
+        // Merge broadcast settings
+        if (newSettings.broadcast.Frontline) {
+            if (!merged.broadcast.Frontline) merged.broadcast.Frontline = {};
+            Object.assign(merged.broadcast.Frontline, newSettings.broadcast.Frontline);
+        }
+        
+        if (newSettings.broadcast.support) {
+            if (!merged.broadcast.support) merged.broadcast.support = {};
+            Object.assign(merged.broadcast.support, newSettings.broadcast.support);
+        }
+        
+        if (newSettings.broadcast.supervisor) {
+            if (!merged.broadcast.supervisor) merged.broadcast.supervisor = {};
+            Object.assign(merged.broadcast.supervisor, newSettings.broadcast.supervisor);
+        }
+        
+        if (newSettings.broadcast.General) {
+            if (!merged.broadcast.General) merged.broadcast.General = {};
+            Object.assign(merged.broadcast.General, newSettings.broadcast.General);
+        }
+    }
+
+    return merged;
+}
+
 module.exports = {
     transformSettingsToOUSettings,
     transformOUSettingsToSettings,
     validateSettings,
-    transformSettingsToJSSettings
+    transformSettingsToJSSettings,
+    mergeSettings
 };

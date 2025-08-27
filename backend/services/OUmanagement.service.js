@@ -1,6 +1,7 @@
 // OU Management Service
 // This service handles all OU (Organizational Unit) related operations
 const OUmodel = require('../model/ou.model');
+const { mergeSettings } = require('../utils/settingsTransformer');
 const ouModel = new OUmodel();
 
 /**
@@ -10,40 +11,16 @@ const ouModel = new OUmodel();
  * @param {string} sort - Sort field and direction
  * @returns {Object} - Paginated OU data
  */
-async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, isactive) {
+async function getOU(howmany, page, sort) {
     try {
-        // Set default values and validate parameters
-        const startNum = parseInt(start) || 0;
-        const limitNum = parseInt(limit) || 10;
-        const sortDirection = (sort && sort.toUpperCase() === 'DESC') ? 'DESC' : 'ASC';
-        const sortColumn = ['dname', 'ddescription', 'tcreatedat'].includes(sortby) ? sortby : 'dname';
-        const searchColumn = ['dname', 'ddescription'].includes(searchby) ? searchby : 'dname';
-        const activeStatus = isactive || 'true'; // Default to active if not specified
-        
-        // Get OUs and total count from model
-        const [ous, totalCount] = await Promise.all([
-            ouModel.getOUs(startNum, limitNum, sortDirection, sortColumn, search, searchColumn, searchvalue, activeStatus),
-            ouModel.getOUCount(search, searchColumn, searchvalue, activeStatus)
-        ]);
-
-        // Format the response according to the requested structure
-        const formattedOUs = ous.map(row => ({
-            ouid: row.ouid,
-            ouname: row.dname,
-            oudescription: row.ddescription,
-            membercount: parseInt(row.membercount) || 0,
-            location: row.jsSettings?.Location || 'Not specified'
-        }));
-
-        // Format response based on active/inactive status
-        const responseKey = activeStatus === 'true' ? 'ActiveOU' : 'InactiveOU';
-        const countKey = activeStatus === 'true' ? 'allactiveou' : 'allinactiveou';
-
+        // TODO: Implement database query to fetch active OUs
+        // This is a placeholder implementation
         return {
-            [responseKey]: {
-                [countKey]: totalCount,
-                ous: formattedOUs
-            }
+            data: [],
+            total: 0,
+            page: parseInt(page),
+            limit: parseInt(howmany),
+            totalPages: 0
         };
     } catch (error) {
         throw new Error(`Failed to get OUs: ${error.message}`);
@@ -114,28 +91,40 @@ async function deactiveOU(id) {
 /**
  * Update an existing OU
  * @param {string} id - OU ID to update
- * @param {string} name - Updated OU name
- * @param {string} description - Updated OU description
- * @param {string} parentouid - Updated parent OU ID
- * @param {Array} OUsettings - Updated OU settings array
+ * @param {Object} changes - Changes object containing fields to update
  * @returns {Object} - Updated OU data
  */
-async function updateOU(id, name, description, parentouid, OUsettings) {
+async function updateOU(id, changes) {
     try {
-        // TODO: Implement database query to update OU
-        // This is a placeholder implementation
-        const updatedOU = {
-            id,
-            name,
-            description,
-            parentouid: parentouid || null,
-            OUsettings,
-            updatedAt: new Date().toISOString()
-        };
-        
+        let processedChanges = { ...changes };
+
+        // Handle Settings merging logic if Settings are provided
+        if (changes.Settings !== undefined) {
+            // Get current settings from database
+            const currentOU = await ouModel.getOUById(id);
+            if (!currentOU) {
+                throw new Error('OU not found');
+            }
+
+            let existingSettings = {};
+            try {
+                existingSettings = currentOU.jsSettings || {};
+                if (typeof existingSettings === 'string') {
+                    existingSettings = JSON.parse(existingSettings);
+                }
+            } catch (parseError) {
+                existingSettings = {};
+            }
+
+            // Merge the new settings with existing settings
+            const mergedSettings = mergeSettings(existingSettings, changes.Settings);
+            processedChanges.Settings = mergedSettings;
+        }
+
+        const result = await ouModel.updateOU(id, processedChanges);
         return {
             message: 'OU updated successfully',
-            data: updatedOU
+            data: result
         };
     } catch (error) {
         throw new Error(`Failed to update OU: ${error.message}`);
