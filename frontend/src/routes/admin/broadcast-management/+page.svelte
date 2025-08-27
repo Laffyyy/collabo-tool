@@ -71,7 +71,7 @@ async function fetchAllBroadcasts() {
       status: b.status,
       acknowledgmentRequired: b.requiresAcknowledgment,
       acknowledgmentCount: 0, // leave as 0 for now
-      totalRecipients: 0,     // leave as 0 for now
+      totalRecipients: b.totalRecipients,
       eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
       isReported: b.isReported,
       reportReason: b.reportReason,

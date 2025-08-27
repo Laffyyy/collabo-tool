@@ -415,6 +415,32 @@ class RetrieveBroadcastModel {
   }
 }
 
+/**
+ * Get recipient counts for multiple broadcasts in one query
+ * @param {string[]} broadcastIds
+ * @returns {Promise<Object>} { [broadcastId]: count }
+ */
+async getRecipientCounts(broadcastIds) {
+  if (!broadcastIds.length) return {};
+
+  const query = `
+    SELECT
+      t.dbroadcastid,
+      COUNT(DISTINCT ur.duserid) AS recipient_count
+    FROM tblbroadcasttargets t
+    JOIN tbluserroles ur ON ur.droleid = t.dtargetid
+    WHERE t.dtargettype = 'role'
+      AND t.dbroadcastid = ANY($1)
+    GROUP BY t.dbroadcastid
+  `;
+  const { rows } = await this.pool.query(query, [broadcastIds]);
+  const result = {};
+  for (const row of rows) {
+    result[row.dbroadcastid] = parseInt(row.recipient_count, 10);
+  }
+  return result;
+}
+
 
 
 }
