@@ -425,17 +425,17 @@ onMount(() => {
         {#if activeTab === 'sent'}
           <!-- Sent Tab -->
           <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <table class="w-full table-fixed">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
@@ -492,52 +492,58 @@ onMount(() => {
               </tbody>
             </table>
 
-            {#if totalPages() > 1}
-            <div class="flex items-center justify-between mt-4">
-              <div class="text-sm text-gray-600">
-                Page {currentPage} of {totalPages()}
-              </div>
-              <div class="flex space-x-2">
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                {#each Array(totalPages()) as _, i}
-                  <button
-                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
-                    onclick={() => goToPage(i + 1)}
-                  >
-                    {i + 1}
-                  </button>
-                {/each}
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages()}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          {/if}
+          {#if totalPages() > 1}
+  <div class="flex items-center justify-between mt-4 mb-6 px-6">
+    <div class="text-xs text-gray-600">
+      Page {currentPage} of {totalPages()}
+    </div>
+    <div class="flex space-x-1">
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        aria-label="Previous page"
+      >
+        Previous
+      </button>
+      {#each Array(totalPages()) as _, i}
+        <button
+          class="secondary-button px-2 py-1 text-xs rounded
+            {currentPage === i + 1
+              ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
+              : 'hover:bg-gray-100'}"
+          onclick={() => goToPage(i + 1)}
+          aria-current={currentPage === i + 1 ? 'page' : undefined}
+        >
+          {i + 1}
+        </button>
+      {/each}
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage + 1)}
+        disabled={currentPage === totalPages()}
+        aria-label="Next page"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+{/if}
           </div>
         {:else if activeTab === 'scheduled'}
           <!-- Scheduled Tab -->
           <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled Date</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <table class="w-full table-fixed">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
@@ -601,51 +607,57 @@ onMount(() => {
               </tbody>
             </table>
             {#if totalPages() > 1}
-            <div class="flex items-center justify-between mt-4">
-              <div class="text-sm text-gray-600">
-                Page {currentPage} of {totalPages()}
-              </div>
-              <div class="flex space-x-2">
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                {#each Array(totalPages()) as _, i}
-                  <button
-                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
-                    onclick={() => goToPage(i + 1)}
-                  >
-                    {i + 1}
-                  </button>
-                {/each}
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages()}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          {/if}
+  <div class="flex items-center justify-between mt-4 mb-6 px-6">
+    <div class="text-xs text-gray-600">
+      Page {currentPage} of {totalPages()}
+    </div>
+    <div class="flex space-x-1">
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        aria-label="Previous page"
+      >
+        Previous
+      </button>
+      {#each Array(totalPages()) as _, i}
+        <button
+          class="secondary-button px-2 py-1 text-xs rounded
+            {currentPage === i + 1
+              ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
+              : 'hover:bg-gray-100'}"
+          onclick={() => goToPage(i + 1)}
+          aria-current={currentPage === i + 1 ? 'page' : undefined}
+        >
+          {i + 1}
+        </button>
+      {/each}
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage + 1)}
+        disabled={currentPage === totalPages()}
+        aria-label="Next page"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+{/if}
           </div>
         {:else if activeTab === 'archived'}
           <!-- Archived Tab -->
           <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <table class="w-full table-fixed">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
@@ -702,52 +714,57 @@ onMount(() => {
               </tbody>
             </table>
             {#if totalPages() > 1}
-            <div class="flex items-center justify-between mt-4">
-              <div class="text-sm text-gray-600">
-                Page {currentPage} of {totalPages()}
-              </div>
-              <div class="flex space-x-2">
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                {#each Array(totalPages()) as _, i}
-                  <button
-                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
-                    onclick={() => goToPage(i + 1)}
-                  >
-                    {i + 1}
-                  </button>
-                {/each}
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages()}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          {/if}
+  <div class="flex items-center justify-between mt-4 mb-6 px-6">
+    <div class="text-xs text-gray-600">
+      Page {currentPage} of {totalPages()}
+    </div>
+    <div class="flex space-x-1">
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        aria-label="Previous page"
+      >
+        Previous
+      </button>
+      {#each Array(totalPages()) as _, i}
+        <button
+          class="secondary-button px-2 py-1 text-xs rounded
+            {currentPage === i + 1
+              ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
+              : 'hover:bg-gray-100'}"
+          onclick={() => goToPage(i + 1)}
+          aria-current={currentPage === i + 1 ? 'page' : undefined}
+        >
+          {i + 1}
+        </button>
+      {/each}
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage + 1)}
+        disabled={currentPage === totalPages()}
+        aria-label="Next page"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+{/if}
           </div>
         {:else if activeTab === 'reported'}
           <!-- Reported Tab -->
           <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report Reason</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <table class="w-full table-fixed">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
+                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
+                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
+                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
@@ -817,36 +834,42 @@ onMount(() => {
               </tbody>
             </table>
             {#if totalPages() > 1}
-            <div class="flex items-center justify-between mt-4">
-              <div class="text-sm text-gray-600">
-                Page {currentPage} of {totalPages()}
-              </div>
-              <div class="flex space-x-2">
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                {#each Array(totalPages()) as _, i}
-                  <button
-                    class="secondary-button px-3 py-1 rounded {currentPage === i + 1 ? 'bg-[#01c0a4] text-white' : ''}"
-                    onclick={() => goToPage(i + 1)}
-                  >
-                    {i + 1}
-                  </button>
-                {/each}
-                <button
-                  class="secondary-button px-3 py-1 rounded disabled:opacity-50"
-                  onclick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages()}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          {/if}
+  <div class="flex items-center justify-between mt-4 mb-6 px-6">
+    <div class="text-xs text-gray-600">
+      Page {currentPage} of {totalPages()}
+    </div>
+    <div class="flex space-x-1">
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        aria-label="Previous page"
+      >
+        Previous
+      </button>
+      {#each Array(totalPages()) as _, i}
+        <button
+          class="secondary-button px-2 py-1 text-xs rounded
+            {currentPage === i + 1
+              ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
+              : 'hover:bg-gray-100'}"
+          onclick={() => goToPage(i + 1)}
+          aria-current={currentPage === i + 1 ? 'page' : undefined}
+        >
+          {i + 1}
+        </button>
+      {/each}
+      <button
+        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={() => goToPage(currentPage + 1)}
+        disabled={currentPage === totalPages()}
+        aria-label="Next page"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+{/if}
           </div>
         {/if}
 
