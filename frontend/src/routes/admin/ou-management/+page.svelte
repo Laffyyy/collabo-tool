@@ -99,7 +99,7 @@
           allowEmojis: true,
           messageRetentionDays: 365,
           maxFileSize: 10,
-          allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+          allowedFileTypes: false,
           maxGroupSize: 50,
           messageEditWindow: 15,
           pinnedMessages: {
@@ -157,7 +157,7 @@
           allowEmojis: false,
           messageRetentionDays: 90,
           maxFileSize: 5,
-          allowedFileTypes: ['pdf', 'doc', 'docx'],
+          allowedFileTypes: false,
           maxGroupSize: 20,
           messageEditWindow: 5,
           pinnedMessages: {
@@ -377,7 +377,7 @@
           allowEmojis: true,
           messageRetentionDays: 365,
           maxFileSize: 10,
-          allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+          allowedFileTypes: false,
           maxGroupSize: 50,
           messageEditWindow: 15,
           pinnedMessages: {

@@ -5,22 +5,35 @@ const { mergeSettings } = require('../utils/settingsTransformer');
 const ouModel = new OUmodel();
 
 /**
- * Get active OUs with pagination and sorting
- * @param {number} howmany - Number of records per page
- * @param {number} page - Page number
- * @param {string} sort - Sort field and direction
+ * Get OUs with pagination, sorting, and optional search
+ * @param {number|string} start - Offset to start from
+ * @param {number|string} limit - Number of records per page
+ * @param {string} sort - Sort direction (ASC|DESC)
+ * @param {string} sortby - Column to sort by
+ * @param {string} search - Enable search ('true'|'false')
+ * @param {string} searchby - Column to search by
+ * @param {string} searchvalue - Search term
+ * @param {string} isactive - Filter by active status ('true'|'false')
  * @returns {Object} - Paginated OU data
  */
-async function getOU(howmany, page, sort) {
+async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, isactive) {
     try {
-        // TODO: Implement database query to fetch active OUs
-        // This is a placeholder implementation
+        const startInt = Number.isInteger(start) ? start : parseInt(start || 0);
+        const limitInt = Number.isInteger(limit) ? limit : parseInt(limit || 10);
+
+        const total = await ouModel.getOUCount(search, searchby, searchvalue, isactive);
+        const rows = await ouModel.getOUs(startInt, limitInt, sort, sortby, search, searchby, searchvalue, isactive);
+
+        const totalPages = limitInt > 0 ? Math.ceil(total / limitInt) : 0;
+        const page = limitInt > 0 ? Math.floor(startInt / limitInt) + 1 : 1;
+
         return {
-            data: [],
-            total: 0,
-            page: parseInt(page),
-            limit: parseInt(howmany),
-            totalPages: 0
+            data: rows,
+            total,
+            start: startInt,
+            limit: limitInt,
+            page,
+            totalPages
         };
     } catch (error) {
         throw new Error(`Failed to get OUs: ${error.message}`);
