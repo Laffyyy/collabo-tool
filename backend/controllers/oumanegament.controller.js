@@ -96,8 +96,8 @@ async function createOUmanager(req, res, next) {
 
 async function deactiveOU(req, res, next) {
     try {
-        const { id } = req.body;
-        const result = await oumanegamentService.deactiveOU(id);
+        const { deativationlist } = req.body;
+        const result = await oumanegamentService.deactiveOU(deativationlist);
         res.status(200).json({ ok: true, ...result });
     } catch (err) {
         next(err);
@@ -106,8 +106,8 @@ async function deactiveOU(req, res, next) {
 
 async function updateOU(req, res, next) {
     try {
-        const { id, name, description, parentouid, OUsettings } = req.body;
-        const result = await oumanegamentService.updateOU(id, name, description, parentouid, OUsettings);
+        const { id, changes } = req.body;
+        const result = await oumanegamentService.updateOU(id, changes);
         res.status(200).json({ ok: true, ...result });
     } catch (err) {
         next(err);

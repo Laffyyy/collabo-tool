@@ -117,4 +117,17 @@ router.post(
     OUmanagerController.updateOU
 )
 
+router.post(
+    '/deactive',
+    [
+        body('deativationlist').isArray().notEmpty().withMessage('deativationlist must be a non-empty array'),
+        body('deativationlist.*').isString().notEmpty().withMessage('Each OU ID must be a non-empty string')
+            .isUUID().withMessage('Each OU ID must be a valid UUID'),
+    ],
+    validate,
+    OUmanagerController.deactiveOU
+)
+
+
+
 module.exports = router;

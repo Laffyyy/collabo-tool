@@ -84,20 +84,53 @@ async function createOU(OrgName, Description, parentouid, OUsettings, Location, 
 }
 
 /**
- * Deactivate an OU
- * @param {string} id - OU ID to deactivate
+ * Deactivate multiple OUs
+ * @param {Array<string>} deativationlist - Array of OU IDs to deactivate
  * @returns {Object} - Deactivation result
  */
-async function deactiveOU(id) {
+async function deactiveOU(deativationlist) {
     try {
-        // TODO: Implement database query to deactivate OU
-        // This is a placeholder implementation
+        if (!Array.isArray(deativationlist) || deativationlist.length === 0) {
+            throw new Error('deativationlist must be a non-empty array');
+        }
+
+        const results = [];
+        const errors = [];
+        const deactivatedAt = new Date().toISOString();
+
+        // Process each OU ID in the deactivation list
+        for (const id of deativationlist) {
+            try {
+                // Deactivate the OU using the model
+                const result = await ouModel.deactiveOU(id);
+                results.push({
+                    id,
+                    status: 'deactivated',
+                    deactivatedAt,
+                    ...result
+                });
+            } catch (ouError) {
+                errors.push({
+                    id,
+                    status: 'failed',
+                    error: ouError.message
+                });
+            }
+        }
+
+        const successCount = results.length;
+        const failureCount = errors.length;
+
         return {
-            message: 'OU deactivated successfully',
-            data: { id, active: false, deactivatedAt: new Date().toISOString() }
+            message: `Deactivation completed: ${successCount} successful, ${failureCount} failed`,
+            totalRequested: deativationlist.length,
+            successCount,
+            failureCount,
+            results,
+            errors: errors.length > 0 ? errors : undefined
         };
     } catch (error) {
-        throw new Error(`Failed to deactivate OU: ${error.message}`);
+        throw new Error(`Failed to deactivate OUs: ${error.message}`);
     }
 }
 
