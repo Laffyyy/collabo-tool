@@ -23,18 +23,29 @@ class OUmodel {
 
     async createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
         try {
-            const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, (SELECT COALESCE(array_agg(elem), ARRAY[]::jsonb[]) FROM jsonb_array_elements($5::jsonb) AS elem)) RETURNING *`;
+            // Normalize jsSettings to an array of plain objects
             let normalized = jsSettings;
-            if (typeof normalized === 'string') {
-                try { normalized = JSON.parse(normalized); } catch {}
-                if (typeof normalized === 'string') {
-                    try { normalized = JSON.parse(normalized); } catch {}
-                }
+            for (let i = 0; i < 2 && typeof normalized === 'string'; i++) {
+                try { normalized = JSON.parse(normalized); } catch { break; }
             }
             if (!Array.isArray(normalized)) {
                 normalized = normalized ? [normalized] : [];
             }
-            const result = await db.query(query, [OrgName, Description, parentouid, new Date(), JSON.stringify(normalized)]);
+
+            const baseParams = [OrgName, Description, parentouid, new Date()];
+            let query;
+            let params;
+
+            if (normalized.length === 0) {
+                query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, ARRAY[]::jsonb[]) RETURNING *`;
+                params = baseParams;
+            } else {
+                const placeholders = normalized.map((_, idx) => `$${baseParams.length + 1 + idx}::jsonb`).join(', ');
+                query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, ARRAY[${placeholders}]) RETURNING *`;
+                params = [...baseParams, ...normalized.map(elem => JSON.stringify(elem))];
+            }
+
+            const result = await db.query(query, params);
             return result.rows[0];
         } catch (error) {
             throw new Error(error);
