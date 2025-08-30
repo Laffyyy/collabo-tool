@@ -1,7 +1,7 @@
 // OU Management Service
 // This service handles all OU (Organizational Unit) related operations
 const OUmodel = require('../model/ou.model');
-const { mergeSettings } = require('../utils/settingsTransformer');
+const { mergeSettings, transformSettingsToJSSettings } = require('../utils/settingsTransformer');
 const ouModel = new OUmodel();
 
 /**
@@ -162,9 +162,10 @@ async function updateOU(id, changes) {
                 existingSettings = {};
             }
 
-            // Merge the new settings with existing settings
+            // Merge the new settings with existing settings and transform to jsSettings array
             const mergedSettings = mergeSettings(existingSettings, changes.Settings);
-            processedChanges.Settings = mergedSettings;
+            const jsSettingsArray = transformSettingsToJSSettings(mergedSettings);
+            processedChanges.Settings = jsSettingsArray;
         }
 
         const result = await ouModel.updateOU(id, processedChanges);

@@ -23,10 +23,8 @@ class OUmodel {
 
     async createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
         try {
-            const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, $5) RETURNING *`;
-            // Pass jsSettings as an array directly to PostgreSQL
-            // PostgreSQL will handle the JSON objects within the array
-            const result = await db.query(query, [OrgName, Description, parentouid, new Date(), jsSettings]);
+            const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, (SELECT COALESCE(array_agg(elem), ARRAY[]::jsonb[]) FROM jsonb_array_elements($5::jsonb) AS elem)) RETURNING *`;
+            const result = await db.query(query, [OrgName, Description, parentouid, new Date(), JSON.stringify(jsSettings)]);
             return result.rows[0];
         } catch (error) {
             throw new Error(error);
@@ -174,7 +172,15 @@ class OUmodel {
             }
 
             if (changes.Settings !== undefined) {
-                updates.push(`"jsSettings" = $${paramIndex}`);
+                // Accept either a JSON array or a single JSON object; always store as jsonb[]
+                updates.push(`"jsSettings" = (
+                    SELECT CASE
+                        WHEN jsonb_typeof($${paramIndex}::jsonb) = 'array' THEN 
+                            COALESCE((SELECT array_agg(e) FROM jsonb_array_elements($${paramIndex}::jsonb) AS e), ARRAY[]::jsonb[])
+                        ELSE 
+                            ARRAY[$${paramIndex}::jsonb]
+                    END
+                )`);
                 values.push(JSON.stringify(changes.Settings));
                 paramIndex++;
             }
