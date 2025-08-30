@@ -24,7 +24,17 @@ class OUmodel {
     async createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
         try {
             const query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, (SELECT COALESCE(array_agg(elem), ARRAY[]::jsonb[]) FROM jsonb_array_elements($5::jsonb) AS elem)) RETURNING *`;
-            const result = await db.query(query, [OrgName, Description, parentouid, new Date(), JSON.stringify(jsSettings)]);
+            let normalized = jsSettings;
+            if (typeof normalized === 'string') {
+                try { normalized = JSON.parse(normalized); } catch {}
+                if (typeof normalized === 'string') {
+                    try { normalized = JSON.parse(normalized); } catch {}
+                }
+            }
+            if (!Array.isArray(normalized)) {
+                normalized = normalized ? [normalized] : [];
+            }
+            const result = await db.query(query, [OrgName, Description, parentouid, new Date(), JSON.stringify(normalized)]);
             return result.rows[0];
         } catch (error) {
             throw new Error(error);
@@ -172,17 +182,30 @@ class OUmodel {
             }
 
             if (changes.Settings !== undefined) {
-                // Accept either a JSON array or a single JSON object; always store as jsonb[]
-                updates.push(`"jsSettings" = (
-                    SELECT CASE
-                        WHEN jsonb_typeof($${paramIndex}::jsonb) = 'array' THEN 
-                            COALESCE((SELECT array_agg(e) FROM jsonb_array_elements($${paramIndex}::jsonb) AS e), ARRAY[]::jsonb[])
-                        ELSE 
-                            ARRAY[$${paramIndex}::jsonb]
-                    END
-                )`);
-                values.push(JSON.stringify(changes.Settings));
-                paramIndex++;
+                // Normalize to an array of plain objects
+                let normalized = changes.Settings;
+                // Unwrap double-encoded strings up to 2 times
+                for (let i = 0; i < 2 && typeof normalized === 'string'; i++) {
+                    try {
+                        normalized = JSON.parse(normalized);
+                    } catch {
+                        break;
+                    }
+                }
+                if (!Array.isArray(normalized)) {
+                    normalized = normalized ? [normalized] : [];
+                }
+
+                if (normalized.length === 0) {
+                    updates.push(`"jsSettings" = ARRAY[]::jsonb[]`);
+                } else {
+                    const placeholders = normalized.map((_, idx) => `$${paramIndex + idx}::jsonb`).join(', ');
+                    updates.push(`"jsSettings" = ARRAY[${placeholders}]`);
+                    for (const element of normalized) {
+                        values.push(JSON.stringify(element));
+                    }
+                    paramIndex += normalized.length;
+                }
             }
 
             if (changes.isactive !== undefined) {
@@ -207,6 +230,16 @@ class OUmodel {
             return result.rows[0];
         } catch (error) {
             throw new Error(error.message);
+        }
+    }
+
+    async getOUsettings(id) {
+        try {
+            const query = `SELECT "jsSettings" FROM tblorganizationalunits WHERE did = $1`;
+            const result = await db.query(query, [id]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
         }
     }
     

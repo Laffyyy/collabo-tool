@@ -117,6 +117,13 @@ router.post(
     OUmanagerController.updateOU
 )
 
+router.get(
+    '/getOUsettings',
+    [query('id').isString().notEmpty()],
+    validate,
+    OUmanagerController.getOUsettings
+)
+
 router.post(
     '/deactive',
     [

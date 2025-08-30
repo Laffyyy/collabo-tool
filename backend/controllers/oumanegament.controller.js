@@ -126,11 +126,24 @@ async function updateOU(req, res, next) {
     }
 }
 
+
+async function getOUsettings(req, res, next) {
+    try {
+        const { id } = req.query;
+        const result = await oumanegamentService.getOUsettings(id);
+        res.status(200).json({ ok: true, ...result });
+    } catch (err) {
+        next(err);
+    }
+}
+
+
 module.exports = {
     getOU,
     getDeactiveOU,
     getDeactiveOUList,
     createOUmanager,
     deactiveOU,
-    updateOU
+    updateOU,
+    getOUsettings
 };

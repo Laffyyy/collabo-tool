@@ -1,8 +1,58 @@
 // OU Management Service
 // This service handles all OU (Organizational Unit) related operations
 const OUmodel = require('../model/ou.model');
-const { mergeSettings, transformSettingsToJSSettings } = require('../utils/settingsTransformer');
+const { mergeSettings, transformSettingsToJSSettings, transformOUSettingsToSettings } = require('../utils/settingsTransformer');
 const ouModel = new OUmodel();
+
+// Normalize jsSettings field coming from Postgres jsonb[] which often arrives as array of strings
+function deserializeJsSettings(jsSettings) {
+    try {
+        if (!jsSettings) return [];
+
+        // If it is already an array of plain objects, return as is
+        if (Array.isArray(jsSettings) && jsSettings.every(elem => elem && typeof elem === 'object' && !Array.isArray(elem))) {
+            return jsSettings;
+        }
+
+        // If it is a string that encodes an array or object, parse it
+        if (typeof jsSettings === 'string') {
+            try {
+                const parsed = JSON.parse(jsSettings);
+                return deserializeJsSettings(parsed);
+            } catch {
+                return [];
+            }
+        }
+
+        // If it is an array of strings, parse each and flatten any nested arrays
+        if (Array.isArray(jsSettings)) {
+            const out = [];
+            for (const element of jsSettings) {
+                if (typeof element === 'string') {
+                    try {
+                        const parsed = JSON.parse(element);
+                        if (Array.isArray(parsed)) {
+                            for (const inner of parsed) {
+                                if (inner && typeof inner === 'object' && !Array.isArray(inner)) out.push(inner);
+                            }
+                        } else if (parsed && typeof parsed === 'object') {
+                            out.push(parsed);
+                        }
+                    } catch {
+                        // skip unparsable entries
+                    }
+                } else if (element && typeof element === 'object' && !Array.isArray(element)) {
+                    out.push(element);
+                }
+            }
+            return out;
+        }
+
+        return [];
+    } catch {
+        return [];
+    }
+}
 
 /**
  * Get OUs with pagination, sorting, and optional search
@@ -23,6 +73,13 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
 
         const total = await ouModel.getOUCount(search, searchby, searchvalue, isactive);
         const rows = await ouModel.getOUs(startInt, limitInt, sort, sortby, search, searchby, searchvalue, isactive);
+
+        // Ensure jsSettings is deserialized for all rows
+        for (const row of rows) {
+            if (Object.prototype.hasOwnProperty.call(row, 'jsSettings')) {
+                row.jsSettings = deserializeJsSettings(row.jsSettings);
+            }
+        }
 
         const totalPages = limitInt > 0 ? Math.ceil(total / limitInt) : 0;
         const page = limitInt > 0 ? Math.floor(startInt / limitInt) + 1 : 1;
@@ -76,6 +133,9 @@ async function getDeactiveOU(howmany, page, sort) {
 async function createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
     try {
         const result = await ouModel.createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings);
+        if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
+            result.jsSettings = deserializeJsSettings(result.jsSettings);
+        }
         return result;
 
     } catch (error) {
@@ -154,9 +214,17 @@ async function updateOU(id, changes) {
 
             let existingSettings = {};
             try {
-                existingSettings = currentOU.jsSettings || {};
-                if (typeof existingSettings === 'string') {
-                    existingSettings = JSON.parse(existingSettings);
+                const savedJsSettings = currentOU.jsSettings;
+                if (Array.isArray(savedJsSettings)) {
+                    existingSettings = transformOUSettingsToSettings(savedJsSettings);
+                } else if (typeof savedJsSettings === 'string') {
+                    const parsed = JSON.parse(savedJsSettings);
+                    existingSettings = Array.isArray(parsed)
+                        ? transformOUSettingsToSettings(parsed)
+                        : (parsed || {});
+                } else if (savedJsSettings && typeof savedJsSettings === 'object') {
+                    // In case the driver already parsed jsonb[] to JS array
+                    existingSettings = transformOUSettingsToSettings(savedJsSettings);
                 }
             } catch (parseError) {
                 existingSettings = {};
@@ -169,6 +237,9 @@ async function updateOU(id, changes) {
         }
 
         const result = await ouModel.updateOU(id, processedChanges);
+        if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
+            result.jsSettings = deserializeJsSettings(result.jsSettings);
+        }
         return {
             message: 'OU updated successfully',
             data: result
@@ -178,10 +249,24 @@ async function updateOU(id, changes) {
     }
 }
 
+async function getOUsettings(id) {
+    try {
+        const result = await ouModel.getOUById(id);
+        if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
+            result.jsSettings = deserializeJsSettings(result.jsSettings);
+        }
+        return result;
+    } catch (error) {
+        throw new Error(`Failed to get OU settings: ${error.message}`);
+    }
+}
+
+
 module.exports = {
     getOU,
     getDeactiveOU,
     createOU,
     deactiveOU,
-    updateOU
+    updateOU,
+    getOUsettings
 };
