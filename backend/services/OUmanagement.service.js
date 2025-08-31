@@ -71,8 +71,16 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
         const startInt = Number.isInteger(start) ? start : parseInt(start || 0);
         const limitInt = Number.isInteger(limit) ? limit : parseInt(limit || 10);
 
-        const total = await ouModel.getOUCount(search, searchby, searchvalue, isactive);
-        const rows = await ouModel.getOUs(startInt, limitInt, sort, sortby, search, searchby, searchvalue, isactive);
+        const { rows, total } = await ouModel.getOUsWithTotal(
+            startInt,
+            limitInt,
+            sort,
+            sortby,
+            search,
+            searchby,
+            searchvalue,
+            isactive
+        );
 
         // Ensure jsSettings is deserialized for all rows
         for (const row of rows) {

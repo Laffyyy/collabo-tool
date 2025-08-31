@@ -117,7 +117,7 @@ class OUmodel {
 
             // Add search conditions if search is enabled
             if (search && search !== 'false' && searchvalue && searchvalue.trim() !== '') {
-                const searchCondition = ` AND ou.${searchby} ILIKE $${paramIndex}`;
+                const searchCondition = ` AND (ou.dname ILIKE $${paramIndex} OR ou.ddescription ILIKE $${paramIndex})`;
                 whereClause += searchCondition;
                 params.push(`%${searchvalue}%`);
                 paramIndex++;
@@ -139,6 +139,83 @@ class OUmodel {
             // Execute query
             const result = await db.query(finalQuery, params);
             return result.rows;
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
+
+    async getOUsWithTotal(start, limit, sort, sortby, search, searchby, searchvalue, isactive = 'true') {
+        try {
+            // Build common filters
+            const activeStatus = isactive === 'true';
+            let whereClause = ` WHERE ou."bisActive" = ${activeStatus}`;
+            let params = [];
+            let paramIndex = 1;
+
+            if (search && search !== 'false' && searchvalue && searchvalue.trim() !== '') {
+                const searchCondition = ` AND (ou.dname ILIKE $${paramIndex} OR ou.ddescription ILIKE $${paramIndex})`;
+                whereClause += searchCondition;
+                params.push(`%${searchvalue}%`);
+                paramIndex++;
+            }
+
+            // Validate sort
+            const validSortColumns = ['dname', 'ddescription', 'tcreatedat'];
+            const validSortBy = validSortColumns.includes(sortby) ? sortby : 'dname';
+            const validSort = (sort && sort.toUpperCase() === 'DESC') ? 'DESC' : 'ASC';
+
+            // Use window function COUNT(*) OVER() to compute total across filtered set
+            const query = `
+                WITH filtered AS (
+                    SELECT ou.*
+                    FROM tblorganizationalunits ou
+                    ${whereClause}
+                ),
+                with_members AS (
+                    SELECT 
+                        ou.did as ouid,
+                        ou.dname,
+                        ou.ddescription,
+                        ou.dparentouid,
+                        ou.tcreatedat,
+                        ou."jsSettings",
+                        ou."bisActive",
+                        COALESCE(mc.membercount, 0) as membercount
+                    FROM filtered ou
+                    LEFT JOIN (
+                        WITH RECURSIVE ou_hierarchy AS (
+                            SELECT did as base_ou, did as descendant_ou FROM tblorganizationalunits
+                            UNION ALL
+                            SELECT h.base_ou, o.did
+                            FROM tblorganizationalunits o
+                            INNER JOIN ou_hierarchy h ON o.dparentouid = h.descendant_ou
+                        )
+                        SELECT base_ou, COUNT(ur.duserid) as membercount
+                        FROM ou_hierarchy oh
+                        LEFT JOIN tbluserroles ur ON ur.douid = oh.descendant_ou
+                        GROUP BY base_ou
+                    ) mc ON mc.base_ou = ou.did
+                )
+                SELECT *, COUNT(*) OVER() AS total_count
+                FROM with_members
+                ORDER BY ${validSortBy} ${validSort}
+                LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+            `;
+
+            params.push(limit, start);
+            const result = await db.query(query, params);
+            const rows = result.rows.map(r => ({
+                ouid: r.ouid,
+                dname: r.dname,
+                ddescription: r.ddescription,
+                dparentouid: r.dparentouid,
+                tcreatedat: r.tcreatedat,
+                jsSettings: r.jsSettings,
+                bisActive: r.bisActive,
+                membercount: r.membercount
+            }));
+            const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
+            return { rows, total };
         } catch (error) {
             throw new Error(error);
         }
