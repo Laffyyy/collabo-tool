@@ -772,6 +772,9 @@ const performCSVExport = (broadcast: Broadcast) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+
+  // Show success toast after successful export
+  $toastStore.success(`CSV export completed! File: broadcast-responses-${broadcast.title.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.csv`);
   
   console.log('CSV export completed');
 };
