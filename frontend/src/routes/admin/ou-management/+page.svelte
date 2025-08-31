@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
-  import { createOU as createOUAPI, transformOUDataForAPI } from '$lib/api/OUmanagement';
+  import { onMount } from 'svelte';
+  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -65,125 +66,10 @@
     };
   }
 
-  // Mock OU data - simplified for demo
-  let organizationUnits = $state<OrganizationUnit[]>([
-    {
-      id: '1',
-      name: 'Engineering',
-      description: 'Software development and technical teams',
-      parentId: null,
-      memberCount: 15,
-      location: 'New York, NY',
-      createdAt: new Date(Date.now() - 86400000 * 180),
-      modifiedAt: new Date(Date.now() - 86400000 * 30),
-      status: 'active',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: true,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: true,
-          frontlineCanShareFiles: false,
-          frontlineCanForwardMessages: false,
-          supportCanInitiate1v1: true,
-          supportCanCreateGroups: false,
-          supportCanJoinGroups: true,
-          supportCanShareFiles: true,
-          supportCanForwardMessages: true,
-          supervisorCanCreateGroups: true,
-          supervisorCanShareFiles: true,
-          supervisorCanForwardMessages: true,
-          managerCanAccessAllGroups: true,
-          managerCanShareFiles: true,
-          managerCanForwardMessages: true,
-          allowFileSharing: true,
-          allowEmojis: true,
-          messageRetentionDays: 365,
-          maxFileSize: 10,
-          allowedFileTypes: false,
-          maxGroupSize: 50,
-          messageEditWindow: 15,
-          pinnedMessages: {
-            enabled: true,
-            maxPinnedPerConversation: 10
-          }
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: true,
-          supportCanCreateBroadcast: false,
-          supportCanReplyToBroadcast: true,
-          supervisorCanCreateBroadcast: true,
-          managerCanCreateBroadcast: true,
-          requireApprovalForBroadcast: false,
-          allowScheduledBroadcasts: true,
-          allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 365,
-          requireAcknowledgment: true,
-          acknowledgmentReminders: true,
-          reminderInterval: 1440,
-          maxBroadcastTargets: 1000
-        }
-      }
-    },
-    {
-      id: '2',
-      name: 'Human Resources',
-      description: 'HR operations and people management',
-      parentId: null,
-      memberCount: 5,
-      location: 'Chicago, IL',
-      createdAt: new Date(Date.now() - 86400000 * 200),
-      modifiedAt: new Date(Date.now() - 86400000 * 7),
-      status: 'active',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: false,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: false,
-          frontlineCanShareFiles: false,
-          frontlineCanForwardMessages: false,
-          supportCanInitiate1v1: true,
-          supportCanCreateGroups: false,
-          supportCanJoinGroups: true,
-          supportCanShareFiles: false,
-          supportCanForwardMessages: false,
-          supervisorCanCreateGroups: true,
-          supervisorCanShareFiles: true,
-          supervisorCanForwardMessages: true,
-          managerCanAccessAllGroups: true,
-          managerCanShareFiles: true,
-          managerCanForwardMessages: true,
-          allowFileSharing: false,
-          allowEmojis: false,
-          messageRetentionDays: 90,
-          maxFileSize: 5,
-          allowedFileTypes: false,
-          maxGroupSize: 20,
-          messageEditWindow: 5,
-          pinnedMessages: {
-            enabled: false,
-            maxPinnedPerConversation: 5
-          }
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: false,
-          supportCanCreateBroadcast: false,
-          supportCanReplyToBroadcast: true,
-          supervisorCanCreateBroadcast: false,
-          managerCanCreateBroadcast: true,
-          requireApprovalForBroadcast: true,
-          allowScheduledBroadcasts: true,
-          allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 90,
-          requireAcknowledgment: true,
-          acknowledgmentReminders: true,
-          reminderInterval: 720,
-          maxBroadcastTargets: 500
-        }
-      }
-    }
-  ]);
+  // Data state
+  let organizationUnits = $state<OrganizationUnit[]>([]);
+  let activeList = $state<OrganizationUnit[]>([]);
+  let inactiveList = $state<OrganizationUnit[]>([]);
 
   let searchQuery = $state<string>('');
   let currentTab = $state<string>('active');
@@ -208,6 +94,97 @@
   let isCreatingOU = $state<boolean>(false);
   let apiError = $state<string>('');
   let apiSuccess = $state<string>('');
+  let isLoading = $state<boolean>(false);
+  let loadError = $state<string>('');
+
+  const defaultRules: OURules = {
+    chat: {
+      frontlineCanInitiate1v1: true,
+      frontlineCanCreateGroups: false,
+      frontlineCanJoinGroups: true,
+      frontlineCanShareFiles: false,
+      frontlineCanForwardMessages: false,
+      supportCanInitiate1v1: true,
+      supportCanCreateGroups: false,
+      supportCanJoinGroups: true,
+      supportCanShareFiles: true,
+      supportCanForwardMessages: true,
+      supervisorCanCreateGroups: true,
+      supervisorCanShareFiles: true,
+      supervisorCanForwardMessages: true,
+      managerCanAccessAllGroups: true,
+      managerCanShareFiles: true,
+      managerCanForwardMessages: true,
+      allowFileSharing: true,
+      allowEmojis: true,
+      messageRetentionDays: 365,
+      maxFileSize: 10,
+      allowedFileTypes: false,
+      maxGroupSize: 50,
+      messageEditWindow: 15,
+      pinnedMessages: { enabled: true, maxPinnedPerConversation: 10 }
+    },
+    broadcast: {
+      frontlineCanCreateBroadcast: false,
+      frontlineCanReplyToBroadcast: true,
+      supportCanCreateBroadcast: false,
+      supportCanReplyToBroadcast: true,
+      supervisorCanCreateBroadcast: true,
+      managerCanCreateBroadcast: true,
+      requireApprovalForBroadcast: false,
+      allowScheduledBroadcasts: true,
+      allowPriorityBroadcasts: true,
+      broadcastRetentionDays: 365,
+      requireAcknowledgment: true,
+      acknowledgmentReminders: true,
+      reminderInterval: 1440,
+      maxBroadcastTargets: 1000
+    }
+  };
+
+  const mapBackendToOU = (row: any): OrganizationUnit => {
+    const created = row?.tcreatedat ? new Date(row.tcreatedat) : new Date();
+    const isActive = !!row?.bisActive;
+    return {
+      id: row?.ouid || row?.did || String(Date.now()),
+      name: row?.dname || 'Unknown',
+      description: row?.ddescription || '',
+      parentId: row?.dparentouid || null,
+      memberCount: Number(row?.membercount) || 0,
+      location: row?.dlocation || '',
+      createdAt: created,
+      modifiedAt: created,
+      status: isActive ? 'active' : 'inactive',
+      rules: defaultRules
+    };
+  };
+
+  const loadLists = async () => {
+    isLoading = true;
+    loadError = '';
+    try {
+      const [activeRes, inactiveRes] = await Promise.all([
+        getActiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' }),
+        getInactiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' })
+      ]);
+
+      const activeRows = (activeRes.data as any)?.data || [];
+      const inactiveRows = (inactiveRes.data as any)?.data || [];
+
+      activeList = activeRows.map(mapBackendToOU);
+      inactiveList = inactiveRows.map(mapBackendToOU);
+      organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+    } catch (e) {
+      console.error(e);
+      loadError = 'Failed to load organization units';
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  onMount(() => {
+    loadLists();
+  });
 
   let newOU = $state({
     name: '',
@@ -263,9 +240,20 @@
   });
 
   // Computed values
-  const tabCounts = $derived({
-    active: organizationUnits.filter(ou => ou.status === 'active').length,
-    inactive: organizationUnits.filter(ou => ou.status === 'inactive').length
+  const tabCounts = $derived.by(() => {
+    const matches = (list: OrganizationUnit[]) => {
+      if (!searchQuery) return list.length;
+      const q = searchQuery.toLowerCase();
+      return list.filter(ou =>
+        ou.name.toLowerCase().includes(q) ||
+        ou.description.toLowerCase().includes(q) ||
+        ou.location.toLowerCase().includes(q)
+      ).length;
+    };
+    return {
+      active: matches(activeList),
+      inactive: matches(inactiveList)
+    };
   });
 
   let filteredOUs = $derived.by(() => {
@@ -322,7 +310,8 @@
           };
 
           // Update the local state
-          organizationUnits = [ou, ...organizationUnits];
+          activeList = [ou, ...activeList];
+          organizationUnits = currentTab === 'active' ? activeList : inactiveList;
           
           // Show success message
           apiSuccess = result.message || 'Organization Unit created successfully!';
@@ -491,9 +480,17 @@
 
   const bulkDeactivateOUs = () => {
     const selectedCount = selectedRows.size;
-    organizationUnits = organizationUnits.map(ou =>
-      selectedRows.has(ou.id) ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
-    );
+    // Optimistic UI update
+    if (currentTab === 'active') {
+      activeList = activeList.map(ou =>
+        selectedRows.has(ou.id) ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
+      );
+      // Move to inactive list
+      const moved = activeList.filter(ou => selectedRows.has(ou.id));
+      inactiveList = [...moved.map(ou => ({ ...ou, status: 'inactive' as const })), ...inactiveList];
+      activeList = activeList.filter(ou => !selectedRows.has(ou.id));
+      organizationUnits = activeList;
+    }
     showConfirmationModal = false;
     selectedRows = new Set();
     selectAll = false;
@@ -555,6 +552,7 @@
     // Clear selections when switching tabs
     selectedRows = new Set();
     selectAll = false;
+    organizationUnits = currentTab === 'active' ? activeList : inactiveList;
   };
 
   // Row selection functions
@@ -589,18 +587,28 @@
   };
 
   const deactivateOU = (ouId: string) => {
-    organizationUnits = organizationUnits.map(ou =>
-      ou.id === ouId ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
-    );
+    // Optimistic move
+    const found = activeList.find(ou => ou.id === ouId);
+    if (found) {
+      const updated = { ...found, status: 'inactive' as const, modifiedAt: new Date() };
+      activeList = activeList.filter(ou => ou.id !== ouId);
+      inactiveList = [updated, ...inactiveList];
+      organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+    }
     showConfirmationModal = false;
     selectedRows = new Set();
   };
 
   // Reactivate function
   const reactivateOU = (ouId: string) => {
-    organizationUnits = organizationUnits.map(ou =>
-      ou.id === ouId ? { ...ou, status: 'active' as const, modifiedAt: new Date() } : ou
-    );
+    // Optimistic UI: move from inactive to active
+    const found = inactiveList.find(ou => ou.id === ouId);
+    if (found) {
+      const updated = { ...found, status: 'active' as const, modifiedAt: new Date() };
+      inactiveList = inactiveList.filter(ou => ou.id !== ouId);
+      activeList = [updated, ...activeList];
+      organizationUnits = currentTab === 'inactive' ? inactiveList : activeList;
+    }
   };
 </script>
 

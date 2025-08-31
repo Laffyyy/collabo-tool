@@ -68,9 +68,13 @@ interface APIResponse<T = any> {
 }
 
 interface OUQueryParams {
-  page?: number;
-  limit?: number;
-  sort?: string;
+  start?: number; // offset
+  limit?: number; // page size
+  sort?: 'ASC' | 'DESC';
+  sortby?: 'dname' | 'ddescription' | 'tcreatedat';
+  search?: 'true' | 'false';
+  searchby?: 'dname' | 'ddescription';
+  searchvalue?: string;
 }
 
 interface UpdateOURequest {
@@ -190,7 +194,7 @@ export const createOU = async (ouData: CreateOURequest): Promise<APIResponse> =>
  */
 export const getActiveOUs = async (params: OUQueryParams = {}): Promise<APIResponse> => {
   try {
-    const response = await apiClient.get('/active', { params });
+    const response = await apiClient.get('/list', { params: { ...params, isactive: 'true' } });
     return {
       success: true,
       data: response.data
@@ -212,7 +216,7 @@ export const getActiveOUs = async (params: OUQueryParams = {}): Promise<APIRespo
  */
 export const getInactiveOUs = async (params: OUQueryParams = {}): Promise<APIResponse> => {
   try {
-    const response = await apiClient.get('/deactive', { params });
+    const response = await apiClient.get('/list', { params: { ...params, isactive: 'false' } });
     return {
       success: true,
       data: response.data
@@ -234,7 +238,7 @@ export const getInactiveOUs = async (params: OUQueryParams = {}): Promise<APIRes
  */
 export const deactivateOU = async (id: string): Promise<APIResponse> => {
   try {
-    const response = await apiClient.post('/deactive', { id });
+    const response = await apiClient.post('/deactive', { deativationlist: [id] });
     return {
       success: true,
       data: response.data,
@@ -251,13 +255,35 @@ export const deactivateOU = async (id: string): Promise<APIResponse> => {
 };
 
 /**
+ * Deactivate multiple Organization Units in one request
+ */
+export const deactivateOUs = async (ids: string[]): Promise<APIResponse> => {
+  try {
+    const response = await apiClient.post('/deactive', { deativationlist: ids });
+    return {
+      success: true,
+      data: response.data,
+      message: 'Selected Organization Units deactivated successfully'
+    };
+  } catch (error) {
+    console.error('Error deactivating OUs:', error);
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error: (axiosError.response?.data as any)?.message || axiosError.message || 'Failed to deactivate Organization Units'
+    };
+  }
+};
+
+/**
  * Update an Organization Unit
  * @param updateData - Update data
  * @returns API response
  */
 export const updateOU = async (updateData: UpdateOURequest): Promise<APIResponse> => {
   try {
-    const response = await apiClient.post('/update', updateData);
+    const { id, ...rest } = updateData as any;
+    const response = await apiClient.post('/update', { id, changes: rest });
     return {
       success: true,
       data: response.data,
@@ -269,6 +295,27 @@ export const updateOU = async (updateData: UpdateOURequest): Promise<APIResponse
     return {
       success: false,
       error: (axiosError.response?.data as any)?.message || axiosError.message || 'Failed to update Organization Unit'
+    };
+  }
+};
+
+/**
+ * Reactivate an Organization Unit
+ */
+export const reactivateOU = async (id: string): Promise<APIResponse> => {
+  try {
+    const response = await apiClient.post('/update', { id, changes: { isactive: true } });
+    return {
+      success: true,
+      data: response.data,
+      message: 'Organization Unit reactivated successfully'
+    };
+  } catch (error) {
+    console.error('Error reactivating OU:', error);
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error: (axiosError.response?.data as any)?.message || axiosError.message || 'Failed to reactivate Organization Unit'
     };
   }
 };
@@ -351,6 +398,8 @@ export default {
   getActiveOUs,
   getInactiveOUs,
   deactivateOU,
+  deactivateOUs,
+  reactivateOU,
   updateOU,
   transformOUDataForAPI
 };
