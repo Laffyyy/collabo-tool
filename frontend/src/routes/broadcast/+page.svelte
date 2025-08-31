@@ -630,9 +630,212 @@ let prevTab = $state(activeTab);
     }
   });
 
+// Update the CSV export function to work with your data structure
 const exportCSV = (broadcast: Broadcast) => {
-    alert('CSV export functionality would be implemented here.');
-  };
+  console.log('Starting CSV export for broadcast:', broadcast.id);
+  
+  // If we don't have the report data loaded, load it first
+  if (reportResponses.length === 0) {
+    loadReportData(broadcast).then(() => {
+      performCSVExport(broadcast);
+    });
+  } else {
+    performCSVExport(broadcast);
+  }
+};
+
+const performCSVExport = (broadcast: Broadcast) => {
+  console.log('Performing CSV export with responses:', reportResponses);
+  
+  // Prepare CSV headers
+  const headers = [
+    'User Name',
+    'Username',
+    'Email',
+    'Response Type',
+    'Response Details',
+    'Response Time',
+    'Status'
+  ];
+
+  // Prepare CSV data rows
+  const csvData = [];
+  
+  // Add broadcast details header section
+  csvData.push([`Broadcast Response Report: ${broadcast.title}`]);
+  csvData.push([`Generated on: ${new Date().toLocaleString()}`]);
+  csvData.push(['']); // Empty row for spacing
+  
+  // Add detailed broadcast information
+  csvData.push(['BROADCAST DETAILS']);
+  csvData.push(['Title:', broadcast.title]);
+  csvData.push(['Content:', broadcast.content]);
+  csvData.push(['Priority:', broadcast.priority.toUpperCase()]);
+  csvData.push(['Created By:', broadcast.createdBy]);
+  csvData.push(['Created Date:', broadcast.createdAt ? new Date(broadcast.createdAt).toLocaleString() : 'N/A']);
+  csvData.push(['Response Type:', getResponseTypeDisplay(broadcast.responseType)]);
+  csvData.push(['Status:', broadcast.status.toUpperCase()]);
+  
+  // Add target information
+  if (broadcast.targetRoles && broadcast.targetRoles.length > 0) {
+    csvData.push(['Target Roles:', broadcast.targetRoles.join(', ')]);
+  }
+  if (broadcast.targetOUs && broadcast.targetOUs.length > 0) {
+    csvData.push(['Target Organization Units:', broadcast.targetOUs.join(', ')]);
+  }
+  
+  // Add scheduling information if applicable
+  if (broadcast.scheduledFor) {
+    csvData.push(['Scheduled For:', new Date(broadcast.scheduledFor).toLocaleString()]);
+  }
+  if (broadcast.sentAt) {
+    csvData.push(['Sent At:', new Date(broadcast.sentAt).toLocaleString()]);
+  }
+  if (broadcast.eventDate) {
+    csvData.push(['Event Date:', new Date(broadcast.eventDate).toLocaleString()]);
+  }
+  if (broadcast.endDate) {
+    csvData.push(['End Date:', new Date(broadcast.endDate).toLocaleString()]);
+  }
+  
+  // Add choices if it's a multiple choice broadcast
+  if (broadcast.responseType === 'choices' && broadcast.choices && broadcast.choices.length > 0) {
+    csvData.push(['Available Choices:', broadcast.choices.join(', ')]);
+  }
+  
+  csvData.push(['']); // Empty row for spacing
+  
+  // Add column headers for response data
+  csvData.push(['RESPONSE DATA']);
+  csvData.push(headers);
+
+  // Add response data
+  if (reportResponses.length > 0) {
+    reportResponses.forEach(response => {
+      // Extract user information based on your backend structure
+      const user = response.user || {};
+      const userName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}` 
+        : (user.username || 'Unknown User');
+      
+      // Parse response data if it's a string
+      let responseData = response.responseData;
+      if (typeof responseData === 'string') {
+        try {
+          responseData = JSON.parse(responseData);
+        } catch (e) {
+          console.warn('Failed to parse response data:', responseData);
+          responseData = {};
+        }
+      }
+      
+      const row = [
+        userName,
+        user.username || 'N/A',
+        user.email || 'N/A',
+        getResponseTypeDisplay(responseData?.responseType || broadcast.responseType),
+        getResponseDetailsForExport(responseData, broadcast.responseType),
+        response.acknowledgedAt ? new Date(response.acknowledgedAt).toLocaleString() : 'N/A',
+        'Responded'
+      ];
+      csvData.push(row);
+    });
+  } else {
+    // If no responses, add a row indicating this
+    csvData.push(['No responses recorded', '', '', '', '', '', '']);
+  }
+
+  // Add simplified summary section (without total recipients and response rate)
+  csvData.push(['']); // Empty row
+  csvData.push(['SUMMARY']);
+  csvData.push(['Total Responses:', reportResponses.length.toString()]);
+
+  // Convert to CSV string
+  const csvContent = csvData.map(row => 
+    row.map(cell => {
+      // Escape quotes and wrap in quotes if contains comma, newline, or quote
+      const cellStr = String(cell || '');
+      if (cellStr.includes(',') || cellStr.includes('\n') || cellStr.includes('"')) {
+        return `"${cellStr.replace(/"/g, '""')}"`;
+      }
+      return cellStr;
+    }).join(',')
+  ).join('\n');
+
+  // Create and trigger download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `broadcast-responses-${broadcast.title.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  
+  console.log('CSV export completed');
+};
+
+// Update the loadReportData function to use the correct API and data structure
+const loadReportData = async (broadcast: Broadcast) => {
+  try {
+    isLoadingReport = true;
+    
+    // Use the actual API call to get responses
+    const response = await responseBroadcastAPI.getBroadcastResponses(broadcast.id);
+    
+    if (response.success) {
+      reportResponses = response.responses || [];
+      console.log('Loaded report responses:', reportResponses);
+    } else {
+      console.error('Failed to load report data:', response.message);
+      reportResponses = [];
+    }
+  } catch (error) {
+    console.error('Error loading report data:', error);
+    reportResponses = [];
+  } finally {
+    isLoadingReport = false;
+  }
+};
+
+// Helper function to display response type in a user-friendly way
+const getResponseTypeDisplay = (responseType: string) => {
+  switch (responseType) {
+    case 'none':
+      return 'No response required';
+    case 'required':
+      return 'Acknowledgment required';
+    case 'preferred-date':
+      return 'Preferred date selection';
+    case 'choices':
+      return 'Multiple choice';
+    case 'textbox':
+      return 'Text response';
+    default:
+      return responseType || 'Unknown';
+  }
+};
+
+// Update the getResponseDetails function to handle both display and export
+const getResponseDetailsForExport = (responseData: any, broadcastResponseType: string) => {
+  if (!responseData) {
+    return broadcastResponseType === 'none' ? 'No response required' : 'No response';
+  }
+  
+  switch (responseData.responseType) {
+    case 'required':
+      return 'Acknowledged';
+    case 'preferred-date':
+      return `Preferred date: ${responseData.preferredDate ? new Date(responseData.preferredDate).toLocaleDateString() : 'Not specified'}`;
+    case 'choices':
+      return `Selected: ${responseData.selectedChoice || 'Not specified'}`;
+    case 'textbox':
+      return `Response: ${responseData.textResponse || 'No text provided'}`;
+    default:
+      return 'Response recorded';
+  }
+};
 
   const viewReport = async (broadcast: Broadcast, e: MouseEvent) => {
     e.stopPropagation(); // Prevent opening the broadcast details modal
@@ -641,25 +844,30 @@ const exportCSV = (broadcast: Broadcast) => {
     await loadBroadcastResponses(broadcast.id);
   };
 
-  const loadBroadcastResponses = async (broadcastId: string) => {
-    try {
-      isLoadingReport = true;
-      const response = await responseBroadcastAPI.getBroadcastResponses(broadcastId);
-      if (response.success) {
-        // Add proper type annotation for the resp parameter
-        reportResponses = response.responses.map((resp: any) => ({
-          ...resp,
-          acknowledgedAt: new Date(resp.acknowledgedAt)
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading broadcast responses:', error);
-      $toastStore.error('Failed to load response data');
+  // Also update the loadBroadcastResponses function to ensure it's working correctly
+const loadBroadcastResponses = async (broadcastId: string) => {
+  try {
+    isLoadingReport = true;
+    const response = await responseBroadcastAPI.getBroadcastResponses(broadcastId);
+    if (response.success) {
+      // Process the responses with proper date handling
+      reportResponses = response.responses.map((resp: any) => ({
+        ...resp,
+        acknowledgedAt: resp.acknowledgedAt ? new Date(resp.acknowledgedAt) : null
+      }));
+      console.log('Loaded broadcast responses:', reportResponses);
+    } else {
+      console.error('Failed to load responses:', response);
       reportResponses = [];
-    } finally {
-      isLoadingReport = false;
     }
-  };
+  } catch (error) {
+    console.error('Error loading broadcast responses:', error);
+    $toastStore.error('Failed to load response data');
+    reportResponses = [];
+  } finally {
+    isLoadingReport = false;
+  }
+};
   
   // Add this helper function for formatting
   const formatResponse = (responseData: any) => {
@@ -1897,7 +2105,7 @@ onMount(async () => {
                     class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
                   >
                     <Download class="w-4 h-4" />
-                    <span>Export CSV</span>
+                    <span>Export to CSV</span>
                   </button>
                   <button 
                     onclick={(e) => viewReport(broadcast, e)}
