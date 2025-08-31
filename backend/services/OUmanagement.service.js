@@ -270,11 +270,58 @@ async function getOUsettings(id) {
 }
 
 
+async function reactiveOU(reactivationlist) {
+    try {
+        if (!Array.isArray(reactivationlist) || reactivationlist.length === 0) {
+            throw new Error('reactivationlist must be a non-empty array');
+        }
+
+        const results = [];
+        const errors = [];
+        const deactivatedAt = new Date().toISOString();
+
+        // Process each OU ID in the deactivation list
+        for (const id of reactivationlist) {
+            try {
+                // Deactivate the OU using the model
+                const result = await ouModel.deactiveOU(id);
+                results.push({
+                    id,
+                    status: 'reactivated',
+                    deactivatedAt,
+                    ...result
+                });
+            } catch (ouError) {
+                errors.push({
+                    id,
+                    status: 'failed',
+                    error: ouError.message
+                });
+            }
+        }
+
+        const successCount = results.length;
+        const failureCount = errors.length;
+
+        return {
+            message: `Deactivation completed: ${successCount} successful, ${failureCount} failed`,
+            totalRequested: reactivationlist.length,
+            successCount,
+            failureCount,
+            results,
+            errors: errors.length > 0 ? errors : undefined
+        };
+    } catch (error) {
+        throw new Error(`Failed to deactivate OUs: ${error.message}`);
+    }
+}
+
 module.exports = {
     getOU,
     getDeactiveOU,
     createOU,
     deactiveOU,
     updateOU,
-    getOUsettings
+    getOUsettings,
+    reactiveOU
 };

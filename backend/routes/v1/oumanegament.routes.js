@@ -135,6 +135,17 @@ router.post(
     OUmanagerController.deactiveOU
 )
 
+router.post(
+    '/reactive',
+    [body('reactivationlist').isArray().notEmpty().withMessage('reactivationlist must be a non-empty array'),
+    body('reactivationlist.*').isString().notEmpty().withMessage('Each OU ID must be a non-empty string')
+        .isUUID().withMessage('Each OU ID must be a valid UUID'),
+        
+    ],
+    validate,
+    OUmanagerController.reactiveOU
+)
+
 
 
 module.exports = router;

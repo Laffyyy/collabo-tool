@@ -142,9 +142,68 @@
     }
   };
 
+  const parseJsSettingsToRules = (jsSettings: any): OURules => {
+    const base: OURules = JSON.parse(JSON.stringify(defaultRules));
+    if (!jsSettings) return base;
+    const arr = Array.isArray(jsSettings) ? jsSettings : [jsSettings];
+
+    for (const item of arr) {
+      if (item && item.chat) {
+        const chat = item.chat;
+        if (chat.general) {
+          base.chat.allowFileSharing = !!chat.general.fileSharing;
+          base.chat.allowEmojis = !!chat.general.emoji;
+          if (chat.general.retention != null) base.chat.messageRetentionDays = Number(chat.general.retention) || base.chat.messageRetentionDays;
+        }
+        if (chat.frontline) {
+          base.chat.frontlineCanInitiate1v1 = !!chat.frontline.init1v1;
+          base.chat.frontlineCanCreateGroups = !!chat.frontline.createGroup;
+          base.chat.frontlineCanJoinGroups = !!chat.frontline.joinGroupChats;
+          base.chat.frontlineCanShareFiles = !!chat.frontline.shareFiles;
+          base.chat.frontlineCanForwardMessages = !!chat.frontline.forwardMessage;
+        }
+        if (chat.support) {
+          base.chat.supportCanInitiate1v1 = !!chat.support.init1v1;
+          base.chat.supportCanCreateGroups = !!chat.support.createGroup;
+          base.chat.supportCanJoinGroups = !!chat.support.joinGroupChats;
+          base.chat.supportCanShareFiles = !!chat.support.shareFiles;
+          base.chat.supportCanForwardMessages = !!chat.support.forwardMessage;
+        }
+        if (chat.supervisor) {
+          base.chat.supervisorCanCreateGroups = !!chat.supervisor.createGroup;
+          base.chat.supervisorCanShareFiles = !!chat.supervisor.shareFiles;
+          base.chat.supervisorCanForwardMessages = !!chat.supervisor.forwardMessage;
+        }
+      }
+      if (item && item.broadcast) {
+        const b = item.broadcast;
+        if (b.general) {
+          base.broadcast.requireApprovalForBroadcast = !!b.general.approvalforBroadcast;
+          base.broadcast.allowScheduledBroadcasts = !!b.general.scheduleBroadcast;
+          base.broadcast.allowPriorityBroadcasts = !!b.general.priorityBroadcast;
+          if (b.general.retention != null) base.broadcast.broadcastRetentionDays = Number(b.general.retention) || base.broadcast.broadcastRetentionDays;
+        }
+        if (b.frontline) {
+          base.broadcast.frontlineCanCreateBroadcast = !!b.frontline.createBroadcasts;
+          base.broadcast.frontlineCanReplyToBroadcast = !!b.frontline.replyToBroadcasts;
+        }
+        if (b.support) {
+          base.broadcast.supportCanCreateBroadcast = !!b.support.createBroadcasts;
+          base.broadcast.supportCanReplyToBroadcast = !!b.support.replyToBroadcasts;
+        }
+        if (b.supervisor) {
+          base.broadcast.supervisorCanCreateBroadcast = !!b.supervisor.createBroadcasts;
+        }
+      }
+    }
+
+    return base;
+  };
+
   const mapBackendToOU = (row: any): OrganizationUnit => {
     const created = row?.tcreatedat ? new Date(row.tcreatedat) : new Date();
     const isActive = !!row?.bisActive;
+    const rules = parseJsSettingsToRules(row?.jsSettings);
     return {
       id: row?.ouid || row?.did || String(Date.now()),
       name: row?.dname || 'Unknown',
@@ -155,7 +214,7 @@
       createdAt: created,
       modifiedAt: created,
       status: isActive ? 'active' : 'inactive',
-      rules: defaultRules
+      rules
     };
   };
 
@@ -478,24 +537,30 @@
     showConfirmationModal = true;
   };
 
-  const bulkDeactivateOUs = () => {
-    const selectedCount = selectedRows.size;
-    // Optimistic UI update
-    if (currentTab === 'active') {
-      activeList = activeList.map(ou =>
-        selectedRows.has(ou.id) ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
-      );
-      // Move to inactive list
-      const moved = activeList.filter(ou => selectedRows.has(ou.id));
-      inactiveList = [...moved.map(ou => ({ ...ou, status: 'inactive' as const })), ...inactiveList];
-      activeList = activeList.filter(ou => !selectedRows.has(ou.id));
-      organizationUnits = activeList;
+  const bulkDeactivateOUs = async () => {
+    const ids = Array.from(selectedRows);
+    if (ids.length === 0) return;
+    try {
+      const res = await deactivateOUsAPI(ids);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      const selectedCount = ids.length;
+      if (currentTab === 'active') {
+        const toMove = new Set(ids);
+        const moved = activeList.filter(ou => toMove.has(ou.id)).map(ou => ({ ...ou, status: 'inactive' as const, modifiedAt: new Date() }));
+        activeList = activeList.filter(ou => !toMove.has(ou.id));
+        inactiveList = [...moved, ...inactiveList];
+        organizationUnits = activeList;
+      }
+      alert(`${selectedCount} organization units have been deactivated successfully!`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to deactivate selected organization units.');
+    } finally {
+      showConfirmationModal = false;
+      selectedRows = new Set();
+      selectAll = false;
+      actionConfirm = null;
     }
-    showConfirmationModal = false;
-    selectedRows = new Set();
-    selectAll = false;
-    actionConfirm = null;
-    alert(`${selectedCount} organization units have been deactivated successfully!`);
   };
 
   const bulkReactivateOUs = () => {
@@ -586,17 +651,25 @@
     showConfirmationModal = true;
   };
 
-  const deactivateOU = (ouId: string) => {
-    // Optimistic move
-    const found = activeList.find(ou => ou.id === ouId);
-    if (found) {
-      const updated = { ...found, status: 'inactive' as const, modifiedAt: new Date() };
-      activeList = activeList.filter(ou => ou.id !== ouId);
-      inactiveList = [updated, ...inactiveList];
-      organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+  const deactivateOU = async (ouId: string) => {
+    try {
+      const res = await deactivateOUAPI(ouId);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      const found = activeList.find(ou => ou.id === ouId);
+      if (found) {
+        const updated = { ...found, status: 'inactive' as const, modifiedAt: new Date() };
+        activeList = activeList.filter(ou => ou.id !== ouId);
+        inactiveList = [updated, ...inactiveList];
+        organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+      }
+      alert('Organization Unit deactivated successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to deactivate Organization Unit.');
+    } finally {
+      showConfirmationModal = false;
+      selectedRows = new Set();
     }
-    showConfirmationModal = false;
-    selectedRows = new Set();
   };
 
   // Reactivate function

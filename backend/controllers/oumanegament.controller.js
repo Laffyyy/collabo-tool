@@ -137,6 +137,15 @@ async function getOUsettings(req, res, next) {
     }
 }
 
+async function reactiveOU(req, res, next) {
+    try {
+        const { reactivationlist } = req.body;
+        const result = await oumanegamentService.reactiveOU(reactivationlist);
+        res.status(200).json({ ok: true, ...result });
+    } catch (err) {
+        next(err);
+    }
+}
 
 module.exports = {
     getOU,
@@ -145,5 +154,6 @@ module.exports = {
     createOUmanager,
     deactiveOU,
     updateOU,
-    getOUsettings
+    getOUsettings,
+    reactiveOU
 };

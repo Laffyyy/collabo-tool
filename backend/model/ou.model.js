@@ -330,6 +330,26 @@ class OUmodel {
             throw new Error(error);
         }
     }
+
+    async deactiveOU(id) {
+        try {
+            const query = `UPDATE tblorganizationalunits SET "bisActive" = false WHERE did = $1 RETURNING *`;
+            const result = await db.query(query, [id]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
+
+    async reactiveOU(id) {
+        try {
+            const query = `UPDATE tblorganizationalunits SET "bisActive" = true WHERE did = $1 RETURNING *`;
+            const result = await db.query(query, [id]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
     
 }
 module.exports = OUmodel;
