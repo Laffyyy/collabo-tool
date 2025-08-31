@@ -154,50 +154,47 @@ class RetrieveBroadcastService {
     }
   }
 
-  async getReceivedBroadcasts({ userRoleId, userOuId, userId, page = 1, limit = 50, status, priority, search }) {
-  const offset = (page - 1) * limit;
+  async getReceivedBroadcasts({ userRoleId, userOuId, userId, page = 1, limit = 50, status, priority, search, includeTargets }) {
+    const offset = (page - 1) * limit;
 
-  try {
-    const broadcasts = await this.broadcastModel.getReceivedBroadcasts({
-      userRoleId,
-      userOuId,
-      userId,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      status,
-      priority
-    });
+    try {
+      const broadcasts = await this.broadcastModel.getReceivedBroadcasts({
+        userRoleId,
+        userOuId,
+        userId,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        status,
+        priority,
+        includeTargets // Pass this flag down
+      });
 
-    // Log the retrieved broadcasts for debugging
-    console.log('Retrieved broadcasts:', broadcasts);
-
-    // ...rest of your logic...
-    let filteredBroadcasts = broadcasts;
-    if (search && search.trim()) {
-      const searchTerm = search.toLowerCase().trim();
-      filteredBroadcasts = broadcasts.filter(broadcast =>
-        broadcast.title.toLowerCase().includes(searchTerm) ||
-        broadcast.content.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    const stats = { total: filteredBroadcasts.length };
-
-    return {
-      broadcasts: filteredBroadcasts,
-      statistics: stats,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: 1,
-        totalItems: filteredBroadcasts.length,
-        itemsPerPage: parseInt(limit)
+      let filteredBroadcasts = broadcasts;
+      if (search && search.trim()) {
+        const searchTerm = search.toLowerCase().trim();
+        filteredBroadcasts = broadcasts.filter(broadcast =>
+          broadcast.title.toLowerCase().includes(searchTerm) ||
+          broadcast.content.toLowerCase().includes(searchTerm)
+        );
       }
-    };
-  } catch (error) {
-    console.error('Service error in getReceivedBroadcasts:', error);
-    throw new Error(`Failed to retrieve received broadcasts: ${error.message}`);
+
+      const stats = { total: filteredBroadcasts.length };
+
+      return {
+        broadcasts: filteredBroadcasts,
+        statistics: stats,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: 1,
+          totalItems: filteredBroadcasts.length,
+          itemsPerPage: parseInt(limit)
+        }
+      };
+    } catch (error) {
+      console.error('Service error in getReceivedBroadcasts:', error);
+      throw new Error(`Failed to retrieve received broadcasts: ${error.message}`);
+    }
   }
-}
 
 }
 

@@ -191,6 +191,8 @@ class RetrieveBroadcastModel {
       status: broadcast.dstatus || 'draft',
       choices: broadcast.dchoices,
       createdAt: broadcast.tcreatedat,
+      creatorFirstName: broadcast.creator_firstname || '',
+      creatorLastName: broadcast.creator_lastname || '',
       scheduledFor: broadcast.tscheduledfor,
       sentAt: broadcast.tsentat,
       eventDate: broadcast.teventdate,
@@ -321,8 +323,9 @@ class RetrieveBroadcastModel {
     const whereClause = (whereConditions.length > 0 ? `AND ${whereConditions.join(' AND ')}` : '');
 
     const query = `
-      SELECT b.*
+      SELECT b.*, u.dfirstname AS creator_firstname, u.dlastname AS creator_lastname
       FROM tblbroadcasts b
+      JOIN tblusers u ON b.dcreatedby = u.did
       WHERE EXISTS (
         SELECT 1 FROM tblbroadcasttargets t
         WHERE t.dbroadcastid = b.did
@@ -343,7 +346,7 @@ class RetrieveBroadcastModel {
     params.push(limit, offset);
 
     const { rows } = await this.pool.query(query, params);
-    
+
     // Get broadcast targets for all fetched broadcasts
     const broadcasts = this.formatBroadcasts(rows);
     
@@ -358,7 +361,7 @@ class RetrieveBroadcastModel {
   async attachTargetsToManyBroadcasts(broadcasts) {
     if (!broadcasts || broadcasts.length === 0) return;
     
-    const broadcastIds = broadcasts.map(b => b.id);
+    const broadcastIds = broadcasts.map(b => b.id)
     
     // Query to get all role targets with names
     const roleQuery = `
@@ -375,7 +378,8 @@ class RetrieveBroadcastModel {
       JOIN tblorganizationalunits ou ON bt.dtargetid = ou.did
       WHERE bt.dbroadcastid = ANY($1) AND bt.dtargettype = 'ou'
     `;
-    
+
+
     const [roleResult, ouResult] = await Promise.all([
       this.pool.query(roleQuery, [broadcastIds]),
       this.pool.query(ouQuery, [broadcastIds])
@@ -397,6 +401,7 @@ class RetrieveBroadcastModel {
     
     // Attach the target names to each broadcast
     broadcasts.forEach(broadcast => {
+      broadcast.targetRoles = roleLookup[broadcast.id] || [];
       broadcast.targetRoles = roleLookup[broadcast.id] || [];
       broadcast.targetOUs = ouLookup[broadcast.id] || [];
       

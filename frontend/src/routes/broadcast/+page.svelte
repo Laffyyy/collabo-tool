@@ -101,7 +101,8 @@
     isActive: boolean;
     status?: string; // allow any string status
     targets?: BroadcastTarget[]; // <-- use the correct type here
-    // Add any additional fields specific to received broadcasts if needed
+    creatorFirstName?: string;
+    creatorLastName?: string;
   }
 
 
@@ -353,9 +354,14 @@
     receivedBroadcasts = response.broadcasts.map(b => {
       console.log(`Processing broadcast ${b.id}:`, b);
       
+       // Debug: Log the raw broadcast object
+      console.log(`[DEBUG] Raw received broadcast:`, b);
       // Extract target information from the broadcast
       let targetRoles: string[] = [];
       let targetOUs: string[] = [];
+
+      console.log(`[DEBUG] b.targetRoles:`, b.targetRoles);
+      console.log(`[DEBUG] b.targetOUs:`, b.targetOUs);
       
       // First check if targetRoles and targetOUs are already provided directly
       if (Array.isArray(b.targetRoles) && b.targetRoles.length > 0) {
@@ -368,7 +374,7 @@
       
       // If the above didn't work, try to extract from targets array as fallback
       if ((targetRoles.length === 0 || targetOUs.length === 0) && b.targets && Array.isArray(b.targets)) {
-        console.log(`Extracting from targets array for broadcast ${b.id}:`, b.targets);
+        console.log(`[DEBUG] Extracting from targets array for broadcast ${b.id}:`, b.targets);
         
         b.targets.forEach((target: BroadcastTarget) => {
           if (target && target.dtargettype === 'role' && target.dtargetname) {
@@ -379,7 +385,7 @@
         });
       }
 
-      console.log(`Final targets for broadcast ${b.id}:`, { targetRoles, targetOUs });
+      console.log(`[DEBUG] Final targets for broadcast ${b.id}:`, { targetRoles, targetOUs });
       
       return {
         ...b,
@@ -2007,9 +2013,17 @@ onMount(async () => {
             <!-- Display broadcast metadata -->
             <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
               <div class="flex items-center space-x-1">
-                <Calendar class="w-4 h-4 flex-shrink-0" />
-                <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
-              </div>
+                <User class="w-4 h-4 flex-shrink-0" />
+                  <span class="truncate">Created By: <b>
+                    {broadcast.creatorFirstName && broadcast.creatorLastName
+                      ? `${broadcast.creatorFirstName} ${broadcast.creatorLastName}`
+                      : broadcast.createdBy} </b>
+                  </span>
+                </div>
+                <div class="flex items-center space-x-1">
+                  <Calendar class="w-4 h-4 flex-shrink-0" />
+                  <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
+                </div>
               <div class="flex items-center space-x-1">
                 <Users class="w-4 h-4 flex-shrink-0" />
                 <span class="truncate">{Array.isArray(broadcast.targetRoles) && broadcast.targetRoles.length > 0 ? broadcast.targetRoles.join(', ') : 'All'}</span>
@@ -2425,11 +2439,11 @@ onMount(async () => {
                       <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
                           <div class="flex-shrink-0 h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-semibold uppercase">
-                            {response.user ? response.user.name?.[0] || '?' : '?'}
+                            {response.user ? (response.user.firstName?.[0] || '') + (response.user.lastName?.[0] || '') : '?'}
                           </div>
                           <div class="ml-3">
                             <div class="text-sm font-medium text-gray-900">
-                              {response.user ? response.user.name : 'Unknown User'}
+                              {response.user ? `${response.user.firstName} ${response.user.lastName}` : 'Unknown User'}
                             </div>
                             <div class="text-sm text-gray-500">
                               {response.user?.email || ''}

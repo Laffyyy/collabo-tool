@@ -23,13 +23,15 @@ function makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promi
 class ReceivedBroadcastAPI {
   private baseUrl = `${API_CONFIG.baseUrl}/api/v1/broadcasts`;
 
-  async getReceivedBroadcasts(filters: ReceivedBroadcastFilters = {}): Promise<ReceivedBroadcastResponse> {
+async getReceivedBroadcasts(filters: ReceivedBroadcastFilters = {}): Promise<ReceivedBroadcastResponse> {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         params.append(key, value.toString());
       }
     });
+    // Always include targets in the response
+    params.append('includeTargets', 'true');
     const url = `${this.baseUrl}/received-broadcasts${params.toString() ? `?${params}` : ''}`;
     const response = await makeAuthenticatedRequest(url);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

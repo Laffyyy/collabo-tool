@@ -146,7 +146,6 @@ class RetrieveBroadcastController {
       const userId = req.user.id;
       const userRoleModel = new UserRoleModel(getPool());
       const userRoles = await userRoleModel.findByUserId(userId);
-      console.log('userRoles:', userRoles);
 
       if (!userRoles || userRoles.length === 0) {
         return res.status(200).json({
@@ -157,9 +156,7 @@ class RetrieveBroadcastController {
         });
       }
 
-      // Use camelCase properties
       const { roleId: userRoleId, ouId: userOuId } = userRoles[0] || {};
-      console.log('userRoleId:', userRoleId, 'userOuId:', userOuId);
 
       const filters = {
         page: parseInt(req.query.page) || 1,
@@ -172,8 +169,8 @@ class RetrieveBroadcastController {
       const result = await RetrieveBroadcastService.getReceivedBroadcasts({
         userRoleId,
         userOuId,
-        userId, // Pass userId to filter out user's own broadcasts
-        includeTargets: true, // Always include target names
+        userId,
+        includeTargets: true,
         ...filters
       });
 
