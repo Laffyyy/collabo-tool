@@ -679,7 +679,7 @@ const paginatedBroadcasts = $derived(() => {
                       {broadcast.scheduledFor ? formatTimestamp(broadcast.scheduledFor) : formatTimestamp(broadcast.createdAt)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div class="flex items-center space-x-2">
+                      <div class="flex justify-center items-center space-x-2">
                         <button
                           onclick={() => viewBroadcast(broadcast)}
                           class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
@@ -793,7 +793,7 @@ const paginatedBroadcasts = $derived(() => {
                       {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div class="flex items-center space-x-2">
+                      <div class="flex justify-center items-center space-x-2">
                         <button
                           onclick={() => viewBroadcast(broadcast)}
                           class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
