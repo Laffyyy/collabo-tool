@@ -3,6 +3,9 @@
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import { API_CONFIG } from '$lib/api/config';
   import { onMount } from 'svelte';
+  import { toastStore } from '$lib/stores/toast.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
+  
 
   interface Broadcast {
     id: string;
@@ -238,14 +241,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       }
 
       showConfirmModal = false;
-      alert('Broadcast archived successfully');
-
-    } catch (error: any) {
-      console.error('Error archiving broadcast:', error);
-      showConfirmModal = false;
-      alert(error.message || 'Failed to archive broadcast');
-    }
-  };
+      $toastStore.success('Broadcast archived successfully');
+  } catch (error: any) {
+    console.error('Error archiving broadcast:', error);
+    showConfirmModal = false;
+    $toastStore.error(error.message || 'Failed to archive broadcast');
+  }
+};
 
   const confirmDeleteBroadcast = (broadcast: Broadcast) => {
     confirmAction = {
@@ -279,14 +281,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       }
 
       showConfirmModal = false;
-      alert('Broadcast deleted successfully');
-
-    } catch (error: any) {
-      console.error('Error deleting broadcast:', error);
-      showConfirmModal = false;
-      alert(error.message || 'Failed to delete broadcast');
-    }
-  };
+       $toastStore.success('Broadcast deleted successfully');
+      } catch (error: any) {
+        console.error('Error deleting broadcast:', error);
+        showConfirmModal = false;
+        $toastStore.error(error.message || 'Failed to delete broadcast');
+      }
+    };
 
   const confirmRestoreBroadcast = (broadcast: Broadcast) => {
     confirmAction = {
@@ -330,14 +331,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       }
 
       showConfirmModal = false;
-      alert('Broadcast restored successfully');
-
-    } catch (error: any) {
-      console.error('Error restoring broadcast:', error);
-      showConfirmModal = false;
-      alert(error.message || 'Failed to restore broadcast');
-    }
-  };
+       $toastStore.success('Broadcast restored successfully');
+  } catch (error: any) {
+    console.error('Error restoring broadcast:', error);
+    showConfirmModal = false;
+    $toastStore.error(error.message || 'Failed to restore broadcast');
+  }
+};
 
   const confirmPermanentlyDeleteBroadcast = (broadcast: Broadcast) => {
     confirmAction = {
@@ -1136,3 +1136,5 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
     }}
   />
 {/if}
+
+<ToastContainer />
