@@ -51,7 +51,7 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
 
-  let currentPage = $state(1);
+  // let currentPage = $state(1);
   const rowsPerPage = 6;
 
 async function fetchAllBroadcasts() {
@@ -374,20 +374,42 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
     alert('Exporting analytics data...');
   };
 
+let pageByTab = $state<{ [key: string]: number }>({
+  sent: 1,
+  scheduled: 1,
+  archived: 1,
+  reported: 1
+});
 
+// Helper to get/set current page for the active tab
+const resetPageIfOutOfRange = $derived(() => {
+  // Reset page to 1 if filteredBroadcasts length changes and current page is out of range
+  const total = Math.ceil(filteredBroadcasts().length / rowsPerPage);
+  if (pageByTab[activeTab] > total && total > 0) {
+    pageByTab[activeTab] = 1;
+  }
+});
 
-  const paginatedBroadcasts = $derived(() => {
-    const start = (currentPage - 1) * rowsPerPage;
-    return filteredBroadcasts().slice(start, start + rowsPerPage);
-  });
+  // Reset page to 1 when switching tabs
+$effect(() => {
+  // If the tab is changed, ensure its page is at least 1
+  if (!pageByTab[activeTab]) pageByTab[activeTab] = 1;
+});
 
-  const totalPages = $derived(() => Math.ceil(filteredBroadcasts().length / rowsPerPage));
+// Update paginatedBroadcasts and totalPages to use per-tab page
+const paginatedBroadcasts = $derived(() => {
+  const start = (pageByTab[activeTab] - 1) * rowsPerPage;
+  return filteredBroadcasts().slice(start, start + rowsPerPage);
+});
+
+  const totalPages = $derived(() => Math.max(1, Math.ceil(filteredBroadcasts().length / rowsPerPage)));
 
   function goToPage(page: number) {
-    if (page >= 1 && page <= totalPages()) {
-      currentPage = page;
-    }
+  const total = totalPages();
+  if (page >= 1 && page <= total) {
+    pageByTab[activeTab] = page;
   }
+}
 
 </script>
 
@@ -574,13 +596,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
           {#if totalPages() > 1}
   <div class="flex items-center justify-between mt-4 mb-6 px-6">
     <div class="text-xs text-gray-600">
-      Page {currentPage} of {totalPages()}
+      Page {pageByTab[activeTab]} of {totalPages()}
     </div>
     <div class="flex space-x-1">
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage - 1)}
-        disabled={currentPage === 1}
+        onclick={() => goToPage(pageByTab[activeTab] - 1)}
+        disabled={pageByTab[activeTab] === 1}
         aria-label="Previous page"
       >
         Previous
@@ -588,19 +610,19 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       {#each Array(totalPages()) as _, i}
         <button
           class="secondary-button px-2 py-1 text-xs rounded
-            {currentPage === i + 1
+            {pageByTab[activeTab] === i + 1
               ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
               : 'hover:bg-gray-100'}"
           onclick={() => goToPage(i + 1)}
-          aria-current={currentPage === i + 1 ? 'page' : undefined}
+          aria-current={pageByTab[activeTab] === i + 1 ? 'page' : undefined}
         >
           {i + 1}
         </button>
       {/each}
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage + 1)}
-        disabled={currentPage === totalPages()}
+        onclick={() => goToPage(pageByTab[activeTab] + 1)}
+        disabled={pageByTab[activeTab] === totalPages()}
         aria-label="Next page"
       >
         Next
@@ -688,13 +710,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
             {#if totalPages() > 1}
   <div class="flex items-center justify-between mt-4 mb-6 px-6">
     <div class="text-xs text-gray-600">
-      Page {currentPage} of {totalPages()}
+      Page {pageByTab[activeTab]} of {totalPages()}
     </div>
     <div class="flex space-x-1">
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage - 1)}
-        disabled={currentPage === 1}
+        onclick={() => goToPage(pageByTab[activeTab] - 1)}
+        disabled={pageByTab[activeTab] === 1}
         aria-label="Previous page"
       >
         Previous
@@ -702,19 +724,19 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       {#each Array(totalPages()) as _, i}
         <button
           class="secondary-button px-2 py-1 text-xs rounded
-            {currentPage === i + 1
+            {pageByTab[activeTab] === i + 1
               ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
               : 'hover:bg-gray-100'}"
           onclick={() => goToPage(i + 1)}
-          aria-current={currentPage === i + 1 ? 'page' : undefined}
+          aria-current={pageByTab[activeTab] === i + 1 ? 'page' : undefined}
         >
           {i + 1}
         </button>
       {/each}
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage + 1)}
-        disabled={currentPage === totalPages()}
+        onclick={() => goToPage(pageByTab[activeTab] + 1)}
+        disabled={pageByTab[activeTab] === totalPages()}
         aria-label="Next page"
       >
         Next
@@ -786,6 +808,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
                           <Undo2 class="w-4 h-4" />
                           <span>Restore</span>
                         </button>
+                        <button
+                        onclick={() => confirmDeleteBroadcast(broadcast)}
+                        class="text-red-600 hover:text-red-500 flex items-center space-x-1"
+                      >
+                        <Trash2 class="w-4 h-4" />
+                        <span>Delete</span>
+                      </button>
                       </div>
                     </td>
                   </tr>
@@ -795,13 +824,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
             {#if totalPages() > 1}
   <div class="flex items-center justify-between mt-4 mb-6 px-6">
     <div class="text-xs text-gray-600">
-      Page {currentPage} of {totalPages()}
+      Page {pageByTab[activeTab]} of {totalPages()}
     </div>
     <div class="flex space-x-1">
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage - 1)}
-        disabled={currentPage === 1}
+        onclick={() => goToPage(pageByTab[activeTab] - 1)}
+        disabled={pageByTab[activeTab] === 1}
         aria-label="Previous page"
       >
         Previous
@@ -809,19 +838,19 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       {#each Array(totalPages()) as _, i}
         <button
           class="secondary-button px-2 py-1 text-xs rounded
-            {currentPage === i + 1
+            {pageByTab[activeTab] === i + 1
               ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
               : 'hover:bg-gray-100'}"
           onclick={() => goToPage(i + 1)}
-          aria-current={currentPage === i + 1 ? 'page' : undefined}
+          aria-current={pageByTab[activeTab] === i + 1 ? 'page' : undefined}
         >
           {i + 1}
         </button>
       {/each}
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage + 1)}
-        disabled={currentPage === totalPages()}
+        onclick={() => goToPage(pageByTab[activeTab] + 1)}
+        disabled={pageByTab[activeTab] === totalPages()}
         aria-label="Next page"
       >
         Next
@@ -899,13 +928,6 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
                           <Undo2 class="w-4 h-4" />
                           <span>Restore</span>
                         </button>
-                        <button
-                          onclick={() => confirmDeleteBroadcast(broadcast)}
-                          class="text-red-600 hover:text-red-500 flex items-center space-x-1"
-                        >
-                          <Trash2 class="w-4 h-4" />
-                          <span>Delete</span>
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -915,13 +937,13 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
             {#if totalPages() > 1}
   <div class="flex items-center justify-between mt-4 mb-6 px-6">
     <div class="text-xs text-gray-600">
-      Page {currentPage} of {totalPages()}
+      Page {pageByTab[activeTab]} of {totalPages()}
     </div>
     <div class="flex space-x-1">
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage - 1)}
-        disabled={currentPage === 1}
+        onclick={() => goToPage(pageByTab[activeTab] - 1)}
+        disabled={pageByTab[activeTab] === 1}
         aria-label="Previous page"
       >
         Previous
@@ -929,19 +951,19 @@ const archiveBroadcast = async (broadcast: Broadcast) => {
       {#each Array(totalPages()) as _, i}
         <button
           class="secondary-button px-2 py-1 text-xs rounded
-            {currentPage === i + 1
+            {pageByTab[activeTab] === i + 1
               ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
               : 'hover:bg-gray-100'}"
           onclick={() => goToPage(i + 1)}
-          aria-current={currentPage === i + 1 ? 'page' : undefined}
+          aria-current={pageByTab[activeTab] === i + 1 ? 'page' : undefined}
         >
           {i + 1}
         </button>
       {/each}
       <button
         class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        onclick={() => goToPage(currentPage + 1)}
-        disabled={currentPage === totalPages()}
+        onclick={() => goToPage(pageByTab[activeTab] + 1)}
+        disabled={pageByTab[activeTab] === totalPages()}
         aria-label="Next page"
       >
         Next
