@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../../auth/requireAuth');
 const RetrieveBroadcastController = require('../../controllers/retrieve-broadcasts.controller');
+const { requireRole } = require('../../auth/requireRole');
 
 // Get user's broadcasts - now uses database
 router.get('/my-broadcasts', requireAuth, RetrieveBroadcastController.getMyBroadcasts);
@@ -20,5 +21,8 @@ router.put('/my-broadcasts/:id/mark-done', requireAuth, RetrieveBroadcastControl
 
 // Get broadcasts received by the user
 router.get('/received-broadcasts', requireAuth, RetrieveBroadcastController.getReceivedBroadcasts);
+
+// Get all broadcasts (admin only)
+router.get('/all', requireAuth, requireRole('admin'), RetrieveBroadcastController.getAllBroadcasts);
 
 module.exports = router;

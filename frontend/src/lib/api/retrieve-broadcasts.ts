@@ -172,6 +172,45 @@ class BroadcastAPI {
       throw error;
     }
   }
+
+  /**
+   * Get all broadcasts (admin only)
+   */
+  async getAllBroadcasts(filters: BroadcastFilters = {}): Promise<BroadcastResponse> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+
+    const url = `${this.baseUrl}/all${params.toString() ? `?${params}` : ''}`;
+    console.log('🚀 Fetching ALL broadcasts from:', url);
+
+    try {
+      const response = await makeAuthenticatedRequest(url);
+      console.log('📡 Response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('✅ API Response:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ API Error:', error);
+      throw error instanceof Error ? error : new Error('Network error occurred');
+    }
+  }
   
 }
 

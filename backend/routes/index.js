@@ -5,6 +5,7 @@ const userManagementRoutes = require('./v1/user-management.routes');
 const retrieveBroadcastRoutes = require('./v1/retrieve-broadcasts.routes');
 const uploadbroadcastRoutes = require('./v1/upload-broadcast.routes');
 const responseBroadcastRoutes = require('./v1/response-broadcast.routes'); // Add this line
+const broadcastManagementRoutes = require('./v1/broadcast-management.routes'); // Add this line
 
 const router = Router();
 
@@ -18,5 +19,7 @@ router.use('/v1/broadcasts', retrieveBroadcastRoutes);
 router.use('/v1/broadcast', uploadbroadcastRoutes);
 //Response Broadcast - Add this line
 router.use('/v1/broadcast-responses', responseBroadcastRoutes);
+// Admin broadcast management - use different path
+router.use('/v1/admin/broadcasts', broadcastManagementRoutes);
 
 module.exports = router;
