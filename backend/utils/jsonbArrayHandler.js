@@ -76,24 +76,41 @@ async function handleUpdateWithJsonbArray(sql, query, params) {
     const whereParam = regularParams[regularParams.length - 1]; // ID is always last
     const updateParams = regularParams.slice(0, -1);
     
-    // Build the update dynamically
-    const setParts = [];
-    
-    if (query.includes('dname =')) setParts.push('dname');
-    if (query.includes('ddescription =')) setParts.push('ddescription');
-    if (query.includes('dparentouid =')) setParts.push('dparentouid');
-    if (query.includes('"jsSettings" =')) setParts.push('jsSettings');
-    if (query.includes('"bisActive" =')) setParts.push('bisActive');
-    
-    // Create the update object
+    // Determine column order based on their appearance in the query
+    const positions = [];
+    const addPos = (colKey, pattern) => {
+        const idx = query.indexOf(pattern);
+        if (idx !== -1) positions.push({ key: colKey, idx });
+    };
+
+    addPos('dname', 'dname =');
+    addPos('ddescription', 'ddescription =');
+    addPos('dLocation', '"dLocation" =');
+    addPos('dparentouid', 'dparentouid =');
+    addPos('jsSettings', '"jsSettings" =');
+    addPos('bisActive', '"bisActive" =');
+
+    positions.sort((a, b) => a.idx - b.idx);
+
+    // Create the update object in the same order to consume params correctly
     const updateObj = {};
     let updateParamIndex = 0;
-    
-    if (setParts.includes('dname')) updateObj.dname = updateParams[updateParamIndex++];
-    if (setParts.includes('ddescription')) updateObj.ddescription = updateParams[updateParamIndex++];
-    if (setParts.includes('dparentouid')) updateObj.dparentouid = updateParams[updateParamIndex++];
-    if (setParts.includes('jsSettings')) updateObj.jsSettings = jsonbParams;
-    if (setParts.includes('bisActive')) updateObj.bisActive = updateParams[updateParamIndex++];
+
+    for (const { key } of positions) {
+        if (key === 'jsSettings') {
+            updateObj.jsSettings = jsonbParams;
+        } else if (key === 'dname') {
+            updateObj.dname = updateParams[updateParamIndex++];
+        } else if (key === 'ddescription') {
+            updateObj.ddescription = updateParams[updateParamIndex++];
+        } else if (key === 'dLocation') {
+            updateObj.dLocation = updateParams[updateParamIndex++];
+        } else if (key === 'dparentouid') {
+            updateObj.dparentouid = updateParams[updateParamIndex++];
+        } else if (key === 'bisActive') {
+            updateObj.bisActive = updateParams[updateParamIndex++];
+        }
+    }
     
     const result = await sql`
         UPDATE tblorganizationalunits 

@@ -2,7 +2,7 @@
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import { onMount } from 'svelte';
-  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI } from '$lib/api/OUmanagement';
+  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -468,10 +468,38 @@
     showEditModal = true;
   };
 
-  const saveEditOU = () => {
+  const saveEditOU = async () => {
     if (!selectedOU || !editOU) return;
     
     if (editOU.name?.trim() && editOU.description?.trim()) {
+      // Build backend changes payload
+      const apiData = transformOUDataForAPI(
+        {
+          name: editOU.name!.trim(),
+          description: editOU.description!.trim(),
+          location: editOU.location?.trim() || '',
+          rules: editOU.rules
+        } as any,
+        activeRulesTab
+      );
+
+      const changes: any = {
+        OrgName: apiData.OrgName,
+        Description: apiData.Description,
+        Location: apiData.Location,
+        Settings: apiData.Settings
+      };
+
+      if (editOU.status) {
+        changes.isactive = editOU.status === 'active';
+      }
+
+      const res = await updateOUAPI({ id: selectedOU.id, changes });
+      if (!res.success) {
+        alert(res.error || 'Failed to update Organization Unit');
+        return;
+      }
+
       organizationUnits = organizationUnits.map(ou =>
         ou.id === selectedOU!.id
           ? {

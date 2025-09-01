@@ -231,17 +231,18 @@ async function updateOU(id, changes) {
                         ? transformOUSettingsToSettings(parsed)
                         : (parsed || {});
                 } else if (savedJsSettings && typeof savedJsSettings === 'object') {
-                    // In case the driver already parsed jsonb[] to JS array
-                    existingSettings = transformOUSettingsToSettings(savedJsSettings);
+                    // Already a Settings-shaped object; use directly
+                    existingSettings = savedJsSettings;
                 }
             } catch (parseError) {
                 existingSettings = {};
             }
 
-            // Merge the new settings with existing settings and transform to jsSettings array
+            // Merge the new settings with existing settings. Pass the merged
+            // Settings object through to the model; the model is responsible
+            // for transforming it into the jsSettings array shape for storage.
             const mergedSettings = mergeSettings(existingSettings, changes.Settings);
-            const jsSettingsArray = transformSettingsToJSSettings(mergedSettings);
-            processedChanges.Settings = jsSettingsArray;
+            processedChanges.Settings = mergedSettings;
         }
 
         const result = await ouModel.updateOU(id, processedChanges);

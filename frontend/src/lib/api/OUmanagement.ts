@@ -77,12 +77,17 @@ interface OUQueryParams {
   searchvalue?: string;
 }
 
+type UpdateOUChanges = {
+  OrgName?: string;
+  Description?: string;
+  Location?: string;
+  isactive?: boolean;
+  Settings?: OUSettings;
+}
+
 interface UpdateOURequest {
   id: string;
-  name: string;
-  description: string;
-  parentouid?: string;
-  OUSettings: any[];
+  changes: UpdateOUChanges;
 }
 
 // Frontend OU interface (matching the Svelte component)
@@ -282,8 +287,7 @@ export const deactivateOUs = async (ids: string[]): Promise<APIResponse> => {
  */
 export const updateOU = async (updateData: UpdateOURequest): Promise<APIResponse> => {
   try {
-    const { id, ...rest } = updateData as any;
-    const response = await apiClient.post('/update', { id, changes: rest });
+    const response = await apiClient.post('/update', updateData);
     return {
       success: true,
       data: response.data,

@@ -264,7 +264,7 @@ class OUmodel {
             }
 
             if (changes.Location !== undefined) {
-                updates.push(`dparentouid = $${paramIndex}`);
+                updates.push(`"dLocation" = $${paramIndex}`);
                 values.push(changes.Location);
                 paramIndex++;
             }
@@ -364,6 +364,7 @@ module.exports = OUmodel;
 // | tcreatedat   | timestamp without time zone | null                     |
 // | jsSettings   | jsonb                       | null                     |
 // | bisActive    | boolean                     | null                     |
+// | dLocation    | character varying           | 100                      |
 
 // tbluserroles
 // | column_name   | data_type                   | character_maximum_length |
