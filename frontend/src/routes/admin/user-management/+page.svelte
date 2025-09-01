@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
@@ -28,6 +29,7 @@
 		type UpdateUserRequest
 	} from '$lib/api/user-management';
 	import type { ApiUser } from '$lib/api/types';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	// TypeScript interfaces
 	interface UserData {
@@ -867,7 +869,8 @@
 			window.URL.revokeObjectURL(url);
 		});
 
-		alert('Four template files have been downloaded:\n• frontline_support_template.csv\n• supervisor_template.csv\n• manager_template.csv\n• admin_template.csv');
+		// Show success toast instead of alert
+    	toastStore.success('Templates Downloaded Successfully');
 	};
 
 	const editUser = (user: UserData) => {
@@ -1392,6 +1395,16 @@
 		const currentPageUserIds = new Set(paginatedUsers().map(user => user.id));
 		selectAll = currentPageUserIds.size > 0 && [...currentPageUserIds].every(id => selectedRows.has(id));
 	});
+
+	// Toast management functions
+	const addToast = (type: 'success' | 'error' | 'info', message: string) => {
+		const id = Math.random().toString(36).substr(2, 9);
+		toasts = [...toasts, { id, type, message }];
+	};
+
+	const removeToast = (id: string) => {
+		toasts = toasts.filter(toast => toast.id !== id);
+	};
 </script>
 
 <svelte:head>
@@ -2794,11 +2807,12 @@
 								</button>
 							</div>
 							<div class="text-sm text-gray-600 mb-4 space-y-2">
-								<p class="font-medium">Three template files will be downloaded:</p>
+								<p class="font-medium">Four template files will be downloaded:</p>
 								<div class="text-left max-w-md mx-auto space-y-1">
 									<p><strong>• Frontline/Support:</strong> Includes Supervisor Name and Manager Name columns</p>
 									<p><strong>• Supervisor:</strong> Includes Manager Name column</p>
 									<p><strong>• Manager:</strong> Basic user information only</p>
+									<p><strong>• Admin:</strong> Basic user information only</p>
 								</div>
 								<p class="mt-3">Fill the appropriate template with user data and upload it back.</p>
 							</div>
@@ -2951,6 +2965,8 @@
 		</div>
 	</div>
 {/if}
+
+<ToastContainer />
 
 </div>
 
