@@ -42,7 +42,7 @@ class OUmodel {
             } else {
                 const placeholders = normalized.map((_, idx) => `$${baseParams.length + 1 + idx}::jsonb`).join(', ');
                 query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, ARRAY[${placeholders}]) RETURNING *`;
-                params = [...baseParams, ...normalized.map(elem => JSON.stringify(elem))];
+                params = [...baseParams, ...normalized];
             }
 
             const result = await db.query(query, params);
@@ -290,7 +290,7 @@ class OUmodel {
                     const placeholders = normalized.map((_, idx) => `$${paramIndex + idx}::jsonb`).join(', ');
                     updates.push(`"jsSettings" = ARRAY[${placeholders}]`);
                     for (const element of normalized) {
-                        values.push(JSON.stringify(element));
+                        values.push(element);
                     }
                     paramIndex += normalized.length;
                 }
