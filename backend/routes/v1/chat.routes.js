@@ -20,7 +20,7 @@ router.use(requireAuth);
 router.post('/conversations', validateCreateConversation, chatController.createConversation);
 
 // Add message
-router.post('/messages', requireAuth, validateAddMessage, chatController.addMessage);
+router.post('/messages', validateAddMessage, chatController.addMessage);
 
 // Fetch messages for a conversation
 router.get('/messages/:conversationId', chatController.getMessagesByConversation);

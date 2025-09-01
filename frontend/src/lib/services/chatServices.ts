@@ -196,12 +196,14 @@ export async function getMessagesForConversation(conversationId: string) {
     return []; // Return empty array to prevent UI errors
   }
 }
-// Update this function in chatServices.ts
+
+import { getCurrentUserId } from './authServices';
+
 export async function sendMessageToApi(conversationId: string, content: string, messageType: string = 'text') {
   const token = localStorage.getItem('jwt');
   
-  // HARDCODED USER ID - replace with the one that works in Postman
-  const userId = "327404ce-d1dd-4a93-a108-dfa5a415a734";
+  // Get the current user ID (no longer hardcoded)
+  const userId = getCurrentUserId();
   
   // First, check if we have all required values
   if (!conversationId) {
@@ -214,15 +216,20 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     throw new Error('Missing content');
   }
   
-  // Create the payload object with hardcoded userId
+  if (!userId) {
+    console.error('Missing userId! User not logged in.');
+    throw new Error('You need to be logged in to send messages.');
+  }
+  
+  // Create the payload object with real userId
   const payload = {
     dconversationId: conversationId,
-    dsenderId: userId, // Using hardcoded ID
+    dsenderId: userId,
     dcontent: content,
     dmessageType: messageType
   };
   
-  console.log('Sending message with payload (using hardcoded userId):', JSON.stringify(payload));
+  console.log('Sending message with payload:', JSON.stringify(payload));
   
   try {
     const response = await fetch('http://localhost:5000/api/chat/messages', {
@@ -244,32 +251,6 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     return await response.json();
   } catch (error) {
     console.error('Error in sendMessageToApi:', error);
-    throw error;
-  }
-}
-
-export async function markMessageAsRead(messageId: string) {
-  const token = localStorage.getItem('jwt');
-  
-  try {
-    const response = await fetch(`http://localhost:5000/api/chat/messages/${messageId}/read`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error marking message as read:', errorText);
-      throw new Error('Failed to mark message as read');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error in markMessageAsRead:', error);
     throw error;
   }
 }
