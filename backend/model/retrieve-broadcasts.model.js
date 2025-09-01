@@ -486,6 +486,109 @@ class RetrieveBroadcastModel {
       throw new Error(`Failed to fetch broadcast statistics: ${error.message}`);
     }
   }
+
+  /**
+   * Get all broadcasts (admin only)
+   * @param {Object} options - Query options (limit, offset, status, priority, includeDeleted)
+   * @returns {Promise<Array>} Array of broadcasts from database
+   */
+  async getAllBroadcasts(options = {}) {
+    const {
+      limit = 50,
+      offset = 0,
+      status = null,
+      priority = null,
+      includeDeleted = false
+    } = options;
+
+    try {
+      const whereConditions = [];
+      const queryParams = [];
+      let paramIndex = 1;
+
+      // Filter out deleted broadcasts unless explicitly included
+      if (!includeDeleted) {
+        whereConditions.push('b.dstatus != $' + paramIndex);
+        queryParams.push('deleted');
+        paramIndex++;
+      }
+
+      if (status && status !== 'all') {
+        whereConditions.push(`b.dstatus = $${paramIndex}`);
+        queryParams.push(status);
+        paramIndex++;
+      }
+
+      if (priority && priority !== 'all') {
+        whereConditions.push(`b.dpriority = $${paramIndex}`);
+        queryParams.push(priority);
+        paramIndex++;
+      }
+
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+      const query = `
+        SELECT 
+          b.*, u.dfirstname AS creator_firstname, u.dlastname AS creator_lastname, u.demail AS createdby_email
+        FROM tblbroadcasts b
+        LEFT JOIN tblusers u ON b.dcreatedby = u.did
+        ${whereClause}
+        ORDER BY b.tcreatedat DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+
+      queryParams.push(limit, offset);
+
+      const result = await this.pool.query(query, queryParams);
+
+      return this.formatBroadcasts(result.rows);
+    } catch (error) {
+      console.error('Database error in getAllBroadcasts:', error);
+      throw new Error(`Failed to fetch all broadcasts: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get recipient counts for a list of broadcast IDs
+   * @param {string[]} broadcastIds
+   * @returns {Promise<Object>} Map of broadcastId -> recipient count
+   */
+  async getRecipientCounts(broadcastIds) {
+    if (!broadcastIds || broadcastIds.length === 0) return {};
+    const query = `
+      SELECT dbroadcastid, COUNT(*) as recipient_count
+      FROM tblbroadcasttargets
+      WHERE dbroadcastid = ANY($1)
+      GROUP BY dbroadcastid
+    `;
+    const result = await this.pool.query(query, [broadcastIds]);
+    const counts = {};
+    result.rows.forEach(row => {
+      counts[row.dbroadcastid] = parseInt(row.recipient_count, 10);
+    });
+    return counts;
+  }
+
+  /**
+   * Get acknowledgment counts for a list of broadcast IDs
+   * @param {string[]} broadcastIds
+   * @returns {Promise<Object>} Map of broadcastId -> acknowledgment count
+   */
+  async getAcknowledgmentCounts(broadcastIds) {
+    if (!broadcastIds || broadcastIds.length === 0) return {};
+    const query = `
+      SELECT dbroadcastid, COUNT(*) as acknowledgment_count
+      FROM tblbroadcastacknowledgments
+      WHERE dbroadcastid = ANY($1)
+      GROUP BY dbroadcastid
+    `;
+    const result = await this.pool.query(query, [broadcastIds]);
+    const counts = {};
+    result.rows.forEach(row => {
+      counts[row.dbroadcastid] = parseInt(row.acknowledgment_count, 10);
+    });
+    return counts;
+  }
 }
 
 module.exports = RetrieveBroadcastModel;
