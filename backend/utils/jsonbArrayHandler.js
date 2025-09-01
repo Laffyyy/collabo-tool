@@ -17,22 +17,22 @@ async function handleInsertWithJsonbArray(sql, query, params) {
         return null;
     }
 
-    const baseParams = params.slice(0, 4); // First 4 params are regular
-    const jsonbParams = params.slice(4); // Remaining params are for JSONB array
+    const baseParams = params.slice(0, 5); // First 5 params are regular (including dLocation)
+    const jsonbParams = params.slice(5); // Remaining params are for JSONB array
     
     if (jsonbParams.length > 0) {
         // Use postgres.js template literal syntax which handles JSONB properly
         const result = await sql`
-            INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") 
-            VALUES (${baseParams[0]}, ${baseParams[1]}, ${baseParams[2]}, ${baseParams[3]}, ${jsonbParams})
+            INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "dLocation", "jsSettings") 
+            VALUES (${baseParams[0]}, ${baseParams[1]}, ${baseParams[2]}, ${baseParams[3]}, ${baseParams[4]}, ${jsonbParams})
             RETURNING *
         `;
         return { rows: result };
     } else {
         // Empty JSONB array
         const result = await sql`
-            INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") 
-            VALUES (${baseParams[0]}, ${baseParams[1]}, ${baseParams[2]}, ${baseParams[3]}, ${[]})
+            INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "dLocation", "jsSettings") 
+            VALUES (${baseParams[0]}, ${baseParams[1]}, ${baseParams[2]}, ${baseParams[3]}, ${baseParams[4]}, ${[]})
             RETURNING *
         `;
         return { rows: result };

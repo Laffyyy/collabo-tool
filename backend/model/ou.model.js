@@ -32,16 +32,16 @@ class OUmodel {
                 normalized = normalized ? [normalized] : [];
             }
 
-            const baseParams = [OrgName, Description, parentouid, new Date()];
+            const baseParams = [OrgName, Description, parentouid, new Date(), Location];
             let query;
             let params;
 
             if (normalized.length === 0) {
-                query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, ARRAY[]::jsonb[]) RETURNING *`;
+                query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "dLocation", "jsSettings") VALUES ($1, $2, $3, $4, $5, ARRAY[]::jsonb[]) RETURNING *`;
                 params = baseParams;
             } else {
                 const placeholders = normalized.map((_, idx) => `$${baseParams.length + 1 + idx}::jsonb`).join(', ');
-                query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "jsSettings") VALUES ($1, $2, $3, $4, ARRAY[${placeholders}]) RETURNING *`;
+                query = `INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, tcreatedat, "dLocation", "jsSettings") VALUES ($1, $2, $3, $4, $5, ARRAY[${placeholders}]) RETURNING *`;
                 params = [...baseParams, ...normalized];
             }
 
