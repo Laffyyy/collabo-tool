@@ -35,10 +35,6 @@ export async function createConversation({
 
 export async function getConversations() {
   const token = localStorage.getItem('jwt');
-  const userId = localStorage.getItem('auth_userId');
-  
-  console.log('Fetching conversations with token:', !!token);
-  console.log('User ID from storage:', userId);
   
   try {
     const response = await fetch('http://localhost:5000/api/chat/conversations', {
@@ -56,12 +52,12 @@ export async function getConversations() {
     }
     
     const data = await response.json();
-    console.log('Conversations fetched successfully:', data.length);
+    console.log('Conversations from server:', data);
     
-    // Transform data into the expected format
+    // Transform the data to match your UI format
     return data.map((conv: any) => ({
       id: conv.did || conv.id,
-      name: conv.dname || 'Unnamed Chat',
+      name: conv.dname || 'Unnamed Conversation',
       type: conv.dtype || 'group',
       lastMessage: 'No messages yet',
       lastMessageTime: conv.tcreatedat || new Date(),
@@ -74,37 +70,42 @@ export async function getConversations() {
     }));
   } catch (error) {
     console.error('Error in getConversations:', error);
-    return []; // Return empty array instead of throwing to prevent app crash
+    return []; // Return empty array to prevent UI errors
   }
 }
 
-export async function sendMessage({
-  dconversationId,
-  dsenderId,
-  dcontent,
-  dmessageType = 'text'
-}: {
-  dconversationId: string,
-  dsenderId: string,
-  dcontent: string,
-  dmessageType?: string
-}) {
+// In chatServices.ts
+export async function sendMessage(conversationId: string, content: string, messageType: string = 'text') {
   const token = localStorage.getItem('jwt');
-  const response = await fetch(`${API_URL}/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "Authorization": `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify({
-      dconversationId,
-      dsenderId,
-      dcontent,
-      dmessageType
-    })
-  });
-  if (!response.ok) throw new Error("Failed to send message");
-  return await response.json();
+  const userId = localStorage.getItem('auth_userId');
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/chat/messages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        dconversationId: conversationId,
+        dsenderId: userId,
+        dcontent: content,
+        dmessageType: messageType
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error sending message:', errorText);
+      throw new Error('Failed to send message');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in sendMessage:', error);
+    throw error;
+  }
 }
 
 export async function getAllUsers() {
@@ -153,6 +154,122 @@ export async function addMemberToConversation({
     return data;
   } catch (error) {
     console.error('Error in addMemberToConversation:', error);
+    throw error;
+  }
+}
+
+export async function getMessagesForConversation(conversationId: string) {
+  const token = localStorage.getItem('jwt');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/chat/messages/${conversationId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Messages fetch error:', errorText);
+      throw new Error('Failed to fetch messages');
+    }
+    
+    const data = await response.json();
+    console.log('Raw messages from server:', data);
+    
+    // Transform the data to match your UI Message format
+    return data.map((msg: any) => ({
+      id: msg.did || msg.id || `temp-${Date.now()}-${Math.random()}`,
+      senderId: msg.dsenderid || "unknown",
+      senderName: msg.dusername || 'Unknown User',
+      senderDepartment: 'Department',
+      senderRole: 'Role',
+      content: msg.dcontent || msg.content || "",
+      timestamp: msg.tcreatedat || msg.timestamp || new Date(),
+      type: msg.dmessagetype || msg.type || 'text',
+      reactions: []
+    }));
+  } catch (error) {
+    console.error('Error getting messages:', error);
+    return []; // Return empty array to prevent UI errors
+  }
+}
+// Update this function in chatServices.ts
+export async function sendMessageToApi(conversationId: string, content: string, messageType: string = 'text') {
+  const token = localStorage.getItem('jwt');
+  
+  // HARDCODED USER ID - replace with the one that works in Postman
+  const userId = "327404ce-d1dd-4a93-a108-dfa5a415a734";
+  
+  // First, check if we have all required values
+  if (!conversationId) {
+    console.error('Missing conversationId!');
+    throw new Error('Missing conversationId');
+  }
+  
+  if (!content) {
+    console.error('Missing content!');
+    throw new Error('Missing content');
+  }
+  
+  // Create the payload object with hardcoded userId
+  const payload = {
+    dconversationId: conversationId,
+    dsenderId: userId, // Using hardcoded ID
+    dcontent: content,
+    dmessageType: messageType
+  };
+  
+  console.log('Sending message with payload (using hardcoded userId):', JSON.stringify(payload));
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/chat/messages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error sending message:', errorText);
+      throw new Error('Failed to send message');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in sendMessageToApi:', error);
+    throw error;
+  }
+}
+
+export async function markMessageAsRead(messageId: string) {
+  const token = localStorage.getItem('jwt');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/chat/messages/${messageId}/read`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error marking message as read:', errorText);
+      throw new Error('Failed to mark message as read');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in markMessageAsRead:', error);
     throw error;
   }
 }

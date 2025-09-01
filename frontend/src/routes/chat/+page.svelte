@@ -8,6 +8,8 @@
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import GroupAvatar from '$lib/components/GroupAvatar.svelte';
 	import UserProfileModal from '$lib/components/UserProfileModal.svelte';
+	import { onDestroy } from 'svelte';
+	import {  getMessagesForConversation, sendMessageToApi } from '$lib/services/chatServices';
 	import LoginBackground from '../login/LoginBackground.svelte';
 	import { 
 		Search, Plus, Archive, MessageCircle, Users, Send, Paperclip, 
@@ -134,6 +136,7 @@
 	let showPinnedPanel = $state(false);
 	let showForwardModal = $state(false);
 	let currentMembersTab = $state<'members' | 'files' | 'media' | 'links'>('members');
+	let messagePollingInterval: ReturnType<typeof setInterval> | null = null;
 	
 	// Reaction modal state
 	let showReactionModal = $state(false);
@@ -291,57 +294,128 @@ if (typeof window !== 'undefined') {
 	const quickEmojis = ['👍', '❤️', '😂', '😊', '😮', '😢'];
 
 	// Functions
-	const selectConversation = (conversation: Conversation) => {
-		currentConversation = conversation;
-		// Mark conversation as read
-		conversation.isRead = true;
-		conversation.unreadCount = 0;
-		// Mark all messages as seen by current user
-		markConversationAsSeen(conversation.id);
-	};
 
-	const sendMessage = (attachment?: any) => {
-		if ((!messageInput.trim() && !attachment) || !currentConversation) return;
+	const startMessagePolling = (conversationId: string) => {
+  // Clear any existing polling
+  if (messagePollingInterval) {
+    clearInterval(messagePollingInterval);
+  }
+  
+  messagePollingInterval = setInterval(async () => {
+    if (!currentConversation || currentConversation.id !== conversationId) {
+      if (messagePollingInterval) clearInterval(messagePollingInterval);
+      return;
+    }
+    
+    try {
+      const messages = await getMessagesForConversation(conversationId);
+      if (messages.length > currentConversation.messages.length) {
+        // Update messages only if there are new ones
+        currentConversation.messages = messages;
+        // Update last message info
+        if (messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          currentConversation.lastMessage = lastMsg.content;
+          currentConversation.lastMessageTime = lastMsg.timestamp;
+        }
+      }
+    } catch (error) {
+      console.error('Error polling messages:', error);
+    }
+  }, 5000); // Poll every 5 seconds
+};
+const selectConversation = async (conversation: Conversation) => {
+  currentConversation = conversation;
+  conversation.isRead = true;
+  conversation.unreadCount = 0;
+  
+  try {
+    const messages = await getMessagesForConversation(conversation.id);
+    currentConversation.messages = messages;
+    markConversationAsSeen(conversation.id);
+    
+    // Start polling for new messages
+    startMessagePolling(conversation.id);
+  } catch (error) {
+    console.error('Failed to load messages:', error);
+  }
+};
 
-		// If this is a temporary conversation, save it to the conversations list
-		if (currentConversation.isTemporary) {
-			// Remove the temporary flag and generate a proper ID
-			const savedConversation = {
-				...currentConversation,
-				id: Date.now().toString(),
-				isTemporary: false
-			};
-			
-			conversations = [...conversations, savedConversation];
-			currentConversation = savedConversation;
-		}
+// Clean up polling on component unmount
+onDestroy(() => {
+  if (messagePollingInterval) {
+    clearInterval(messagePollingInterval);
+  }
+});
 
-		const newMessage: Message = {
-			id: Date.now().toString(),
-			senderId: '1',
-			senderName: 'You',
-			senderDepartment: 'IT',
-			senderRole: 'Manager',
-			content: attachment ? `Shared ${attachment.name}` : messageInput,
-			timestamp: new Date(),
-			type: 'text',
-			replyTo: replyingTo || undefined,
-			reactions: [],
-			hasAttachment: !!attachment,
-			attachment: attachment,
-			forwardingEnabled: true,
-			pinningEnabled: true
-		};
+	const sendMessage = async (attachment?: any) => {
+  if ((!messageInput.trim() && !attachment) || !currentConversation) return;
 
-		currentConversation.messages.push(newMessage);
-		currentConversation.lastMessage = attachment ? `Shared ${attachment.name}` : messageInput;
-		currentConversation.lastMessageTime = new Date();
-		
-		if (!attachment) {
-			messageInput = '';
-		}
-		replyingTo = null;
-	};
+  try {
+    // If this is a temporary conversation, save it to the conversations list
+    if (currentConversation.isTemporary) {
+      // Save conversation logic here
+      console.log('Creating new conversation from temporary one');
+    }
+
+    // Send message to backend
+    const msgContent = attachment ? `Shared ${attachment.name}` : messageInput;
+    const sentMsg = await sendMessageToApi(currentConversation.id, msgContent);
+    
+    console.log('Message sent:', sentMsg);
+
+    // Create UI message object
+    const newMessage: Message = {
+      id: sentMsg.did || Date.now().toString(),
+      senderId: currentUserId || '1',
+      senderName: 'You',
+      senderDepartment: 'Your Department',
+      senderRole: 'Your Role',
+      content: msgContent,
+      timestamp: new Date(),
+      type: 'text',
+      replyTo: replyingTo || undefined,
+      reactions: [],
+      hasAttachment: !!attachment,
+      attachment: attachment,
+      forwardingEnabled: true,
+      pinningEnabled: true
+    };
+
+    // Update UI
+    currentConversation.messages.push(newMessage);
+    currentConversation.lastMessage = msgContent;
+    currentConversation.lastMessageTime = new Date();
+    
+    // Clear input
+    if (!attachment) {
+      messageInput = '';
+    }
+    replyingTo = null;
+    
+    // Fetch updated messages to ensure UI is in sync with backend
+    const updatedMessages = await getMessagesForConversation(currentConversation.id);
+    currentConversation.messages = updatedMessages;
+  } catch (error) {
+    console.error('Error sending message:', error);
+    alert('Failed to send message. Please try again.');
+  }
+};
+
+const markConversationAsSeen = (conversationId?: string) => {
+  const targetConversation = conversationId 
+    ? conversations.find(c => c.id === conversationId)
+    : currentConversation;
+    
+  if (!targetConversation) return;
+  
+  // Mark all messages from other users as seen
+  targetConversation.messages.forEach(message => {
+    if (message.senderId !== currentUserId) {
+      markMessageAsSeen(message.id, currentUserId || '1');
+    }
+  });
+};
 
 	const handleKeyPress = (event: KeyboardEvent) => {
 		if (event.key === 'Enter' && !event.shiftKey) {
@@ -601,21 +675,6 @@ if (typeof window !== 'undefined') {
 				seenAt: new Date()
 			});
 		}
-	};
-
-	const markConversationAsSeen = (conversationId?: string) => {
-		const targetConversation = conversationId 
-			? conversations.find(c => c.id === conversationId)
-			: currentConversation;
-			
-		if (!targetConversation) return;
-		
-		// Mark all messages from other users as seen
-		targetConversation.messages.forEach(message => {
-			if (message.senderId !== '1') {
-				markMessageAsSeen(message.id, '1');
-			}
-		});
 	};
 
 	const saveEditedMessage = () => {
@@ -1216,41 +1275,42 @@ const createGroup = async () => {
 	}
 
 	function groupMessagesByTime(messages: Message[]) {
-		const groups: { 
-			timeLabel: string, 
-			messages: Message[], 
-			timestamp: Date 
-		}[] = [];
-		const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
-		
-		messages.forEach((message, index) => {
-			const messageTime = new Date(message.timestamp);
-			const prevMessage = messages[index - 1];
-			const prevTime = prevMessage ? new Date(prevMessage.timestamp) : null;
-			
-			// Check if we need a new time group
-			const needNewGroup = !prevTime || 
-				(messageTime.getTime() - prevTime.getTime()) > TIME_THRESHOLD ||
-				prevMessage.isDeleted ||
-				message.isDeleted;
-			
-			if (needNewGroup) {
-				// Create new time group
-				const timeLabel = formatTimeLabel(messageTime);
-				groups.push({
-					timeLabel,
-					messages: [message],
-					timestamp: messageTime
-				});
-			} else {
-				// Add to existing group
-				const lastGroup = groups[groups.length - 1];
-				lastGroup.messages.push(message);
-			}
-		});
-		
-		return groups;
-	}
+  const groups: { 
+    timeLabel: string, 
+    messages: Message[], 
+    timestamp: Date 
+  }[] = [];
+  const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
+  
+  messages.forEach((message, index) => {
+    const messageTime = new Date(message.timestamp);
+    const prevMessage = messages[index - 1];
+    const prevTime = prevMessage ? new Date(prevMessage.timestamp) : null;
+    
+    // Check if we need a new time group
+    const needNewGroup = !prevTime || 
+      (messageTime.getTime() - prevTime.getTime()) > TIME_THRESHOLD ||
+      prevMessage.isDeleted ||
+      message.isDeleted;
+    
+    if (needNewGroup) {
+      // Create new time group with a unique identifier
+      const timeLabel = formatTimeLabel(messageTime);
+      groups.push({
+        timeLabel,
+        messages: [message],
+        timestamp: messageTime,
+        uniqueId: `${messageTime.getTime()}-${index}` // Add a uniqueId property
+      });
+    } else {
+      // Add to existing group
+      const lastGroup = groups[groups.length - 1];
+      lastGroup.messages.push(message);
+    }
+  });
+  
+  return groups;
+}
 
 	function formatTimeLabel(date: Date): string {
 		const now = new Date();
@@ -1290,10 +1350,16 @@ const createGroup = async () => {
 	}
 
 	// Derived state for grouped messages
-	const groupedMessages = $derived(() => {
-		if (!currentConversation) return [];
-		return groupMessagesByTime(currentConversation.messages);
-	});
+const groupedMessages = $derived(() => {
+  if (!currentConversation) return [];
+  const groups = groupMessagesByTime(currentConversation.messages);
+  
+  // Add a unique identifier to each group to prevent duplicate keys
+  return groups.map((group, index) => ({
+    ...group,
+    uniqueKey: `${group.timestamp.getTime()}-${index}` // Create a truly unique key
+  }));
+});
 
 	function getMediaHistory(conversation: Conversation | null) {
 		if (!conversation) {
@@ -1719,7 +1785,7 @@ const createGroup = async () => {
 
 				<!-- Messages -->
 				<div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-					{#each groupedMessages() as timeGroup (timeGroup.timestamp.getTime())}
+					{#each groupedMessages() as timeGroup (timeGroup.uniqueKey)}
 						<!-- Time Divider -->
 						<div class="flex items-center space-x-4 my-6">
 							<div class="flex-1 h-px bg-gray-300"></div>

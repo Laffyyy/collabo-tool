@@ -69,3 +69,57 @@ exports.addMember = async (req, res, next) => {
     return next(err);
   }
 };
+
+exports.getMessagesByConversation = async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    
+    if (!conversationId) {
+      return res.status(400).json({ message: 'Conversation ID is required' });
+    }
+    
+    const messages = await chatService.getMessagesByConversation(conversationId);
+    return res.json(messages);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+// In chat.controller.js
+exports.addMessage = async (req, res, next) => {
+  try {
+    console.log('Request body:', req.body);
+    console.log('User from token:', req.user);
+    
+    const { dconversationId, dsenderId, dcontent, dmessageType } = req.body;
+    
+    console.log('Extracted fields:', { dconversationId, dsenderId, dcontent, dmessageType });
+    
+    if (!dconversationId || !dsenderId || !dcontent) {
+      console.log('Missing fields detected');
+      
+      // Create detailed error for debugging
+      const errors = [];
+      if (!dconversationId) errors.push({ type: 'field', msg: 'Missing conversationId', path: 'dconversationId', location: 'body' });
+      if (!dsenderId) errors.push({ type: 'field', msg: 'Missing senderId', path: 'dsenderId', location: 'body' });
+      if (!dcontent) errors.push({ type: 'field', msg: 'Missing content', path: 'dcontent', location: 'body' });
+      
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        errors
+      });
+    }
+    
+    const message = await chatService.addMessage({
+      dconversationId,
+      dsenderId,
+      dcontent,
+      dmessageType: dmessageType || 'text'
+    });
+    
+    return res.status(201).json(message);
+  } catch (err) {
+    console.error('Error adding message:', err);
+    return next(err);
+  }
+};
