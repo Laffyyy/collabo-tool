@@ -11,13 +11,12 @@ class ChatModel {
     return result.rows[0];
   }
 
-  static async addMessage({ dconversationId, dsenderId, dcontent, dmessageType }) {
+static async addMessage({ dconversationId, dsenderId, dcontent, dmessageType }) {
   try {
     console.log('Adding message to database:', { 
       dconversationId, dsenderId, dcontent, dmessageType 
     });
     
-    // Make sure the column names match exactly what's in your database
     const result = await query(
       `INSERT INTO tblmessages 
         (dconversationid, dsenderid, dcontent, dmessagetype, tcreatedat)

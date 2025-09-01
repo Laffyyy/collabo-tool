@@ -18,6 +18,7 @@
 		Pin, PinOff, Share2, Download, Image, FileText, Link, Filter,
 		Forward, Trash2, Flag, Check, User, ArrowUp
 	} from 'lucide-svelte';
+
 	// Type definitions
 	interface User {
 		id: string;
@@ -352,14 +353,10 @@ onDestroy(() => {
   if ((!messageInput.trim() && !attachment) || !currentConversation) return;
 
   try {
-    // If this is a temporary conversation, save it to the conversations list
-    if (currentConversation.isTemporary) {
-      // Save conversation logic here
-      console.log('Creating new conversation from temporary one');
-    }
-
-    // Send message to backend
+    // Get the actual message content
     const msgContent = attachment ? `Shared ${attachment.name}` : messageInput;
+    
+    // Use the real user ID that we already loaded in onMount
     const sentMsg = await sendMessageToApi(currentConversation.id, msgContent);
     
     console.log('Message sent:', sentMsg);
@@ -367,7 +364,7 @@ onDestroy(() => {
     // Create UI message object
     const newMessage: Message = {
       id: sentMsg.did || Date.now().toString(),
-      senderId: currentUserId || '1',
+      senderId: currentUserId || '1', // Use real user ID if available
       senderName: 'You',
       senderDepartment: 'Your Department',
       senderRole: 'Your Role',
@@ -1798,7 +1795,7 @@ const groupedMessages = $derived(() => {
 						<!-- Messages in this time group -->
 						<div class="space-y-1">
 							{#each timeGroup.messages as message (message.id)}
-								<div class="flex {message.senderId === '1' ? 'justify-end' : 'justify-start'} group">
+								<div class="flex {message.senderId === currentUserId ? 'justify-end' : 'justify-start'} group">
 									<div 
 										class="flex items-start space-x-2 max-w-xs lg:max-w-md cursor-pointer"
 										title={formatExactTime(message.timestamp)}

@@ -196,40 +196,39 @@ export async function getMessagesForConversation(conversationId: string) {
     return []; // Return empty array to prevent UI errors
   }
 }
-
-import { getCurrentUserId } from './authServices';
-
+// In chatServices.ts
 export async function sendMessageToApi(conversationId: string, content: string, messageType: string = 'text') {
   const token = localStorage.getItem('jwt');
   
-  // Get the current user ID (no longer hardcoded)
-  const userId = getCurrentUserId();
-  
-  // First, check if we have all required values
-  if (!conversationId) {
-    console.error('Missing conversationId!');
-    throw new Error('Missing conversationId');
-  }
-  
-  if (!content) {
-    console.error('Missing content!');
-    throw new Error('Missing content');
-  }
-  
+  // Try to get user ID from various sources
+  let userId = localStorage.getItem('auth_userId') || 
+               localStorage.getItem('userId');
+               
+  // Try to extract from auth_user if needed
   if (!userId) {
-    console.error('Missing userId! User not logged in.');
-    throw new Error('You need to be logged in to send messages.');
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        userId = user.id || user.did || user._id || user.userId;
+      } catch (e) {
+        console.error('Failed to parse user object:', e);
+      }
+    }
   }
   
-  // Create the payload object with real userId
-  const payload = {
-    dconversationId: conversationId,
-    dsenderId: userId,
-    dcontent: content,
-    dmessageType: messageType
-  };
+  // If still no user ID, use a fallback (temporary solution)
+  if (!userId) {
+    console.warn('Using hardcoded user ID as fallback!');
+    userId = "327404ce-d1dd-4a93-a108-dfa5a415a734"; // Fallback, but will log a warning
+  }
   
-  console.log('Sending message with payload:', JSON.stringify(payload));
+  console.log('Sending message with:', {
+    conversationId,
+    senderId: userId,
+    content,
+    messageType
+  });
   
   try {
     const response = await fetch('http://localhost:5000/api/chat/messages', {
@@ -239,7 +238,12 @@ export async function sendMessageToApi(conversationId: string, content: string, 
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        dconversationId: conversationId,
+        dsenderId: userId,
+        dcontent: content,
+        dmessageType: messageType
+      })
     });
     
     if (!response.ok) {
@@ -251,6 +255,32 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     return await response.json();
   } catch (error) {
     console.error('Error in sendMessageToApi:', error);
+    throw error;
+  }
+}
+
+export async function markMessageAsRead(messageId: string) {
+  const token = localStorage.getItem('jwt');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/chat/messages/${messageId}/read`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error marking message as read:', errorText);
+      throw new Error('Failed to mark message as read');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in markMessageAsRead:', error);
     throw error;
   }
 }

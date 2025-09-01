@@ -12,10 +12,39 @@ exports.createConversation = async (req, res, next) => {
 
 exports.addMessage = async (req, res, next) => {
   try {
-    const message = await chatService.addMessage(req.body);
-    return res.json(message); // Add return
+    const { dconversationId, dsenderId, dcontent, dmessageType } = req.body;
+    
+    // First, verify the sender ID matches the authenticated user
+    const authenticatedUserId = req.user.id;
+    
+    if (dsenderId !== authenticatedUserId) {
+      return res.status(403).json({ 
+        message: 'You can only send messages as yourself'
+      });
+    }
+    
+    if (!dconversationId || !dsenderId || !dcontent) {
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        errors: [
+          { type: 'field', msg: 'Invalid value', path: 'dconversationId', location: 'body' },
+          { type: 'field', msg: 'Invalid value', path: 'dsenderId', location: 'body' },
+          { type: 'field', msg: 'Invalid value', path: 'dcontent', location: 'body' }
+        ]
+      });
+    }
+    
+    const message = await chatService.addMessage({
+      dconversationId,
+      dsenderId,
+      dcontent,
+      dmessageType: dmessageType || 'text'
+    });
+    
+    return res.status(201).json(message);
   } catch (err) {
-    return next(err); // Add return
+    console.error('Error adding message:', err);
+    return next(err);
   }
 };
 
