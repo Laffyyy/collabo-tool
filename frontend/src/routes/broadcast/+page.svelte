@@ -523,7 +523,7 @@ let sortedReceivedBroadcasts = $derived(
 });
 
   let canSendBroadcasts = $derived(
-    currentUser && ['admin', 'manager'].includes(currentUser.role)
+    currentUser && ['admin', 'manager', 'supervisor'].includes(currentUser.role)
   );
 
   // Keep existing utility functions...
