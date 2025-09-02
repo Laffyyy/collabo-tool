@@ -179,6 +179,7 @@ class OUmodel {
                         ou.dparentouid,
                         ou.tcreatedat,
                         ou."jsSettings",
+                        ou."dLocation",
                         ou."bisActive",
                         COALESCE(mc.membercount, 0) as membercount
                     FROM filtered ou
@@ -211,6 +212,7 @@ class OUmodel {
                 dparentouid: r.dparentouid,
                 tcreatedat: r.tcreatedat,
                 jsSettings: r.jsSettings,
+                dLocation: r.dLocation,
                 bisActive: r.bisActive,
                 membercount: r.membercount
             }));

@@ -210,7 +210,7 @@
       description: row?.ddescription || '',
       parentId: row?.dparentouid || null,
       memberCount: Number(row?.membercount) || 0,
-      location: row?.dlocation || '',
+      location: row?.dLocation || row?.dlocation || '',
       createdAt: created,
       modifiedAt: created,
       status: isActive ? 'active' : 'inactive',
@@ -591,16 +591,37 @@
     }
   };
 
-  const bulkReactivateOUs = () => {
-    const selectedCount = selectedRows.size;
-    organizationUnits = organizationUnits.map(ou =>
-      selectedRows.has(ou.id) ? { ...ou, status: 'active' as const, modifiedAt: new Date() } : ou
-    );
-    showConfirmationModal = false;
-    selectedRows = new Set();
-    selectAll = false;
-    actionConfirm = null;
-    alert(`${selectedCount} organization units have been reactivated successfully!`);
+  const bulkReactivateOUs = async () => {
+    const ids = Array.from(selectedRows);
+    if (ids.length === 0) return;
+    
+    try {
+      // Note: The API doesn't have a bulk reactivate endpoint, so we'll call individual reactivate for each
+      const results = await Promise.all(ids.map(id => reactivateOUAPI(id)));
+      const failed = results.filter(r => !r.success);
+      
+      if (failed.length > 0) {
+        throw new Error(`${failed.length} out of ${ids.length} reactivations failed`);
+      }
+      
+      const selectedCount = ids.length;
+      if (currentTab === 'inactive') {
+        const toMove = new Set(ids);
+        const moved = inactiveList.filter(ou => toMove.has(ou.id)).map(ou => ({ ...ou, status: 'active' as const, modifiedAt: new Date() }));
+        inactiveList = inactiveList.filter(ou => !toMove.has(ou.id));
+        activeList = [...moved, ...activeList];
+        organizationUnits = inactiveList;
+      }
+      alert(`${selectedCount} organization units have been reactivated successfully!`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to reactivate selected organization units.');
+    } finally {
+      showConfirmationModal = false;
+      selectedRows = new Set();
+      selectAll = false;
+      actionConfirm = null;
+    }
   };
 
   const deleteOU = (ouId: string) => {
@@ -701,14 +722,23 @@
   };
 
   // Reactivate function
-  const reactivateOU = (ouId: string) => {
-    // Optimistic UI: move from inactive to active
-    const found = inactiveList.find(ou => ou.id === ouId);
-    if (found) {
-      const updated = { ...found, status: 'active' as const, modifiedAt: new Date() };
-      inactiveList = inactiveList.filter(ou => ou.id !== ouId);
-      activeList = [updated, ...activeList];
-      organizationUnits = currentTab === 'inactive' ? inactiveList : activeList;
+  const reactivateOU = async (ouId: string) => {
+    try {
+      const res = await reactivateOUAPI(ouId);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      
+      // Move from inactive to active list
+      const found = inactiveList.find(ou => ou.id === ouId);
+      if (found) {
+        const updated = { ...found, status: 'active' as const, modifiedAt: new Date() };
+        inactiveList = inactiveList.filter(ou => ou.id !== ouId);
+        activeList = [updated, ...activeList];
+        organizationUnits = currentTab === 'inactive' ? inactiveList : activeList;
+      }
+      alert('Organization Unit reactivated successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to reactivate Organization Unit.');
     }
   };
 </script>
