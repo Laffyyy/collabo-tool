@@ -16,6 +16,7 @@
     modifiedAt: Date;
     status: 'active' | 'inactive';
     rules: OURules;
+    _originalJsSettings?: any; // Store original jsSettings for tab determination
   }
 
   interface OURules {
@@ -144,10 +145,45 @@
 
   const parseJsSettingsToRules = (jsSettings: any): OURules => {
     const base: OURules = JSON.parse(JSON.stringify(defaultRules));
+    
+    console.log('Parsing jsSettings:', jsSettings);
+    
     if (!jsSettings) return base;
     const arr = Array.isArray(jsSettings) ? jsSettings : [jsSettings];
 
     for (const item of arr) {
+      // Handle Chat settings
+      if (item && item.Chat) {
+        const chat = item.Chat;
+        console.log('Processing Chat settings:', chat);
+        
+        if (chat.General) {
+          base.chat.allowFileSharing = !!chat.General.FileSharing;
+          base.chat.allowEmojis = !!chat.General.Emoji;
+          if (chat.General.Retention != null) base.chat.messageRetentionDays = Number(chat.General.Retention) || base.chat.messageRetentionDays;
+        }
+        if (chat.Frontline) {
+          base.chat.frontlineCanInitiate1v1 = !!chat.Frontline.Init1v1;
+          base.chat.frontlineCanCreateGroups = !!chat.Frontline.CreateGroup;
+          base.chat.frontlineCanJoinGroups = !!chat.Frontline.JoinGroupChats;
+          base.chat.frontlineCanShareFiles = !!chat.Frontline.ShareFiles;
+          base.chat.frontlineCanForwardMessages = !!chat.Frontline.ForwardMessage;
+        }
+        if (chat.support) {
+          base.chat.supportCanInitiate1v1 = !!chat.support.Init1v1;
+          base.chat.supportCanCreateGroups = !!chat.support.CreateGroup;
+          base.chat.supportCanJoinGroups = !!chat.support.JoinGroupChats;
+          base.chat.supportCanShareFiles = !!chat.support.ShareFiles;
+          base.chat.supportCanForwardMessages = !!chat.support.ForwardMessage;
+        }
+        if (chat.supervisor) {
+          base.chat.supervisorCanCreateGroups = !!chat.supervisor.CreateGroup;
+          base.chat.supervisorCanShareFiles = !!chat.supervisor.ShareFiles;
+          base.chat.supervisorCanForwardMessages = !!chat.supervisor.ForwardMessage;
+        }
+      }
+      
+      // Handle lowercase chat for backward compatibility
       if (item && item.chat) {
         const chat = item.chat;
         if (chat.general) {
@@ -175,36 +211,59 @@
           base.chat.supervisorCanForwardMessages = !!chat.supervisor.forwardMessage;
         }
       }
+      
+      // Handle Broadcast settings
       if (item && item.broadcast) {
         const b = item.broadcast;
+        console.log('Processing broadcast settings:', b);
+        
+        if (b.General) {
+          base.broadcast.requireApprovalForBroadcast = !!b.General.ApprovalforBroadcast;
+          base.broadcast.allowScheduledBroadcasts = !!b.General.ScheduleBroadcast;
+          base.broadcast.allowPriorityBroadcasts = !!b.General.PriorityBroadcast;
+          if (b.General.Retention != null) base.broadcast.broadcastRetentionDays = Number(b.General.Retention) || base.broadcast.broadcastRetentionDays;
+        }
         if (b.general) {
           base.broadcast.requireApprovalForBroadcast = !!b.general.approvalforBroadcast;
           base.broadcast.allowScheduledBroadcasts = !!b.general.scheduleBroadcast;
           base.broadcast.allowPriorityBroadcasts = !!b.general.priorityBroadcast;
           if (b.general.retention != null) base.broadcast.broadcastRetentionDays = Number(b.general.retention) || base.broadcast.broadcastRetentionDays;
         }
+        if (b.Frontline) {
+          base.broadcast.frontlineCanCreateBroadcast = !!b.Frontline.CreateBroadcasts;
+          base.broadcast.frontlineCanReplyToBroadcast = !!b.Frontline.ReplyToBroadcasts;
+        }
         if (b.frontline) {
           base.broadcast.frontlineCanCreateBroadcast = !!b.frontline.createBroadcasts;
           base.broadcast.frontlineCanReplyToBroadcast = !!b.frontline.replyToBroadcasts;
         }
         if (b.support) {
-          base.broadcast.supportCanCreateBroadcast = !!b.support.createBroadcasts;
-          base.broadcast.supportCanReplyToBroadcast = !!b.support.replyToBroadcasts;
+          base.broadcast.supportCanCreateBroadcast = !!b.support.CreateBroadcasts || !!b.support.createBroadcasts;
+          base.broadcast.supportCanReplyToBroadcast = !!b.support.ReplyToBroadcasts || !!b.support.replyToBroadcasts;
         }
         if (b.supervisor) {
-          base.broadcast.supervisorCanCreateBroadcast = !!b.supervisor.createBroadcasts;
+          base.broadcast.supervisorCanCreateBroadcast = !!b.supervisor.CreateBroadcasts || !!b.supervisor.createBroadcasts;
         }
       }
     }
 
+    console.log('Parsed rules result:', base);
     return base;
   };
 
   const mapBackendToOU = (row: any): OrganizationUnit => {
     const created = row?.tcreatedat ? new Date(row.tcreatedat) : new Date();
     const isActive = !!row?.bisActive;
+    
+    console.log('Mapping backend OU:', {
+      id: row?.ouid || row?.did,
+      name: row?.dname,
+      jsSettings: row?.jsSettings
+    });
+    
     const rules = parseJsSettingsToRules(row?.jsSettings);
-    return {
+    
+    const mappedOU: OrganizationUnit = {
       id: row?.ouid || row?.did || String(Date.now()),
       name: row?.dname || 'Unknown',
       description: row?.ddescription || '',
@@ -214,8 +273,13 @@
       createdAt: created,
       modifiedAt: created,
       status: isActive ? 'active' : 'inactive',
-      rules
+      rules,
+      // Store original jsSettings for tab determination
+      _originalJsSettings: row?.jsSettings
     };
+    
+    console.log('Mapped OU result:', mappedOU);
+    return mappedOU;
   };
 
   const loadLists = async () => {
@@ -453,18 +517,125 @@
     };
   };
 
+  // Helper function to determine which tab should be active based on jsSettings
+  const determinePrimarySettingsTab = (jsSettings: any): 'chat' | 'broadcast' => {
+    if (!jsSettings) return 'chat'; // default to chat
+    
+    const arr = Array.isArray(jsSettings) ? jsSettings : [jsSettings];
+    
+    // Check if any item has broadcast settings
+    const hasBroadcast = arr.some(item => item && item.broadcast);
+    const hasChat = arr.some(item => item && (item.Chat || item.chat));
+    
+    console.log('Settings analysis:', { hasBroadcast, hasChat, jsSettings });
+    
+    // If only broadcast settings exist, show broadcast tab
+    if (hasBroadcast && !hasChat) {
+      return 'broadcast';
+    }
+    
+    // If both exist, check which has more substantial settings
+    if (hasBroadcast && hasChat) {
+      // Count non-default broadcast settings
+      let broadcastSettingsCount = 0;
+      let chatSettingsCount = 0;
+      
+      arr.forEach(item => {
+        if (item.broadcast) {
+          if (item.broadcast.general) broadcastSettingsCount += Object.keys(item.broadcast.general).length;
+          if (item.broadcast.frontline) broadcastSettingsCount += Object.keys(item.broadcast.frontline).length;
+          if (item.broadcast.support) broadcastSettingsCount += Object.keys(item.broadcast.support).length;
+          if (item.broadcast.supervisor) broadcastSettingsCount += Object.keys(item.broadcast.supervisor).length;
+        }
+        
+        if (item.Chat || item.chat) {
+          const chatSettings = item.Chat || item.chat;
+          if (chatSettings.General || chatSettings.general) chatSettingsCount += Object.keys(chatSettings.General || chatSettings.general).length;
+          if (chatSettings.Frontline || chatSettings.frontline) chatSettingsCount += Object.keys(chatSettings.Frontline || chatSettings.frontline).length;
+          if (chatSettings.support) chatSettingsCount += Object.keys(chatSettings.support).length;
+          if (chatSettings.supervisor) chatSettingsCount += Object.keys(chatSettings.supervisor).length;
+        }
+      });
+      
+      console.log('Settings count:', { broadcastSettingsCount, chatSettingsCount });
+      
+      // If broadcast has more settings, show broadcast tab
+      if (broadcastSettingsCount > chatSettingsCount) {
+        return 'broadcast';
+      }
+    }
+    
+    // Default to chat
+    return 'chat';
+  };
+
   const editOUFunction = (ou: OrganizationUnit) => {
     selectedOU = ou;
+    
+    // Determine which tab should be active based on original jsSettings
+    const primaryTab = determinePrimarySettingsTab(ou._originalJsSettings);
+    activeRulesTab = primaryTab;
+    
+    console.log('Setting active tab to:', primaryTab, 'based on jsSettings:', ou._originalJsSettings);
+    
+    // Deep copy the rules to ensure all nested properties are properly copied
     editOU = {
       name: ou.name,
       description: ou.description,
       location: ou.location,
       status: ou.status,
       rules: {
-        chat: { ...ou.rules.chat },
-        broadcast: { ...ou.rules.broadcast }
+        chat: {
+          frontlineCanInitiate1v1: ou.rules.chat.frontlineCanInitiate1v1,
+          frontlineCanCreateGroups: ou.rules.chat.frontlineCanCreateGroups,
+          frontlineCanJoinGroups: ou.rules.chat.frontlineCanJoinGroups,
+          frontlineCanShareFiles: ou.rules.chat.frontlineCanShareFiles,
+          frontlineCanForwardMessages: ou.rules.chat.frontlineCanForwardMessages,
+          supportCanInitiate1v1: ou.rules.chat.supportCanInitiate1v1,
+          supportCanCreateGroups: ou.rules.chat.supportCanCreateGroups,
+          supportCanJoinGroups: ou.rules.chat.supportCanJoinGroups,
+          supportCanShareFiles: ou.rules.chat.supportCanShareFiles,
+          supportCanForwardMessages: ou.rules.chat.supportCanForwardMessages,
+          supervisorCanCreateGroups: ou.rules.chat.supervisorCanCreateGroups,
+          supervisorCanShareFiles: ou.rules.chat.supervisorCanShareFiles,
+          supervisorCanForwardMessages: ou.rules.chat.supervisorCanForwardMessages,
+          managerCanAccessAllGroups: ou.rules.chat.managerCanAccessAllGroups,
+          managerCanShareFiles: ou.rules.chat.managerCanShareFiles,
+          managerCanForwardMessages: ou.rules.chat.managerCanForwardMessages,
+          allowFileSharing: ou.rules.chat.allowFileSharing,
+          allowEmojis: ou.rules.chat.allowEmojis,
+          messageRetentionDays: ou.rules.chat.messageRetentionDays,
+          maxFileSize: ou.rules.chat.maxFileSize,
+          allowedFileTypes: ou.rules.chat.allowedFileTypes,
+          maxGroupSize: ou.rules.chat.maxGroupSize,
+          messageEditWindow: ou.rules.chat.messageEditWindow,
+          pinnedMessages: {
+            enabled: ou.rules.chat.pinnedMessages.enabled,
+            maxPinnedPerConversation: ou.rules.chat.pinnedMessages.maxPinnedPerConversation
+          }
+        },
+        broadcast: {
+          frontlineCanCreateBroadcast: ou.rules.broadcast.frontlineCanCreateBroadcast,
+          frontlineCanReplyToBroadcast: ou.rules.broadcast.frontlineCanReplyToBroadcast,
+          supportCanCreateBroadcast: ou.rules.broadcast.supportCanCreateBroadcast,
+          supportCanReplyToBroadcast: ou.rules.broadcast.supportCanReplyToBroadcast,
+          supervisorCanCreateBroadcast: ou.rules.broadcast.supervisorCanCreateBroadcast,
+          managerCanCreateBroadcast: ou.rules.broadcast.managerCanCreateBroadcast,
+          requireApprovalForBroadcast: ou.rules.broadcast.requireApprovalForBroadcast,
+          allowScheduledBroadcasts: ou.rules.broadcast.allowScheduledBroadcasts,
+          allowPriorityBroadcasts: ou.rules.broadcast.allowPriorityBroadcasts,
+          broadcastRetentionDays: ou.rules.broadcast.broadcastRetentionDays,
+          requireAcknowledgment: ou.rules.broadcast.requireAcknowledgment,
+          acknowledgmentReminders: ou.rules.broadcast.acknowledgmentReminders,
+          reminderInterval: ou.rules.broadcast.reminderInterval,
+          maxBroadcastTargets: ou.rules.broadcast.maxBroadcastTargets
+        }
       }
     };
+    
+    console.log('Edit OU - Original OU rules:', ou.rules);
+    console.log('Edit OU - Copied editOU rules:', editOU.rules);
+    
     showEditModal = true;
   };
 
