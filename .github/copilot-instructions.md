@@ -1,16 +1,21 @@
 # Copilot Instructions for Collabo-Tool
 
 ## Project Overview
-This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**. It's a fully-featured frontend-only application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
+This is a sophisticated hackathon collaboration tool built with **SvelteKit 5**, **TypeScript**, and **Tailwind CSS 4**. It's a fully-featured application with role-based authentication, real-time chat, broadcast messaging, and comprehensive admin management interfaces.
 
-**Critical: Frontend-Only Demo** - All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage. No backend integration exists.
+**Critical: Frontend-Only Demo** - All authentication, data persistence, and API calls are simulated using in-memory stores and localStorage. A Node.js/Express backend exists in `/backend` but is not integrated with the frontend. All data is mocked for demo purposes.
 
 ## Development Workflows
 
 ### Quick Start
 ```bash
+# Frontend (primary development)
 cd frontend
 npm run dev -- --open  # Auto-opens browser at localhost:5173
+
+# Backend (available but not integrated)
+cd backend  
+npm run dev             # Starts on localhost:4000
 ```
 
 **Network Config**: Dev server exposes on `0.0.0.0:5173` with ngrok support (`allowedHosts: ['.ngrok-free.app']`)
@@ -65,6 +70,7 @@ class AuthStore {
   }
 }
 
+// Export pattern varies: some use new ClassName(), others use writable(new ClassName())
 export const authStore = writable(new AuthStore());
 ```
 

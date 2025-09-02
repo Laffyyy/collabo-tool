@@ -119,6 +119,23 @@
 	});
 	let showPasswordFields = $state<boolean>(false);
 	
+	// Password requirements validation
+	let passwordRequirements = $derived({
+		minLength: passwordForm.newPassword.length >= 15,
+		hasUppercase: /[A-Z]/.test(passwordForm.newPassword),
+		hasLowercase: /[a-z]/.test(passwordForm.newPassword),
+		hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordForm.newPassword),
+		passwordsMatch: passwordForm.newPassword && passwordForm.confirmPassword && passwordForm.newPassword === passwordForm.confirmPassword
+	});
+	
+	let allRequirementsMet = $derived(
+		passwordRequirements.minLength &&
+		passwordRequirements.hasUppercase &&
+		passwordRequirements.hasLowercase &&
+		passwordRequirements.hasSpecialChar &&
+		passwordRequirements.passwordsMatch
+	);
+	
 	// Options
 	const ouOptions = [
 		'Engineering',
@@ -872,12 +889,8 @@
 			alert('Please enter a new password');
 			return false;
 		}
-		if (passwordForm.newPassword.length < 8) {
-			alert('Password must be at least 8 characters long');
-			return false;
-		}
-		if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-			alert('Passwords do not match');
+		if (!allRequirementsMet) {
+			alert('Please ensure all password requirements are met');
 			return false;
 		}
 		return true;
@@ -1905,7 +1918,7 @@
 											id="newPassword"
 											bind:value={passwordForm.newPassword}
 											type={showPasswordFields ? 'text' : 'password'}
-											placeholder="Enter new password (min 8 characters)"
+											placeholder="Enter new password (min 15 characters)"
 											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent pr-12"
 										/>
 										<button
@@ -1933,6 +1946,47 @@
 									/>
 								</div>
 
+								<!-- Password Requirements -->
+								{#if passwordForm.newPassword}
+									<div class="bg-gray-50 rounded-lg p-4 space-y-3">
+										<h4 class="text-sm font-medium text-gray-700 mb-3">Password Requirements</h4>
+										<div class="grid grid-cols-1 gap-2 text-sm">
+											<div class="flex items-center space-x-2">
+												<CheckCircle class="w-4 h-4 {passwordRequirements.minLength ? 'text-green-500' : 'text-gray-300'}" />
+												<span class="{passwordRequirements.minLength ? 'text-green-700' : 'text-gray-500'}">
+													At least 15 characters
+												</span>
+											</div>
+											<div class="flex items-center space-x-2">
+												<CheckCircle class="w-4 h-4 {passwordRequirements.hasUppercase ? 'text-green-500' : 'text-gray-300'}" />
+												<span class="{passwordRequirements.hasUppercase ? 'text-green-700' : 'text-gray-500'}">
+													Contains uppercase letter (A-Z)
+												</span>
+											</div>
+											<div class="flex items-center space-x-2">
+												<CheckCircle class="w-4 h-4 {passwordRequirements.hasLowercase ? 'text-green-500' : 'text-gray-300'}" />
+												<span class="{passwordRequirements.hasLowercase ? 'text-green-700' : 'text-gray-500'}">
+													Contains lowercase letter (a-z)
+												</span>
+											</div>
+											<div class="flex items-center space-x-2">
+												<CheckCircle class="w-4 h-4 {passwordRequirements.hasSpecialChar ? 'text-green-500' : 'text-gray-300'}" />
+												<span class="{passwordRequirements.hasSpecialChar ? 'text-green-700' : 'text-gray-500'}">
+													Contains special character (!@#$%^&*)
+												</span>
+											</div>
+											{#if passwordForm.confirmPassword}
+												<div class="flex items-center space-x-2">
+													<CheckCircle class="w-4 h-4 {passwordRequirements.passwordsMatch ? 'text-green-500' : 'text-red-400'}" />
+													<span class="{passwordRequirements.passwordsMatch ? 'text-green-700' : 'text-red-600'}">
+														Passwords match
+													</span>
+												</div>
+											{/if}
+										</div>
+									</div>
+								{/if}
+
 								<div class="flex items-center space-x-2">
 									<input
 										id="requirePasswordChange"
@@ -1954,7 +2008,8 @@
 									</button>
 									<button
 										onclick={changePassword}
-										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium"
+										disabled={!allRequirementsMet}
+										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
 									>
 										Update Password
 									</button>
@@ -2086,13 +2141,13 @@
 
 							<!-- Team Member Cards -->
 							<div class="flex justify-center">
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+								<div class="flex flex-wrap justify-center gap-4 max-w-7xl">
 									{#each supervisorTeam as member}
 										<div class="{
 											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
 											member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
 											'bg-green-100 border-green-200'
-										} border rounded-lg p-3 text-center min-w-[160px]">
+										} border rounded-lg p-3 text-center w-[160px] flex-shrink-0">
 											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
@@ -2170,13 +2225,13 @@
 
 							<!-- Team Member Cards -->
 							<div class="flex justify-center">
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+								<div class="flex flex-wrap justify-center gap-4 max-w-7xl">
 									{#each supervisorTeam as member}
 										<div class="{
 											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
 											member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
 											'bg-green-100 border-green-200'
-										} border rounded-lg p-3 text-center min-w-[160px]">
+										} border rounded-lg p-3 text-center w-[160px] flex-shrink-0">
 											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
 											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
@@ -2255,12 +2310,12 @@
 							<h3 class="text-lg font-medium text-gray-900 text-center">Supervisors ({directSupervisors.length})</h3>
 							
 							<div class="flex justify-center">
-								<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 max-w-6xl">
+								<div class="flex flex-wrap justify-center gap-4 max-w-6xl">
 								{#each directSupervisors as supervisor}
 									{@const supervisorTeamCount = getSupervisorTeam(supervisor.id).length}
 									<button
 										onclick={() => navigateToSupervisor(supervisor)}
-										class="bg-emerald-100 border border-emerald-300 rounded-lg p-3 text-center hover:bg-emerald-200 transition-colors cursor-pointer group min-w-[180px]"
+										class="bg-emerald-100 border border-emerald-300 rounded-lg p-3 text-center hover:bg-emerald-200 transition-colors cursor-pointer group w-[180px] flex-shrink-0"
 									>
 										<div class="mx-auto mb-2"><ProfileAvatar user={{ name: supervisor.name }} size="md" showOnlineStatus={false} /></div>
 										<div class="font-medium text-gray-900 text-sm truncate" title="{supervisor.name}">{supervisor.name}</div>
