@@ -2,7 +2,7 @@
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import { onMount } from 'svelte';
-  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
+  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, reactivateOUs as reactivateOUsAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -596,13 +596,8 @@
     if (ids.length === 0) return;
     
     try {
-      // Note: The API doesn't have a bulk reactivate endpoint, so we'll call individual reactivate for each
-      const results = await Promise.all(ids.map(id => reactivateOUAPI(id)));
-      const failed = results.filter(r => !r.success);
-      
-      if (failed.length > 0) {
-        throw new Error(`${failed.length} out of ${ids.length} reactivations failed`);
-      }
+      const res = await reactivateOUsAPI(ids);
+      if (!res.success) throw new Error(res.error || 'Failed');
       
       const selectedCount = ids.length;
       if (currentTab === 'inactive') {

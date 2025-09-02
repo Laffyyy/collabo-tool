@@ -325,6 +325,27 @@ export const reactivateOU = async (id: string): Promise<APIResponse> => {
 };
 
 /**
+ * Reactivate multiple Organization Units in one request
+ */
+export const reactivateOUs = async (ids: string[]): Promise<APIResponse> => {
+  try {
+    const response = await apiClient.post('/reactive', { reactivationlist: ids });
+    return {
+      success: true,
+      data: response.data,
+      message: 'Selected Organization Units reactivated successfully'
+    };
+  } catch (error) {
+    console.error('Error reactivating OUs:', error);
+    const axiosError = error as AxiosError;
+    return {
+      success: false,
+      error: (axiosError.response?.data as any)?.message || axiosError.message || 'Failed to reactivate Organization Units'
+    };
+  }
+};
+
+/**
  * Transform frontend OU data to backend API format
  * @param frontendOU - Frontend OU object
  * @param includeSettings - Which settings to include ('chat', 'broadcast', or 'both')
@@ -404,6 +425,7 @@ export default {
   deactivateOU,
   deactivateOUs,
   reactivateOU,
+  reactivateOUs,
   updateOU,
   transformOUDataForAPI
 };

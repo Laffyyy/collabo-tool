@@ -140,7 +140,7 @@ async function getDeactiveOU(howmany, page, sort) {
  */
 async function createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
     try {
-        const result = await ouModel.createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings);
+        const result = await ouModel.createOU(OrgName, Description, parentouid, Location, jsSettings);
         if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
             result.jsSettings = deserializeJsSettings(result.jsSettings);
         }
@@ -231,18 +231,17 @@ async function updateOU(id, changes) {
                         ? transformOUSettingsToSettings(parsed)
                         : (parsed || {});
                 } else if (savedJsSettings && typeof savedJsSettings === 'object') {
-                    // Already a Settings-shaped object; use directly
-                    existingSettings = savedJsSettings;
+                    // In case the driver already parsed jsonb[] to JS array
+                    existingSettings = transformOUSettingsToSettings(savedJsSettings);
                 }
             } catch (parseError) {
                 existingSettings = {};
             }
 
-            // Merge the new settings with existing settings. Pass the merged
-            // Settings object through to the model; the model is responsible
-            // for transforming it into the jsSettings array shape for storage.
+            // Merge the new settings with existing settings and transform to jsSettings array
             const mergedSettings = mergeSettings(existingSettings, changes.Settings);
-            processedChanges.Settings = mergedSettings;
+            const jsSettingsArray = transformSettingsToJSSettings(mergedSettings);
+            processedChanges.Settings = jsSettingsArray;
         }
 
         const result = await ouModel.updateOU(id, processedChanges);
@@ -279,13 +278,13 @@ async function reactiveOU(reactivationlist) {
 
         const results = [];
         const errors = [];
-        const deactivatedAt = new Date().toISOString();
+        const reactivatedAt = new Date().toISOString();
 
         // Process each OU ID in the deactivation list
         for (const id of reactivationlist) {
             try {
-                // Deactivate the OU using the model
-                const result = await ouModel.deactiveOU(id);
+                // Reactivate the OU using the model
+                const result = await ouModel.reactiveOU(id);
                 results.push({
                     id,
                     status: 'reactivated',
