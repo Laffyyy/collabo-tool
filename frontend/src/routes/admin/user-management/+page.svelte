@@ -109,10 +109,14 @@
 	let bulkPreviewTab = $state<string>('valid');
 	let showEditUserModal = $state<boolean>(false);
 	let showConfirmationModal = $state<boolean>(false);
+	let showSuccessModal = $state<boolean>(false);
+	let showErrorModal = $state<boolean>(false);
 	let showTeamModal = $state<boolean>(false);
 	let confirmationAction = $state<string>('');
 	let selectedUser = $state<UserData | null>(null);
 	let teamModalUser = $state<UserData | null>(null);
+	let successMessage = $state<string>('');
+	let errorMessage = $state<string>('');
 	
 	// Team modal navigation and data
 	let teamViewStack = $state<UserData[]>([]); // Stack for navigation
@@ -1089,7 +1093,11 @@
 	};
 
 	const executeConfirmedAction = async () => {
-		if (!selectedUser || !confirmationAction) return;
+		console.log('executeConfirmedAction called:', { selectedUser, confirmationAction, selectedRows: selectedRows.size }); // Debug log
+		
+		// For bulk operations, we don't need selectedUser, just selectedRows
+		if (!confirmationAction) return;
+		if (!confirmationAction.startsWith('bulk-') && !selectedUser) return;
 
 		try {
 			switch (confirmationAction) {
@@ -1114,6 +1122,7 @@
 					showSuccessModal = true;
 					break;
 				case 'bulk-lock':
+					console.log('Confirmation handler: executing bulk-lock action'); // Debug log
 					await handleBulkLockUsers();
 					break;
 				case 'bulk-deactivate':
@@ -1159,19 +1168,25 @@
 	};
 
 	const handleBulkLockUsers = async () => {
+		console.log('handleBulkLockUsers called with selectedRows:', Array.from(selectedRows)); // Debug log
 		try {
 			loadingLock = true;
 			const userIds = Array.from(selectedRows);
-			await bulkLockUsers(userIds, true);
+			console.log('About to call bulkLockUsers API with userIds:', userIds); // Debug log
+			const result = await bulkLockUsers(userIds, true);
+			console.log('bulkLockUsers API result:', result); // Debug log
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
-			alert(`${userIds.length} users have been locked successfully!`);
+			// Use toast store directly
+			const { success } = $toastStore;
+			success(`${userIds.length} users have been locked successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk lock users:', error);
-			alert('Failed to lock users. Please try again.');
+			const { error: errorFn } = $toastStore;
+			errorFn(error instanceof Error ? error.message : 'Failed to lock users. Please try again.');
 		} finally {
 			loadingLock = false;
 		}
@@ -1181,16 +1196,18 @@
 		try {
 			loadingBulk = true;
 			const userIds = Array.from(selectedRows);
-			await bulkActivateUsers(userIds, false);
+			const result = await bulkActivateUsers(userIds, false);
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
-			alert(`${userIds.length} users have been deactivated successfully!`);
+			const { success } = $toastStore;
+			success(`${userIds.length} users have been deactivated successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk deactivate users:', error);
-			alert('Failed to deactivate users. Please try again.');
+			const { error: errorFn } = $toastStore;
+			errorFn(error instanceof Error ? error.message : 'Failed to deactivate users. Please try again.');
 		} finally {
 			loadingBulk = false;
 		}
@@ -1214,16 +1231,18 @@
 		try {
 			loadingLock = true;
 			const userIds = Array.from(selectedRows);
-			await bulkLockUsers(userIds, false);
+			const result = await bulkLockUsers(userIds, false);
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
-			alert(`${userIds.length} users have been unlocked successfully!`);
+			const { success } = $toastStore;
+			success(`${userIds.length} users have been unlocked successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk unlock users:', error);
-			alert('Failed to unlock users. Please try again.');
+			const { error: errorFn } = $toastStore;
+			errorFn(error instanceof Error ? error.message : 'Failed to unlock users. Please try again.');
 		} finally {
 			loadingLock = false;
 		}
@@ -1233,16 +1252,18 @@
 		try {
 			loadingBulk = true;
 			const userIds = Array.from(selectedRows);
-			await bulkActivateUsers(userIds, true);
+			const result = await bulkActivateUsers(userIds, true);
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
 			selectedRows = new Set();
 			selectAll = false;
-			alert(`${userIds.length} users have been reactivated successfully!`);
+			const { success } = $toastStore;
+			success(`${userIds.length} users have been reactivated successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk reactivate users:', error);
-			alert('Failed to reactivate users. Please try again.');
+			const { error: errorFn } = $toastStore;
+			errorFn(error instanceof Error ? error.message : 'Failed to reactivate users. Please try again.');
 		} finally {
 			loadingBulk = false;
 		}

@@ -326,7 +326,7 @@ const bulkLockUsers = async (req, res, next) => {
   try {
     const { userIds, locked } = req.body;
 
-    const newStatus = locked ? 'Locked' : 'Active';
+    const newStatus = locked ? 'locked' : 'active';
     const result = await userModel.bulkUpdateStatus(userIds, newStatus);
 
     res.status(200).json({
@@ -346,7 +346,7 @@ const bulkActivateUsers = async (req, res, next) => {
   try {
     const { userIds, active } = req.body;
 
-    const newStatus = active ? 'Active' : 'Deactivated';
+    const newStatus = active ? 'active' : 'deactivated';
     const result = await userModel.bulkUpdateStatus(userIds, newStatus);
 
     res.status(200).json({
