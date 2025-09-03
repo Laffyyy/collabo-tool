@@ -184,258 +184,153 @@
     <div class="collaboration-card fade-in">
       <!-- Tab Navigation -->
       <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">
-            <button
-              onclick={() => activeTab = 'general'}
-              class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
-            >
-              <Globe class="w-5 h-5" />
-              <span>General</span>
-            </button>
-            <button
-              onclick={() => activeTab = 'chat'}
-              class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'chat' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
-            >
-              <MessageSquare class="w-5 h-5" />
-              <span>Chat</span>
-            </button>
-            <button
-              onclick={() => activeTab = 'broadcast'}
-              class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'broadcast' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
-            >
-              <Radio class="w-5 h-5" />
-              <span>Broadcast</span>
-            </button>
-          </div>
+        <button
+          onclick={() => activeTab = 'general'}
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+        >
+          <Globe class="w-5 h-5" />
+          <span>General</span>
+        </button>
+        <button
+          onclick={() => activeTab = 'chat'}
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'chat' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+        >
+          <MessageSquare class="w-5 h-5" />
+          <span>Chat</span>
+        </button>
+        <button
+          onclick={() => activeTab = 'broadcast'}
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'broadcast' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+        >
+          <Radio class="w-5 h-5" />
+          <span>Broadcast</span>
+        </button>
+      </div>
 
-          <!-- Tab Content -->
-          <div class="p-6">
-            <!-- General Tab -->
-            {#if activeTab === 'general'}
-              <div class="space-y-6 max-w-4xl">
-                <!-- General Settings -->
-                <div class="space-y-4">
-                  <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                    <Globe class="w-5 h-5 text-[#01c0a4] mr-2" />
-                    General Settings
-                  </h3>
-                  
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label for="orgName" class="block text-sm font-medium text-gray-700 mb-2">Organization Name</label>
-                      <input
-                        id="orgName"
-                        bind:value={config.organizationName}
-                        class="input-field"
-                        placeholder="Enter organization name"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label for="timezone" class="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
-                      <select id="timezone" bind:value={config.timezone} class="input-field">
-                        <option value="America/New_York">Eastern Time (EST/EDT)</option>
-                        <option value="America/Chicago">Central Time (CST/CDT)</option>
-                        <option value="America/Denver">Mountain Time (MST/MDT)</option>
-                        <option value="America/Los_Angeles">Pacific Time (PST/PDT)</option>
-                        <option value="UTC">UTC</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label for="dateFormat" class="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
-                      <select id="dateFormat" bind:value={config.dateFormat} class="input-field">
-                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label for="timeFormat" class="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
-                      <select id="timeFormat" bind:value={config.timeFormat} class="input-field">
-                        <option value="12h">12 Hour (AM/PM)</option>
-                        <option value="24h">24 Hour</option>
-                      </select>
-                    </div>
-                  </div>
+      <!-- Tab Content -->
+      <div class="p-6">
+        <!-- General Tab -->
+        {#if activeTab === 'general'}
+          <div class="space-y-6 max-w-4xl">
+            <!-- General Settings -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <Globe class="w-5 h-5 text-[#01c0a4] mr-2" />
+                General Settings
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="dateFormat" class="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+                  <select id="dateFormat" bind:value={config.dateFormat} class="input-field">
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  </select>
                 </div>
+                <div>
+                  <label for="timeFormat" class="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
+                  <select id="timeFormat" bind:value={config.timeFormat} class="input-field">
+                    <option value="12h">12 Hour (AM/PM)</option>
+                    <option value="24h">24 Hour</option>
+                  </select>
+                </div>
+              </div>
+            </div>
 
-                <!-- Security Settings -->
-                <div class="space-y-4">
-                  <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                    <Shield class="w-5 h-5 text-[#01c0a4] mr-2" />
-                    Security Settings
-                  </h3>
-                  
-                  <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold text-gray-900 mb-3">Password Policy</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label for="minLength" class="block text-sm font-medium text-gray-700 mb-2">Minimum Length</label>
-                        <input
-                          id="minLength"
-                          type="number"
-                          bind:value={config.passwordPolicy.minLength}
-                          min="6"
-                          max="32"
-                          class="input-field"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label for="passwordExpiry" class="block text-sm font-medium text-gray-700 mb-2">Password Expiry (Days)</label>
-                        <input
-                          id="passwordExpiry"
-                          type="number"
-                          bind:value={config.passwordPolicy.passwordExpiry}
-                          min="30"
-                          max="365"
-                          class="input-field"
-                        />
-                      </div>
-                      
-                      <div class="md:col-span-2 space-y-3">
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireUppercase}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Uppercase Letters</span>
-                        </label>
-                        
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireLowercase}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Lowercase Letters</span>
-                        </label>
-                        
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireNumbers}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Numbers</span>
-                        </label>
-                        
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireSpecialChars}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Special Characters</span>
-                        </label>
-                      </div>
-                    </div>
+            <!-- Security Settings -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <Shield class="w-5 h-5 text-[#01c0a4] mr-2" />
+                Security Settings
+              </h3>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <h4 class="font-semibold text-gray-900 mb-3">Password Policy</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label for="minLength" class="block text-sm font-medium text-gray-700 mb-2">Minimum Length</label>
+                    <input
+                      id="minLength"
+                      type="number"
+                      bind:value={config.passwordPolicy.minLength}
+                      min="6"
+                      max="32"
+                      class="input-field"
+                    />
                   </div>
-                  
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label for="sessionTimeout" class="block text-sm font-medium text-gray-700 mb-2">Session Timeout (Minutes)</label>
-                      <input
-                        id="sessionTimeout"
-                        type="number"
-                        bind:value={config.sessionTimeout}
-                        min="15"
-                        max="1440"
-                        class="input-field"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label for="maxLoginAttempts" class="block text-sm font-medium text-gray-700 mb-2">Max Login Attempts</label>
-                      <input
-                        id="maxLoginAttempts"
-                        type="number"
-                        bind:value={config.maxLoginAttempts}
-                        min="3"
-                        max="10"
-                        class="input-field"
-                      />
-                    </div>
+                  <div>
+                    <label for="passwordExpiry" class="block text-sm font-medium text-gray-700 mb-2">Password Expiry (Days)</label>
+                    <input
+                      id="passwordExpiry"
+                      type="number"
+                      bind:value={config.passwordPolicy.passwordExpiry}
+                      min="30"
+                      max="365"
+                      class="input-field"
+                    />
                   </div>
-                  
-                  <div class="space-y-3">
+                  <div class="md:col-span-2 space-y-3">
                     <label class="flex items-center space-x-2">
                       <input
                         type="checkbox"
-                        bind:checked={config.twoFactorAuth}
+                        bind:checked={config.passwordPolicy.requireUppercase}
                         class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                       />
-                      <span class="text-sm font-medium">Enable Two-Factor Authentication</span>
+                      <span class="text-sm">Require Uppercase Letters</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        bind:checked={config.passwordPolicy.requireLowercase}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm">Require Lowercase Letters</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        bind:checked={config.passwordPolicy.requireNumbers}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm">Require Numbers</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        bind:checked={config.passwordPolicy.requireSpecialChars}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm">Require Special Characters</span>
                     </label>
                   </div>
                 </div>
-
-                <!-- Backup Settings -->
-                <div class="space-y-6">
-                  <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-semibold text-gray-900 flex items-center">
-                      <Database class="w-6 h-6 text-[#01c0a4] mr-3" />
-                      Backup Settings
-                    </h3>
-                    <button
-                      onclick={initiateBackup}
-                      class="secondary-button text-sm"
-                    >
-                      Initiate Manual Backup
-                    </button>
-                  </div>
-                  
-                  <div class="space-y-4">
-                    <div class="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        bind:checked={config.autoBackup}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                      />
-                      <span class="text-sm font-medium">Enable Automatic Backups</span>
-                    </div>
-                    
-                    {#if config.autoBackup}
-                      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label for="backupFrequency" class="block text-sm font-medium text-gray-700 mb-2">Backup Frequency</label>
-                          <select id="backupFrequency" bind:value={config.backupFrequency} class="input-field">
-                            <option value="hourly">Hourly</option>
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label for="backupRetention" class="block text-sm font-medium text-gray-700 mb-2">Retention (Days)</label>
-                          <input
-                            id="backupRetention"
-                            type="number"
-                            bind:value={config.backupRetention}
-                            min="7"
-                            max="365"
-                            class="input-field"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label for="backupLocation" class="block text-sm font-medium text-gray-700 mb-2">Backup Location</label>
-                          <input
-                            id="backupLocation"
-                            bind:value={config.backupLocation}
-                            class="input-field"
-                            placeholder="/backup/collabhub"
-                          />
-                        </div>
-                      </div>
-                    {/if}
-                  </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="sessionTimeout" class="block text-sm font-medium text-gray-700 mb-2">Session Timeout (Minutes)</label>
+                  <input
+                    id="sessionTimeout"
+                    type="number"
+                    bind:value={config.sessionTimeout}
+                    min="15"
+                    max="1440"
+                    class="input-field"
+                  />
+                </div>
+                <div>
+                  <label for="maxLoginAttempts" class="block text-sm font-medium text-gray-700 mb-2">Max Login Attempts</label>
+                  <input
+                    id="maxLoginAttempts"
+                    type="number"
+                    bind:value={config.maxLoginAttempts}
+                    min="3"
+                    max="10"
+                    class="input-field"
+                  />
                 </div>
               </div>
-            {/if}
+            </div>
+          </div>
+        {/if}
 
             <!-- Chat Tab -->
             {#if activeTab === 'chat'}
