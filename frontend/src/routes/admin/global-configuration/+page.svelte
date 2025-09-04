@@ -1,14 +1,13 @@
 <script lang="ts">
+	import { API_CONFIG } from '$lib/api/config';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
-
+  const API_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings/general`;
+  
   // Mock global configuration data
   let config = $state({
     // General Settings
-    organizationName: 'CollabHub Enterprise',
-    timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',
-    language: 'en',
     
     // Security Settings
     passwordPolicy: {
@@ -21,7 +20,6 @@
     },
     sessionTimeout: 480, // minutes
     maxLoginAttempts: 5,
-    twoFactorAuth: false,
     
     // Chat Settings - Global defaults for all OUs
     chat: {
@@ -81,12 +79,17 @@
     ssoEnabled: false,
     ssoProvider: 'none',
     
-    // Backup Settings
-    autoBackup: true,
-    backupFrequency: 'daily',
-    backupRetention: 30, // days
-    backupLocation: '/backup/collabhub'
   });
+
+  function getGeneralSettings(config: any) {
+  return {
+    dateFormat: config.dateFormat,
+    timeFormat: config.timeFormat,
+    passwordPolicy: config.passwordPolicy,
+    sessionTimeout: config.sessionTimeout,
+    maxLoginAttempts: config.maxLoginAttempts
+  };
+}
 
   let hasChanges = $state(false);
   let savedConfigString = $state('');
@@ -106,14 +109,38 @@
     }
   });
 
-  const saveConfiguration = () => {
-    // Simulate API call
+  const saveConfiguration = async () => {
+  if (activeTab === 'general') {
+    try {
+      const generalSettings = getGeneralSettings(config);
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include', // needed if using cookies/JWT
+        body: JSON.stringify({ settings: generalSettings })
+      });
+      const result = await response.json();
+      if (result.success) {
+        savedConfigString = JSON.stringify(config);
+        hasChanges = false;
+        alert('Global configuration saved successfully!');
+      } else {
+        alert(result.message || 'Failed to save configuration');
+      }
+    } catch (err) {
+      alert('Failed to save configuration');
+    }
+  } else {
+    // ...existing code for other tabs...
     setTimeout(() => {
       savedConfigString = JSON.stringify(config);
       hasChanges = false;
       alert('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
     }, 500);
-  };
+  }
+};
 
   const resetConfiguration = () => {
     if (confirm('Are you sure you want to reset all changes?')) {
