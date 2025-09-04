@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { API_CONFIG } from '$lib/api/config';
+    import { API_CONFIG } from '$lib/api/config';
+    import { onMount } from 'svelte';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
-  const API_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings/general`;
   
-  // Mock global configuration data
-  let config = $state({
+  const API_BASE_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings`;
+  const GENERAL_API_URL = `${API_BASE_URL}/general`;
+  
+  // Default configuration structure
+  const defaultConfig = {
     // General Settings
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',
@@ -54,7 +57,7 @@
       }
     },
     
-    // Broadcast Settings - Global defaults for all OUs
+// Broadcast Settings - Global defaults for all OUs
     broadcast: {
       frontlineCanCreateBroadcast: false,
       frontlineCanReplyToBroadcast: true,
@@ -70,36 +73,80 @@
       acknowledgmentReminders: true,
       reminderInterval: 1440, // minutes
       maxBroadcastTargets: 1000
-    },
-    
-    // Integration Settings
-    ldapEnabled: false,
-    ldapServer: '',
-    ldapBaseDN: '',
-    ssoEnabled: false,
-    ssoProvider: 'none',
-    
-  });
-
-  function getGeneralSettings(config: any) {
-  return {
-    dateFormat: config.dateFormat,
-    timeFormat: config.timeFormat,
-    passwordPolicy: config.passwordPolicy,
-    sessionTimeout: config.sessionTimeout,
-    maxLoginAttempts: config.maxLoginAttempts
+    }
   };
-}
 
+  // State variables
+  let config = $state({ ...defaultConfig });
+  let isLoading = $state(false);
   let hasChanges = $state(false);
   let savedConfigString = $state('');
   let activeTab = $state<'general' | 'chat' | 'broadcast'>('general');
 
-  // Initialize saved config on mount
-  $effect(() => {
-    if (savedConfigString === '') {
+  // Load configuration from backend
+  const loadConfiguration = async () => {
+    try {
+      isLoading = true;
+      const response = await fetch(GENERAL_API_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Parse the JSON string from database
+          const savedSettings = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+          
+          // Merge saved settings with defaults (in case new settings were added)
+          config = {
+            ...defaultConfig,
+            ...savedSettings,
+            passwordPolicy: {
+              ...defaultConfig.passwordPolicy,
+              ...(savedSettings.passwordPolicy || {})
+            },
+            chat: {
+              ...defaultConfig.chat,
+              ...(savedSettings.chat || {}),
+              pinnedMessages: {
+                ...defaultConfig.chat.pinnedMessages,
+                ...(savedSettings.chat?.pinnedMessages || {})
+              }
+            },
+            broadcast: {
+              ...defaultConfig.broadcast,
+              ...(savedSettings.broadcast || {})
+            }
+          };
+          
+          savedConfigString = JSON.stringify(config);
+          console.log('✅ Configuration loaded successfully:', config);
+        } else {
+          // No saved configuration, use defaults
+          console.log('ℹ️ No saved configuration found, using defaults');
+          savedConfigString = JSON.stringify(config);
+        }
+      } else {
+        console.error('Failed to load configuration:', response.statusText);
+        // Use defaults if loading fails
+        savedConfigString = JSON.stringify(config);
+      }
+    } catch (error) {
+      console.error('Error loading configuration:', error);
+      // Use defaults if loading fails
       savedConfigString = JSON.stringify(config);
+    } finally {
+      isLoading = false;
     }
+  };
+
+  // Load configuration on mount
+  onMount(() => {
+    loadConfiguration();
   });
 
   // Watch for changes
@@ -109,42 +156,57 @@
     }
   });
 
+ function getGeneralSettings(config: any) {
+    return {
+      dateFormat: config.dateFormat,
+      timeFormat: config.timeFormat,
+      passwordPolicy: config.passwordPolicy,
+      sessionTimeout: config.sessionTimeout,
+      maxLoginAttempts: config.maxLoginAttempts
+    };
+  }
+
   const saveConfiguration = async () => {
-  if (activeTab === 'general') {
-    try {
-      const generalSettings = getGeneralSettings(config);
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include', // needed if using cookies/JWT
-        body: JSON.stringify({ settings: generalSettings })
-      });
-      const result = await response.json();
-      if (result.success) {
+    if (activeTab === 'general') {
+      try {
+        isLoading = true;
+        const generalSettings = getGeneralSettings(config);
+        const response = await fetch(GENERAL_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({ settings: generalSettings })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          savedConfigString = JSON.stringify(config);
+          hasChanges = false;
+          alert('Global configuration saved successfully!');
+        } else {
+          alert(result.message || 'Failed to save configuration');
+        }
+      } catch (error) {
+        console.error('Error saving configuration:', error);
+        alert('Failed to save configuration');
+      } finally {
+        isLoading = false;
+      }
+    } else {
+      // For chat and broadcast tabs, simulate save for now
+      setTimeout(() => {
         savedConfigString = JSON.stringify(config);
         hasChanges = false;
-        alert('Global configuration saved successfully!');
-      } else {
-        alert(result.message || 'Failed to save configuration');
-      }
-    } catch (err) {
-      alert('Failed to save configuration');
+        alert('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
+      }, 500);
     }
-  } else {
-    // ...existing code for other tabs...
-    setTimeout(() => {
-      savedConfigString = JSON.stringify(config);
-      hasChanges = false;
-      alert('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
-    }, 500);
-  }
-};
+  };
 
-  const resetConfiguration = () => {
+const resetConfiguration = async () => {
     if (confirm('Are you sure you want to reset all changes?')) {
-      config = JSON.parse(savedConfigString);
+      await loadConfiguration(); // Reload from backend
       hasChanges = false;
     }
   };
@@ -176,6 +238,15 @@
   <title>Global Configuration - Admin Controls</title>
 </svelte:head>
 
+{#if isLoading}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#01c0a4]"></div>
+      <span class="text-gray-700">Loading configuration...</span>
+    </div>
+  </div>
+{/if}
+
 <div class="min-h-screen bg-gray-50">
   <div class="max-w-5xl mx-auto px-6 py-8">
     <!-- Header -->
@@ -190,6 +261,7 @@
             <button
               onclick={resetConfiguration}
               class="secondary-button flex items-center space-x-2"
+              disabled={isLoading}
             >
               <RotateCcw class="w-4 h-4" />
               <span>Reset</span>
@@ -197,17 +269,18 @@
           {/if}
           <button
             onclick={saveConfiguration}
-            disabled={!hasChanges}
+            disabled={!hasChanges || isLoading}
             class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save class="w-4 h-4" />
-            <span>Save Changes</span>
+            <span>{isLoading ? 'Saving...' : 'Save Changes'}</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- Main Configuration Panel -->
+<!-- Main Configuration Panel -->
     <div class="collaboration-card fade-in">
       <!-- Tab Navigation -->
       <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">

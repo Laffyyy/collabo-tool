@@ -40,6 +40,8 @@ class GlobalSettingsModel {
     `;
     const { rows } = await this.pool.query(query, [key]);
     if (rows.length === 0) return null;
+    
+    // Return the raw JSON string - let the service/controller handle parsing
     return rows[0].dsettingvalue;
   }
 }

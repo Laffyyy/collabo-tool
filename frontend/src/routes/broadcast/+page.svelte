@@ -31,6 +31,45 @@
   import { API_CONFIG } from '$lib/api/config';
   import { authStore } from '$lib/stores/auth.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
+
+  // Add global settings state
+  let globalSettings = $state<{
+    dateFormat: string;
+    timeFormat: string;
+  }>({
+    dateFormat: 'MM/DD/YYYY',
+    timeFormat: '12h'
+  });
+
+  // Load global settings from backend
+  const loadGlobalSettings = async () => {
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/global-settings/general`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const settings = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+          globalSettings = {
+            dateFormat: settings.dateFormat || 'MM/DD/YYYY',
+            timeFormat: settings.timeFormat || '12h'
+          };
+          console.log('✅ Global settings loaded:', globalSettings);
+        }
+      } else {
+        console.warn('Failed to load global settings, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading global settings:', error);
+    }
+  };
+
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 
@@ -526,16 +565,144 @@ let sortedReceivedBroadcasts = $derived(
     currentUser && ['admin', 'manager', 'supervisor'].includes(currentUser.role)
   );
 
-  // Keep existing utility functions...
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
+// Enhanced date formatting function using global settings
+const formatDate = (date: Date) => {
+  if (!date || isNaN(date.getTime())) {
+    return 'Invalid date';
+  }
+
+  const options: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+
+  // Apply time format setting - always use 'en-US' for consistent AM/PM display
+  if (globalSettings.timeFormat === '24h') {
+    options.hour12 = false;
+  } else {
+    options.hour12 = true;
+  }
+
+  // Apply date format setting
+  switch (globalSettings.dateFormat) {
+    case 'DD/MM/YYYY':
+      options.day = '2-digit';
+      options.month = '2-digit';
+      options.year = 'numeric';
+      break;
+    case 'YYYY-MM-DD':
+      options.year = 'numeric';
+      options.month = '2-digit';
+      options.day = '2-digit';
+      break;
+    case 'MM/DD/YYYY':
+    default:
+      options.month = '2-digit';
+      options.day = '2-digit';
+      options.year = 'numeric';
+      break;
+  }
+
+  // Always use 'en-US' locale for consistent AM/PM display
+  let locale = 'en-US';
+  
+  // For date formatting, we can still use appropriate locales for date order
+  if (globalSettings.timeFormat === '24h') {
+    // For 24-hour format, use locale-appropriate formatting
+    if (globalSettings.dateFormat === 'DD/MM/YYYY') {
+      locale = 'en-GB';
+    } else if (globalSettings.dateFormat === 'YYYY-MM-DD') {
+      locale = 'sv-SE';
+    }
+  }
+
+  return new Intl.DateTimeFormat(locale, options).format(date);
+};
+
+
+ // Enhanced short date formatting for timestamps
+const formatShortDate = (date: Date) => {
+  if (!date || isNaN(date.getTime())) {
+    return 'Invalid date';
+  }
+
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: globalSettings.timeFormat === '12h'
+  };
+
+  if (isToday) {
+    // Always use 'en-US' for consistent AM/PM display
+    return new Intl.DateTimeFormat('en-US', timeOptions).format(date);
+  } else if (isYesterday) {
+    const timeStr = new Intl.DateTimeFormat('en-US', timeOptions).format(date);
+    return `Yesterday ${timeStr}`;
+  } else {
+    const dateOptions: Intl.DateTimeFormatOptions = {
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+      ...timeOptions
+    };
+    // Always use 'en-US' for consistent AM/PM display
+    return new Intl.DateTimeFormat('en-US', dateOptions).format(date);
+  }
+};
+
+// Enhanced full timestamp formatting for detailed views
+const formatFullTimestamp = (date: Date) => {
+  if (!date || isNaN(date.getTime())) {
+    return 'Invalid date';
+  }
+
+  // For full timestamps, use appropriate locale for date formatting but 'en-US' for 12-hour time
+  let locale = 'en-US';
+  
+  // Only change locale for 24-hour format
+  if (globalSettings.timeFormat === '24h') {
+    if (globalSettings.dateFormat === 'DD/MM/YYYY') {
+      locale = 'en-GB';
+    } else if (globalSettings.dateFormat === 'YYYY-MM-DD') {
+      locale = 'sv-SE';
+    }
+  }
+
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: globalSettings.timeFormat === '12h'
   };
+
+  return new Intl.DateTimeFormat(locale, options).format(date);
+};
+
+  // Enhanced CSV date formatting for exports
+  const formatDateForCSV = (date: Date) => {
+    if (!date || isNaN(date.getTime())) {
+      return 'N/A';
+    }
+    return formatFullTimestamp(date);
+  };
+
+  // Update existing onMount to load global settings first
+  onMount(async () => {
+    await loadGlobalSettings();
+    // Continue with existing broadcast loading logic...
+    loadBroadcasts();
+    loadReceivedBroadcasts();
+    loadTemplates();
+    loadTargetData();
+  });
 
   const getPriorityStyle = (priority: string) => {
     const p = priorities.find(p => p.value === priority);
@@ -630,19 +797,154 @@ let prevTab = $state(activeTab);
     }
   });
 
-// Update the CSV export function to work with your data structure
-const exportCSV = (broadcast: Broadcast) => {
-  console.log('Starting CSV export for broadcast:', broadcast.id);
-  
-  // If we don't have the report data loaded, load it first
-  if (reportResponses.length === 0) {
-    loadReportData(broadcast).then(() => {
-      performCSVExport(broadcast);
-    });
-  } else {
+ // Update the CSV export function to use global date formatting
+  const exportCSV = async (broadcast: Broadcast) => {
+    if (!broadcast) return;
+    
+    console.log('Starting CSV export for broadcast:', broadcast.id);
+    
+    // Load responses first
+    await loadResponsesForBroadcast(broadcast.id);
+    
+    // Show success toast after successful export
+    const performCSVExport = (broadcast: Broadcast) => {
+      console.log('Performing CSV export with responses:', reportResponses);
+      
+      // Prepare CSV headers
+      const headers = [
+        'User Name',
+        'Username', 
+        'Email',
+        'Response Type',
+        'Response Details',
+        'Response Time',
+        'Status'
+      ];
+
+      // Prepare CSV data rows
+      const csvData = [];
+      
+      // Add broadcast details header section
+      csvData.push([`Broadcast Response Report: ${broadcast.title}`]);
+      csvData.push([`Generated on: ${formatFullTimestamp(new Date())}`]); // Use global format
+      csvData.push(['']); // Empty row for spacing
+      
+      // Add detailed broadcast information
+      csvData.push(['BROADCAST DETAILS']);
+      csvData.push(['Title:', broadcast.title]);
+      csvData.push(['Content:', broadcast.content]);
+      csvData.push(['Priority:', broadcast.priority.toUpperCase()]);
+      csvData.push(['Created By:', broadcast.createdBy]);
+      csvData.push(['Created Date:', broadcast.createdAt ? formatDateForCSV(broadcast.createdAt) : 'N/A']);
+      csvData.push(['Response Type:', getResponseTypeDisplay(broadcast.responseType)]);
+      csvData.push(['Status:', broadcast.status?.toUpperCase() || 'ACTIVE']);
+      
+      // Add target information
+      if (broadcast.targetRoles && broadcast.targetRoles.length > 0) {
+        csvData.push(['Target Roles:', broadcast.targetRoles.join(', ')]);
+      }
+      if (broadcast.targetOUs && broadcast.targetOUs.length > 0) {
+        csvData.push(['Target Organization Units:', broadcast.targetOUs.join(', ')]);
+      }
+      
+      // Add scheduling information if applicable with global formatting
+      if (broadcast.scheduledFor) {
+        csvData.push(['Scheduled For:', formatDateForCSV(broadcast.scheduledFor)]);
+      }
+      if (broadcast.sentAt) {
+        csvData.push(['Sent At:', formatDateForCSV(broadcast.sentAt)]);
+      }
+      if (broadcast.eventDate) {
+        csvData.push(['Event Date:', formatDateForCSV(broadcast.eventDate)]);
+      }
+      if (broadcast.endDate) {
+        csvData.push(['End Date:', formatDateForCSV(broadcast.endDate)]);
+      }
+      
+      // Add choices if it's a multiple choice broadcast
+      if (broadcast.responseType === 'choices' && broadcast.choices && broadcast.choices.length > 0) {
+        csvData.push(['Available Choices:', broadcast.choices.join(', ')]);
+      }
+      
+      csvData.push(['']); // Empty row for spacing
+      
+      // Add column headers for response data
+      csvData.push(['RESPONSE DATA']);
+      csvData.push(headers);
+
+      // Add response data with global date formatting
+      if (reportResponses.length > 0) {
+        reportResponses.forEach(response => {
+          // Extract user information based on your backend structure
+          const user = response.user || {};
+          const userName = user.firstName && user.lastName 
+            ? `${user.firstName} ${user.lastName}` 
+            : (user.username || 'Unknown User');
+          
+          // Parse response data if it's a string
+          let responseData = response.responseData;
+          if (typeof responseData === 'string') {
+            try {
+              responseData = JSON.parse(responseData);
+            } catch (e) {
+              console.warn('Failed to parse response data:', responseData);
+              responseData = {};
+            }
+          }
+          
+          const row = [
+            userName,
+            user.username || 'N/A',
+            user.email || 'N/A',
+            getResponseTypeDisplay(responseData?.responseType || broadcast.responseType),
+            getResponseDetailsForExport(responseData, broadcast.responseType),
+            response.acknowledgedAt ? formatDateForCSV(new Date(response.acknowledgedAt)) : 'N/A', // Use global format
+            'Responded'
+          ];
+          csvData.push(row);
+        });
+      } else {
+        // If no responses, add a row indicating this
+        csvData.push(['No responses recorded', '', '', '', '', '', '']);
+      }
+
+      // Add simplified summary section
+      csvData.push(['']); // Empty row
+      csvData.push(['SUMMARY']);
+      csvData.push(['Total Responses:', reportResponses.length.toString()]);
+
+      // Convert to CSV string
+      const csvContent = csvData.map(row => 
+        row.map(cell => {
+          // Escape quotes and wrap in quotes if contains comma, newline, or quote
+          const cellStr = String(cell || '');
+          if (cellStr.includes(',') || cellStr.includes('\n') || cellStr.includes('"')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(',')
+      ).join('\n');
+
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `broadcast-responses-${broadcast.title.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      // Show success toast after successful export
+      $toastStore.success(`CSV export completed! File: broadcast-responses-${broadcast.title.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.csv`);
+      
+      console.log('CSV export completed');
+    };
+
     performCSVExport(broadcast);
-  }
-};
+    closeReportModal();
+  };
 
 const performCSVExport = (broadcast: Broadcast) => {
   console.log('Performing CSV export with responses:', reportResponses);

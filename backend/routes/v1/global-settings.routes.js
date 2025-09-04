@@ -3,12 +3,18 @@ const router = express.Router();
 const { requireAuth } = require('../../auth/requireAuth');
 const controller = require('../../controllers/global-settings.controller');
 
-console.log('saveGeneralSettings:', controller.saveGeneralSettings);
+// GET endpoint to fetch current settings
+router.get(
+  '/general',
+  requireAuth,
+  controller.getGeneralSettings
+);
 
+// POST endpoint to save settings
 router.post(
   '/general',
   requireAuth,
-  controller.saveGeneralSettings // <-- THIS MUST BE A FUNCTION, NOT THE WHOLE OBJECT
+  controller.saveGeneralSettings
 );
 
 module.exports = router;
