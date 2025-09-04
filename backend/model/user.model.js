@@ -363,7 +363,8 @@ class UserModel {
     }
 
     if (filters.ou) {
-      whereConditions.push(`ur.douid::text = $${paramIndex}`);
+      console.log('OU Filter applied:', filters.ou); // Debug log
+      whereConditions.push(`LOWER(ou.dname) = LOWER($${paramIndex})`);
       queryParams.push(filters.ou);
       paramIndex++;
     }
@@ -420,6 +421,11 @@ class UserModel {
     `;
 
     queryParams.push(limit, offset);
+
+    // Debug logging
+    console.log('Final Query:', dataQuery);
+    console.log('Query Params:', queryParams);
+    console.log('Where Clause:', whereClause);
 
     const [countResult, dataResult] = await Promise.all([
       this.pool.query(countQuery, queryParams.slice(0, -2)),

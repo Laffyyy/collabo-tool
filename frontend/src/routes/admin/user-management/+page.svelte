@@ -189,6 +189,12 @@
 		confirmPassword: '',
 		requirePasswordChange: false
 	});
+	let passwordErrors = $state({
+		empty: false,
+		length: false,
+		characters: false,
+		mismatch: false
+	});
 	let showPasswordFields = $state<boolean>(false);
 	
 	// Options
@@ -285,7 +291,9 @@
 			loadingOUs = true;
 			const response = await getOrganizationalUnits();
 			if (response.ok) {
+				console.log('Raw OU data from API:', response.data.ous);
 				ouOptions = response.data.ous.map((ou: any) => ou.name);
+				console.log('OU options after mapping:', ouOptions);
 				cachedOUs = [...ouOptions]; // Cache the data
 				lastOUFetchTime = now;
 			}
@@ -392,6 +400,14 @@
 		// Reset OU when manager changes
 		individualForm.ou = '';
 		
+		// Auto-fill OU for Supervisors based on manager's OU
+		if (individualForm.role === 'Supervisor' && individualForm.managerId) {
+			const selectedManager = hierarchyOptions.managers.find(m => m.id === individualForm.managerId);
+			if (selectedManager && selectedManager.ou) {
+				individualForm.ou = selectedManager.ou;
+			}
+		}
+		
 		// For Frontline/Support, reset supervisor when manager changes
 		if (individualForm.role === 'Frontline' || individualForm.role === 'Support') {
 			individualForm.supervisorId = '';
@@ -402,6 +418,14 @@
 	function handleSupervisorChange() {
 		// Reset OU when supervisor changes
 		individualForm.ou = '';
+		
+		// Auto-fill OU for Frontline/Support based on supervisor's OU
+		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.ou) {
+				individualForm.ou = selectedSupervisor.ou;
+			}
+		}
 		
 		// Auto-assign manager based on supervisor selection
 		if (individualForm.supervisorId) {
@@ -548,6 +572,7 @@
 				sortOrder: sortDirection
 			};
 
+			console.log('Filter params being sent:', params);
 			const response = await getUsers(params);
 			
 			if (response.ok) {
@@ -971,7 +996,14 @@
 			confirmPassword: '',
 			requirePasswordChange: false
 		};
+		passwordErrors = {
+			empty: false,
+			length: false,
+			characters: false,
+			mismatch: false
+		};
 		showPasswordFields = false;
+		showPasswordSection = false;  // Close the password section
 	};
 
 	const togglePasswordSection = () => {
@@ -982,19 +1014,91 @@
 	};
 
 	const validatePassword = () => {
+		// Reset all errors
+		passwordErrors.empty = false;
+		passwordErrors.length = false;
+		passwordErrors.characters = false;
+		passwordErrors.mismatch = false;
+		
+		let isValid = true;
+		
 		if (!passwordForm.newPassword) {
-			alert('Please enter a new password');
-			return false;
+			passwordErrors.empty = true;
+			isValid = false;
 		}
-		if (passwordForm.newPassword.length < 8) {
-			alert('Password must be at least 8 characters long');
-			return false;
+		
+		// New validation rules: 15-20 characters, alphanumeric + specific special chars
+		if (passwordForm.newPassword.length < 15 || passwordForm.newPassword.length > 20) {
+			passwordErrors.length = true;
+			isValid = false;
 		}
+		
+		// Check for allowed characters only: alphanumeric + ! @ - _ &
+		const allowedPattern = /^[a-zA-Z0-9!@\-_&]+$/;
+		if (!allowedPattern.test(passwordForm.newPassword)) {
+			passwordErrors.characters = true;
+			isValid = false;
+		}
+		
 		if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-			alert('Passwords do not match');
-			return false;
+			passwordErrors.mismatch = true;
+			isValid = false;
 		}
-		return true;
+		
+		return isValid;
+	};
+
+	// Helper functions for password validation display
+	const isPasswordLengthValid = (password: string) => {
+		return password.length >= 15 && password.length <= 20;
+	};
+
+	const isPasswordCharactersValid = (password: string) => {
+		const allowedPattern = /^[a-zA-Z0-9!@\-_&]+$/;
+		return allowedPattern.test(password);
+	};
+
+	// Input validation helper functions
+	const validateEmployeeIdInput = (value: string) => {
+		// Employee ID: 10 Characters. AlphaNumeric. Limited Special Characters ("-" and "_")
+		const pattern = /^[a-zA-Z0-9\-_]*$/;
+		return pattern.test(value) && value.length <= 10;
+	};
+
+	const validateFullNameInput = (value: string) => {
+		// Full name: 100 Characters. Alpha Numeric. Limited Special Characters ("-" and "ñ")
+		const pattern = /^[a-zA-Z0-9\-ñ\s]*$/;
+		return pattern.test(value) && value.length <= 100;
+	};
+
+	const validateEmailInput = (value: string) => {
+		// Email: 70 Character Limit. AlphaNumeric. Limited Special Characters ("@", "-", and "_")
+		const pattern = /^[a-zA-Z0-9@\-_.]*$/;
+		return pattern.test(value) && value.length <= 70;
+	};
+
+	const validateSearchInput = (value: string) => {
+		// Search Bar: 70 Characters. AlphaNumeric. Limited Special Characters ("@", "-", "ñ", and "_")
+		const pattern = /^[a-zA-Z0-9@\-ñ_\s]*$/;
+		return pattern.test(value) && value.length <= 70;
+	};
+
+	const validatePasswordInput = (value: string) => {
+		// Passwords: Same as Login and Change Password (alphanumeric + ! @ - _ &)
+		const pattern = /^[a-zA-Z0-9!@\-_&]*$/;
+		return pattern.test(value) && value.length <= 20;
+	};
+
+	// Generic input handler that prevents invalid characters
+	const handleInput = (event: Event, validator: (value: string) => boolean) => {
+		const target = event.target as HTMLInputElement;
+		const newValue = target.value;
+		
+		if (!validator(newValue)) {
+			// Prevent the invalid character by reverting to previous value
+			event.preventDefault();
+			target.value = target.value.slice(0, -1);
+		}
 	};
 
 	const changePassword = async () => {
@@ -1103,21 +1207,25 @@
 			switch (confirmationAction) {
 				case 'lock':
 					await toggleUserLock(selectedUser.id, true);
+					await loadTabCounts(); // Refresh tab counts
 					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been locked successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'unlock':
 					await toggleUserLock(selectedUser.id, false);
+					await loadTabCounts(); // Refresh tab counts
 					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been unlocked successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'activate':
 					await toggleUserActivation(selectedUser.id, true);
+					await loadTabCounts(); // Refresh tab counts
 					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been activated successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'deactivate':
 					await toggleUserActivation(selectedUser.id, false);
+					await loadTabCounts(); // Refresh tab counts
 					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been deactivated successfully.`;
 					showSuccessModal = true;
 					break;
@@ -1178,6 +1286,7 @@
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
 			// Use toast store directly
@@ -1200,6 +1309,7 @@
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
 			const { success } = $toastStore;
@@ -1235,6 +1345,7 @@
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
 			const { success } = $toastStore;
@@ -1256,6 +1367,7 @@
 			// Clear cache to ensure fresh data
 			clearAllCache();
 			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
 			const { success } = $toastStore;
@@ -1311,6 +1423,8 @@
 			case 'edit':
 				showEditUserModal = false;
 				selectedUser = null;
+				showPasswordSection = false;  // Reset password section
+				resetPasswordForm();  // Reset password form and errors
 				break;
 			case 'team':
 				showTeamModal = false;
@@ -1451,7 +1565,9 @@
 								<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 								<input
 									bind:value={searchQuery}
+									oninput={(e) => handleInput(e, validateSearchInput)}
 									type="text"
+									maxlength="70"
 									placeholder="Search by name, email, or employee ID..."
 									class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
 								/>
@@ -2009,6 +2125,13 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between p-6 border-b border-gray-200">
 				<h2 class="text-xl font-semibold text-gray-900">Edit User</h2>
+				<button
+					onclick={() => closeModal('edit')}
+					class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+					disabled={isAnyLoading()}
+				>
+					<X class="w-5 h-5 text-gray-500" />
+				</button>
 			</div>
 
 			<!-- Content -->
@@ -2033,7 +2156,9 @@
 							<input
 								id="editName"
 								bind:value={editForm.name}
+								oninput={(e) => handleInput(e, validateFullNameInput)}
 								type="text"
+								maxlength="100"
 								placeholder="Enter full name"
 								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 							/>
@@ -2043,7 +2168,9 @@
 							<input
 								id="editEmail"
 								bind:value={editForm.email}
+								oninput={(e) => handleInput(e, validateEmailInput)}
 								type="email"
+								maxlength="70"
 								placeholder="Enter email address"
 								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 							/>
@@ -2166,17 +2293,11 @@
 
 					<!-- Password Management Section -->
 					<div class="border-t border-gray-200 pt-4">
-						<div class="flex items-center justify-between mb-3">
+						<div class="flex items-center mb-3">
 							<div class="flex items-center space-x-2">
 								<Key class="w-5 h-5 text-gray-600" />
 								<span class="text-sm font-medium text-gray-700">Password Management</span>
 							</div>
-							<button
-								onclick={togglePasswordSection}
-								class="text-sm text-[#01c0a4] hover:text-[#00a085] font-medium"
-							>
-								{showPasswordSection ? 'Cancel' : 'Change Password'}
-							</button>
 						</div>
 
 						{#if !showPasswordSection}
@@ -2196,14 +2317,36 @@
 							</div>
 						{:else}
 							<div class="space-y-4">
+								<!-- Password Requirements -->
+								<div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+									<h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+										<svg class="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+										</svg>
+										Password Requirements
+									</h4>
+									<div class="space-y-2">
+										<div class="flex items-center text-sm">
+											<div class="w-2 h-2 rounded-full mr-3 {passwordErrors.length || passwordErrors.empty ? 'bg-red-500' : (isPasswordLengthValid(passwordForm.newPassword) ? 'bg-green-500' : 'bg-gray-300')}"></div>
+											<span class="{passwordErrors.length || passwordErrors.empty ? 'text-red-600' : (isPasswordLengthValid(passwordForm.newPassword) ? 'text-green-700 font-medium' : 'text-gray-600')}">15-20 characters long</span>
+										</div>
+										<div class="flex items-center text-sm">
+											<div class="w-2 h-2 rounded-full mr-3 {passwordErrors.characters || passwordErrors.empty ? 'bg-red-500' : (isPasswordCharactersValid(passwordForm.newPassword) ? 'bg-green-500' : 'bg-gray-300')}"></div>
+											<span class="{passwordErrors.characters || passwordErrors.empty ? 'text-red-600' : (isPasswordCharactersValid(passwordForm.newPassword) ? 'text-green-700 font-medium' : 'text-gray-600')}">Letters, numbers, and symbols: ! @ - _ &</span>
+										</div>
+									</div>
+								</div>
+
 								<div>
 									<label for="newPassword" class="block text-sm font-medium text-gray-700 mb-2">New Password *</label>
 									<div class="relative">
 										<input
 											id="newPassword"
 											bind:value={passwordForm.newPassword}
+											oninput={(e) => handleInput(e, validatePasswordInput)}
 											type={showPasswordFields ? 'text' : 'password'}
-											placeholder="Enter new password (min 8 characters)"
+											maxlength="20"
+											placeholder="Enter new password (15-20 characters)"
 											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent pr-12"
 										/>
 										<button
@@ -2225,10 +2368,15 @@
 									<input
 										id="confirmPassword"
 										bind:value={passwordForm.confirmPassword}
+										oninput={(e) => handleInput(e, validatePasswordInput)}
 										type={showPasswordFields ? 'text' : 'password'}
+										maxlength="20"
 										placeholder="Confirm new password"
 										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 									/>
+									{#if passwordErrors.mismatch}
+										<p class="text-red-600 text-sm mt-2">Passwords do not match</p>
+									{/if}
 								</div>
 
 								<div class="flex items-center space-x-2">
@@ -2270,14 +2418,7 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
-				<button
-					onclick={() => closeModal('edit')}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-					disabled={isAnyLoading()}
-				>
-					Cancel
-				</button>
+			<div class="flex justify-end p-6 border-t border-gray-200">
 				<button
 					onclick={saveEditUser}
 					disabled={loadingEdit}
@@ -2349,15 +2490,24 @@
 						</p>
 					</div>
 				</div>
-				{#if selectedSupervisorView}
+				<div class="flex items-center space-x-2">
+					{#if selectedSupervisorView}
+						<button
+							onclick={navigateBack}
+							class="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+						>
+							<ArrowLeft class="w-4 h-4" />
+							<span>Back to Overview</span>
+						</button>
+					{/if}
 					<button
-						onclick={navigateBack}
-						class="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+						onclick={() => closeModal('team')}
+						class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+						aria-label="Close modal"
 					>
-						<ArrowLeft class="w-4 h-4" />
-						<span>Back to Overview</span>
+						<X class="w-5 h-5 text-gray-500" />
 					</button>
-				{/if}
+				</div>
 			</div>
 
 			<!-- Content -->
@@ -2405,7 +2555,7 @@
 
 							<!-- Team Member Cards -->
 							<div class="flex justify-center">
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+								<div class="grid gap-4 max-w-7xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); justify-content: center;">
 									{#each supervisorTeam as member}
 										<div class="{
 											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
@@ -2489,7 +2639,7 @@
 
 							<!-- Team Member Cards -->
 							<div class="flex justify-center">
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+								<div class="grid gap-4 max-w-7xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); justify-content: center;">
 									{#each supervisorTeam as member}
 										<div class="{
 											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
@@ -2574,7 +2724,7 @@
 							<h3 class="text-lg font-medium text-gray-900 text-center">Supervisors ({directSupervisors.length})</h3>
 							
 							<div class="flex justify-center">
-								<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 max-w-6xl">
+								<div class="grid gap-4 max-w-6xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); justify-content: center;">
 								{#each directSupervisors as supervisor}
 									{@const supervisorTeamCount = teamData?.teamMembers ? teamData.teamMembers.filter((m: any) => m.supervisorId === supervisor.id).length : 0}
 									<button
@@ -2610,16 +2760,6 @@
 					{/if}
 				{/if}
 			</div>
-
-			<!-- Footer -->
-			<div class="flex justify-end p-6 border-t border-gray-200">
-				<button
-					onclick={() => closeModal('team')}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Close
-				</button>
-			</div>
 		</div>
 	</div>
 {/if}
@@ -2643,6 +2783,13 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between p-6 border-b border-gray-200">
 				<h2 class="text-xl font-semibold text-gray-900">Add New User</h2>
+				<button
+					onclick={() => closeModal('add')}
+					class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+					aria-label="Close modal"
+				>
+					<X class="w-5 h-5 text-gray-500" />
+				</button>
 			</div>
 
 			<!-- Tabs -->
@@ -2674,7 +2821,9 @@
 								<input
 									id="employeeId"
 									bind:value={individualForm.employeeId}
+									oninput={(e) => handleInput(e, validateEmployeeIdInput)}
 									type="text"
+									maxlength="10"
 									placeholder="Enter employee ID"
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								/>
@@ -2684,7 +2833,9 @@
 								<input
 									id="name"
 									bind:value={individualForm.name}
+									oninput={(e) => handleInput(e, validateFullNameInput)}
 									type="text"
+									maxlength="100"
 									placeholder="Enter full name"
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								/>
@@ -2696,7 +2847,9 @@
 							<input
 								id="email"
 								bind:value={individualForm.email}
+								oninput={(e) => handleInput(e, validateEmailInput)}
 								type="email"
+								maxlength="70"
 								placeholder="Enter email address"
 								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 							/>
@@ -2769,21 +2922,34 @@
 									<label for="ou" class="block text-sm font-medium text-gray-700 mb-2">
 										Organizational Unit
 										{#if individualForm.role === 'Supervisor' && individualForm.managerId}
-											<span class="text-sm text-gray-500">(Based on Manager's OUs)</span>
+											<span class="text-sm text-gray-500">(Auto-filled based on Manager's OU)</span>
 										{:else if (individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId}
-											<span class="text-sm text-gray-500">(Based on Supervisor's OU)</span>
+											<span class="text-sm text-gray-500">(Auto-filled based on Supervisor's OU)</span>
 										{/if}
 									</label>
-									<select
-										id="ou"
-										bind:value={individualForm.ou}
-										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-									>
-										<option value="">Select OU</option>
-										{#each getAvailableOUs() as ou}
-											<option value={ou}>{ou}</option>
-										{/each}
-									</select>
+									{#if (individualForm.role === 'Supervisor' && individualForm.managerId && individualForm.ou) || ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId && individualForm.ou)}
+										<!-- Read-only field when auto-determined -->
+										<input
+											id="ou"
+											value={individualForm.ou}
+											readonly
+											class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed"
+											placeholder="Auto-filled based on hierarchy"
+										/>
+										<p class="text-xs text-gray-500 mt-1">OU is automatically determined by your selected {individualForm.role === 'Supervisor' ? 'manager' : 'supervisor'}</p>
+									{:else}
+										<!-- Dropdown for manual selection -->
+										<select
+											id="ou"
+											bind:value={individualForm.ou}
+											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+										>
+											<option value="">Select OU</option>
+											{#each getAvailableOUs() as ou}
+												<option value={ou}>{ou}</option>
+											{/each}
+										</select>
+									{/if}
 								</div>
 							{/if}
 						</div>
@@ -2793,14 +2959,7 @@
 					</div>
 
 					<!-- Individual Add Footer -->
-					<div class="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
-						<button
-							onclick={() => closeModal('add')}
-							class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-							disabled={isAnyLoading()}
-						>
-							Cancel
-						</button>
+					<div class="flex justify-end mt-6 pt-6 border-t border-gray-200">
 						<button
 							onclick={addIndividualUser}
 							disabled={loadingCreate}
@@ -2961,13 +3120,7 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
-				<button
-					onclick={() => showBulkPreview = false}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Cancel
-				</button>
+			<div class="flex justify-end p-6 border-t border-gray-200">
 				{#if bulkData.valid.length > 0}
 					<button
 						onclick={processBulkUpload}

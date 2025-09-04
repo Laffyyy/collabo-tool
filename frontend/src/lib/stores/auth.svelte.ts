@@ -21,6 +21,24 @@ class AuthStore {
   token = $state<string | null>(null);
   sessionToken = $state<string | null>(null);
 
+  constructor() {
+    // Initialize with demo data for frontend-only behavior
+    this.user = {
+      id: '1',
+      username: 'admin',
+      email: 'admin@company.com',
+      role: 'admin',
+      firstName: 'Admin',
+      lastName: 'User',
+      organizationUnit: 'Administration',
+      onlineStatus: 'online',
+      profilePhoto: undefined
+    };
+    this.isAuthenticated = true;
+    this.token = 'demo-token';
+    this.sessionToken = 'demo-session-token';
+  }
+
   get userRole() {
     return this.user?.role || '';
   }
