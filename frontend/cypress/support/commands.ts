@@ -1,37 +1,26 @@
 /// <reference types="cypress" />
-// ***********************************************
-// This example commands.ts shows you how to
-// create various custom commands and overwrite
-// existing commands.
-//
-// For more comprehensive examples of custom
-// commands please read more here:
-// https://on.cypress.io/custom-commands
-// ***********************************************
-//
-//
-// -- This is a parent command --
-// Cypress.Commands.add('login', (email, password) => { ... })
-//
-//
-// -- This is a child command --
-// Cypress.Commands.add('drag', { prevSubject: 'element'}, (subject, options) => { ... })
-//
-//
-// -- This is a dual command --
-// Cypress.Commands.add('dismiss', { prevSubject: 'optional'}, (subject, options) => { ... })
-//
-//
-// -- This will overwrite an existing command --
-// Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
-//
-// declare global {
-//   namespace Cypress {
-//     interface Chainable {
-//       login(email: string, password: string): Chainable<void>
-//       drag(subject: string, options?: Partial<TypeOptions>): Chainable<Element>
-//       dismiss(subject: string, options?: Partial<TypeOptions>): Chainable<Element>
-//       visit(originalFn: CommandOriginalFn, url: string, options: Partial<VisitOptions>): Chainable<Element>
-//     }
-//   }
-// }
+
+export {}
+declare global {
+  namespace Cypress {
+    interface Chainable<Subject = any> {
+      login(email: string, password: string): Chainable<void>
+    }
+  }
+}
+
+Cypress.Commands.add('login', (email: string, password: string) => {
+  cy.visit('http://localhost:5173/login')
+  cy.get('input[id="loginUsername"]').type(email)
+  cy.get('input[id="loginPassword"]').type(password)
+  cy.get('button').contains('Sign in to your workspace').click()
+
+  cy.task('getLatestOtp', { email }).then((otp) => {
+    cy.get('#otp-input-0').type(otp[0])
+    cy.get('#otp-input-1').type(otp[1]) 
+    cy.get('#otp-input-2').type(otp[2])
+    cy.get('#otp-input-3').type(otp[3])
+    cy.get('#otp-input-4').type(otp[4])
+    cy.get('#otp-input-5').type(otp[5])
+  })
+})
