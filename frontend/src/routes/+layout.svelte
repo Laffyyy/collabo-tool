@@ -4,6 +4,7 @@
   import { authStore } from '$lib/stores/auth.svelte';
   import { sessionManager } from '$lib/stores/session.svelte';
   import SessionWarningModal from '$lib/components/SessionWarningModal.svelte';
+  import SessionTimeoutModal from '$lib/components/SessionTimeoutModal.svelte'; // Add this import
   import Navigation from '$lib/components/Navigation.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
@@ -13,6 +14,7 @@
 
   // Use derived state from sessionManager instead of local state
   let showSessionWarning = $derived(sessionManager.isWarningShown);
+  let showTimeoutModal = $derived(sessionManager.isTimeoutModalShown); 
   
   onMount(() => {
     // Start session monitoring when user is authenticated
@@ -53,14 +55,6 @@
 <!-- Session Warning Modal -->
 <SessionWarningModal show={showSessionWarning} />
 
-<div class="fixed top-4 right-4 z-50 space-y-2">
-  {#each toastStore.items as toast (toast.id)}
-    <Toast
-      id={toast.id}
-      type={toast.type}
-      message={toast.message}
-      duration={toast.duration}
-      onDismiss={(id) => toastStore.remove(id)}
-    />
-  {/each}
-</div>
+<!-- Session Timeout Modal -->
+<SessionTimeoutModal show={showTimeoutModal} />
+

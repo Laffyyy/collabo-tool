@@ -16,6 +16,7 @@ class SessionManager {
   private warningShown = $state(false);
   private timeRemaining = $state(0);
   private showWarning = $state(false);
+  private showTimeoutModal = $state(false);
   private idleTimeRemaining = $state(0);
   private showIdleWarning = $state(false);
   private activityListeners: (() => void)[] = [];
@@ -42,6 +43,10 @@ class SessionManager {
   
   get isIdleWarningShown() {
     return this.showIdleWarning;
+  }
+
+  get isTimeoutModalShown() { // Add this getter
+    return this.showTimeoutModal;
   }
   
   get remainingTime() {
@@ -167,22 +172,6 @@ class SessionManager {
     }
   };
   
-  
-  /**
-   * Handle idle timeout - logout user
-   */
-  private async handleIdleTimeout() {
-    this.stopMonitoring();
-    
-    // Logout user
-    authStore.update(store => {
-      store.logout();
-      return store;
-    });
-    
-    // Navigate to login with idle timeout message
-    await goto('/login?reason=idle');
-  }
   
   /**
    * Check current session status (existing method)
@@ -335,6 +324,34 @@ class SessionManager {
       this.handleIdleTimeout();
     }
   }
+
+   /**
+   * Handle idle timeout - show timeout modal then logout
+   */
+  private async handleIdleTimeout() {
+    console.log('🚪 Session timed out due to inactivity');
+    this.stopMonitoring();
+    
+    // Show timeout modal instead of immediate logout
+    this.showTimeoutModal = true;
+  }
+
+  /**
+   * Dismiss timeout modal and logout user
+   */
+  dismissTimeoutModal() {
+    this.showTimeoutModal = false;
+    
+    // Logout user
+    authStore.update(store => {
+      store.logout();
+      return store;
+    });
+    
+    // Navigate to login with idle timeout message
+    goto('/login?reason=idle');
+  }
+
 }
 
 
