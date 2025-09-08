@@ -10,20 +10,50 @@ const app = express();
 
 // Core Middlewares
 app.use(helmet());
-const corsOrigins = env.CORS_ORIGIN ? env.CORS_ORIGIN.split(',') : ['http://localhost:5173'];
-app.use(cors({ 
+
+// CORS configuration (development-friendly)
+const defaultCorsOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+const envOrigins = env.CORS_ORIGIN ? env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean) : [];
+const corsOrigins = Array.from(new Set([
+  ...defaultCorsOrigins,
+  ...envOrigins
+]));
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // Allow tools like curl/Postman
+  if (corsOrigins.includes(origin)) return true;
+  try {
+    const { hostname } = new URL(origin);
+    // Allow ngrok *.ngrok-free.app during development
+    if (/\.ngrok-free\.app$/i.test(hostname)) return true;
+  } catch (_e) {
+    // fall through
+  }
+  return false;
+};
+
+const corsOptions = {
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if(!origin) return callback(null, true);
-    
-    if(corsOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
     }
+    // Don't throw; just disable CORS for this origin
+    return callback(null, false);
   },
-  credentials: true 
-}));
+  credentials: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -51,4 +81,3 @@ app.use((err, _req, res, _next) => {
 });
 
 module.exports = app;
-

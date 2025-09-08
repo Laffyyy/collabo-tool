@@ -45,6 +45,7 @@
 	"dependencies": {
 		"@types/uuid": "^10.0.0",
 		"cypress": "^15.1.0",
+		"dotenv": "^17.2.2",
 		"lucide-svelte": "^0.535.0",
 		"uuid": "^11.1.0"
 	}
