@@ -31,20 +31,41 @@ const saveGeneralSettings = async (req, res, next) => {
 };
 
 /**
- * Get current general global configuration.
+ * Get general settings
  */
-const getGeneralSettings = async (req, res, next) => {
+async function getGeneralSettings(req, res, next) {
   try {
-    const result = await GlobalSettingsService.getGeneralSettings();
+    const settings = await GlobalSettingsService.getGeneralSettings();
+    
+    if (!settings) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          sessionTimeout: 480, // Default fallback
+          dateFormat: "YYYY-MM-DD",
+          timeFormat: "24h",
+          maxLoginAttempts: 5,
+          passwordPolicy: {
+            minLength: 8,
+            passwordExpiry: 90,
+            requireNumbers: true,
+            requireLowercase: true,
+            requireUppercase: true,
+            requireSpecialChars: true
+          }
+        }
+      });
+    }
+
     res.status(200).json({
       success: true,
-      data: result
+      data: settings
     });
   } catch (error) {
-    console.error('Controller error in getGeneralSettings:', error);
+    console.error('Error fetching general settings:', error);
     next(error);
   }
-};
+}
 
 module.exports = {
   saveGeneralSettings,

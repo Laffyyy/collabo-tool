@@ -37,7 +37,7 @@
             Session Expired
           </h3>
           <p class="text-sm text-gray-600">
-            You have been logged out due to inactivity
+            Your session has timed out due to inactivity
           </p>
         </div>
       </div>
@@ -47,6 +47,9 @@
         <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
           <p class="text-sm font-medium text-red-800">
             Your session has expired for security reasons.
+          </p>
+          <p class="text-xs text-red-600 mt-1">
+            Session timeout: {sessionManager.timeoutMinutes} minutes
           </p>
         </div>
         

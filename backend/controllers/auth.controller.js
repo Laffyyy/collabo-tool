@@ -1,6 +1,8 @@
 const authService = require('../services/auth.service');
 const SessionModel = require('../model/session.model');
 const { getPool } = require('../config/db');
+const GlobalSettingsService = require('../services/global-settings.service');
+
 
 // Initialize SessionModel with database pool
 const pool = getPool();
@@ -15,7 +17,17 @@ const sessionModel = new SessionModel(getPool());
 async function login(req, res, next) {
   try {
     const { username, password } = req.body;
-    const result = await authService.login({ username, password });
+    
+    // Get IP and user agent for session tracking
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    
+    const result = await authService.login({ 
+      username, 
+      password, 
+      ipAddress, 
+      userAgent 
+    });
     
     // For the initial integration, we'll return a simple response
     // that the frontend can use to show an alert
@@ -24,9 +36,12 @@ async function login(req, res, next) {
       exists: result.exists, 
       message: result.message,
       step: result.step,
-      userId: result.userId,  // Add this to pass userId to frontend
+      userId: result.userId,
       email: result.email,
-      username: result.username
+      username: result.username,
+      sessionTimeout: result.sessionTimeout,
+      sessionExpiresAt: result.sessionExpiresAt,
+      otpExpiresAt: result.otpExpiresAt
     });
   } catch (err) {
     next(err);
@@ -228,18 +243,37 @@ async function logout(req, res, next) {
 }
 
 /**
- * Get session info including expiry time
+ * Get session info including expiry time and session timeout configuration
  */
 async function getSessionInfo(req, res, next) {
   try {
     const { session } = req;
+    
+    // Get session timeout from global settings
+    let sessionTimeoutMinutes = 480; // Default 8 hours
+    try {
+      const globalSettings = await GlobalSettingsService.getGeneralSettings();
+      if (globalSettings) {
+        const settings = typeof globalSettings === 'string' 
+          ? JSON.parse(globalSettings) 
+          : globalSettings;
+        
+        if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+          sessionTimeoutMinutes = settings.sessionTimeout;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load session timeout from global settings:', error);
+      // Continue with default value
+    }
     
     res.status(200).json({
       ok: true,
       data: {
         expiresAt: session.expiresAt,
         timeRemaining: new Date(session.expiresAt) - new Date(),
-        isActive: session.isActive
+        isActive: session.isActive,
+        sessionTimeout: sessionTimeoutMinutes
       }
     });
   } catch (err) {
@@ -248,14 +282,32 @@ async function getSessionInfo(req, res, next) {
 }
 
 /**
- * Refresh session token
+ * Refresh session token with dynamic session timeout
  */
 async function refreshSession(req, res, next) {
   try {
     const { session } = req;
     
-    // Extend session by 24 hours from now
-    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Get session timeout from global settings
+    let sessionTimeoutMinutes = 480; // Default 8 hours
+    try {
+      const globalSettings = await GlobalSettingsService.getGeneralSettings();
+      if (globalSettings) {
+        const settings = typeof globalSettings === 'string' 
+          ? JSON.parse(globalSettings) 
+          : globalSettings;
+        
+        if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+          sessionTimeoutMinutes = settings.sessionTimeout;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load session timeout from global settings:', error);
+      // Continue with default value
+    }
+    
+    // Extend session by configured timeout from now
+    const newExpiresAt = new Date(Date.now() + sessionTimeoutMinutes * 60 * 1000);
     
     const updatedSession = await sessionModel.updateExpiry(session.id, newExpiresAt);
     
@@ -263,7 +315,8 @@ async function refreshSession(req, res, next) {
       ok: true,
       data: {
         expiresAt: updatedSession.expiresAt,
-        timeRemaining: new Date(updatedSession.expiresAt) - new Date()
+        timeRemaining: new Date(updatedSession.expiresAt) - new Date(),
+        sessionTimeout: sessionTimeoutMinutes
       }
     });
   } catch (err) {

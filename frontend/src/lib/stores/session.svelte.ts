@@ -8,6 +8,15 @@ interface SessionInfo {
   expiresAt: string;
   timeRemaining: number;
   isActive: boolean;
+  sessionTimeout: number; 
+}
+
+interface GlobalSettings {
+  sessionTimeout: number;
+  dateFormat: string;
+  timeFormat: string;
+  maxLoginAttempts: number;
+  passwordPolicy: any;
 }
 
 class SessionManager {
@@ -21,14 +30,30 @@ class SessionManager {
   private showIdleWarning = $state(false);
   private activityListeners: (() => void)[] = [];
   private lastActivity: number = Date.now();
+
+// Dynamic session configuration from database
+  private sessionTimeoutMinutes = $state(10);
   
   // Session expiry thresholds
   private readonly WARNING_TIME = 60 * 1000; // 1 minute before expiry
   private readonly CHECK_INTERVAL = 10 * 1000; // Check every 10 seconds
   
-  // Idle timeout thresholds
-  private readonly IDLE_TIMEOUT = 60 * 1000; // 1 minute of inactivity
-  private readonly IDLE_WARNING_TIME = 45 * 1000; // 45 seconds (15 seconds warning)
+
+  // Dynamic idle timeout based on session timeout
+  get IDLE_TIMEOUT() {
+    // Set idle timeout to 75% of session timeout (converted to milliseconds)
+    return Math.min(this.sessionTimeoutMinutes * 60 * 1000 * 0.75, 30 * 60 * 1000); // Max 30 minutes idle
+  }
+  
+  get IDLE_WARNING_TIME() {
+    // Warning 5 minutes before idle timeout
+    return Math.max(this.IDLE_TIMEOUT - (5 * 60 * 1000), this.IDLE_TIMEOUT * 0.75);
+  }
+
+  get timeoutMinutes() {
+    return this.sessionTimeoutMinutes;
+  }
+  
   private readonly IDLE_CHECK_INTERVAL = 1000; // Check idle status every second
   
   // Activity events to monitor
@@ -71,12 +96,15 @@ class SessionManager {
   /**
    * Start monitoring session expiry and idle timeout
    */
-  startMonitoring() {
+  async startMonitoring() {
     if (this.checkInterval) {
       this.stopMonitoring();
     }
     
     console.log('[Session Manager] Starting session and idle monitoring');
+    
+    // Load session configuration from database first
+    await this.loadSessionConfig();
     
     // Start session expiry monitoring
     this.checkSession();
@@ -84,7 +112,7 @@ class SessionManager {
       this.checkSession();
     }, this.CHECK_INTERVAL);
     
-    // Start idle monitoring
+    // Start idle monitoring with updated configuration
     this.startIdleMonitoring();
   }
   
@@ -350,6 +378,35 @@ class SessionManager {
     
     // Navigate to login with idle timeout message
     goto('/login?reason=idle');
+  }
+
+    /**
+   * Load session configuration from database
+   */
+  private async loadSessionConfig() {
+    try {
+      console.log('[Session Manager] Loading session configuration from database');
+      
+      const response = await apiClient.get<{ success: boolean; data: string }>(
+        '/api/v1/global-settings/general'
+      );
+      
+      if (response.success && response.data) {
+        const settings: GlobalSettings = typeof response.data === 'string' 
+          ? JSON.parse(response.data) 
+          : response.data;
+        
+        if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+          this.sessionTimeoutMinutes = settings.sessionTimeout;
+          console.log(`[Session Manager] Session timeout configured to ${this.sessionTimeoutMinutes} minutes`);
+          console.log(`[Session Manager] Idle timeout set to ${Math.floor(this.IDLE_TIMEOUT / 60000)} minutes`);
+          console.log(`[Session Manager] Idle warning at ${Math.floor(this.IDLE_WARNING_TIME / 60000)} minutes`);
+        }
+      }
+    } catch (error) {
+      console.warn('[Session Manager] Failed to load session config, using defaults:', error);
+      // Keep default values if API call fails
+    }
   }
 
 }
