@@ -16,13 +16,13 @@
   
   onMount(() => {
     // Start session monitoring when user is authenticated
-    if (authStore.isAuthenticated) {
+    if ($authStore.isAuthenticated) {
       sessionManager.startMonitoring();
     }
     
     // Watch for authentication changes
     $effect(() => {
-      if (authStore.isAuthenticated) {
+      if ($authStore.isAuthenticated) {
         sessionManager.startMonitoring();
       } else {
         sessionManager.stopMonitoring();

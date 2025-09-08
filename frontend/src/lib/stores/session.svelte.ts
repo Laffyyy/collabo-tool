@@ -19,6 +19,7 @@ class SessionManager {
   private idleTimeRemaining = $state(0);
   private showIdleWarning = $state(false);
   private activityListeners: (() => void)[] = [];
+  private lastActivity: number = Date.now();
   
   // Session expiry thresholds
   private readonly WARNING_TIME = 60 * 1000; // 1 minute before expiry
@@ -102,31 +103,45 @@ class SessionManager {
     console.log('[Session Manager] Stopped all monitoring');
   }
   
+  
   /**
    * Start monitoring user activity for idle timeout
    */
   private startIdleMonitoring() {
-    console.log('[Session Manager] Starting idle monitoring');
+    console.log('🟢 Starting idle monitoring');
     
-    // Reset idle timer
-    this.resetIdleTimer();
+    // Initialize last activity
+    this.lastActivity = Date.now();
+    
+    // Remove any existing listeners first
+    this.stopIdleMonitoring();
     
     // Add event listeners for user activity
     this.ACTIVITY_EVENTS.forEach(event => {
-      const listener = () => this.onUserActivity();
+      const listener = () => this.handleActivity();
       document.addEventListener(event, listener, { passive: true, capture: true });
       this.activityListeners.push(() => {
         document.removeEventListener(event, listener, true);
       });
+      console.log(`👂 Added listener for: ${event}`);
     });
+    
+    // Start checking idle status every second
+    this.idleTimer = setInterval(() => {
+      this.checkIdleStatus();
+    }, this.IDLE_CHECK_INTERVAL);
+    
+    console.log(`⏰ Idle monitoring started - Warning at ${this.IDLE_WARNING_TIME/1000}s, Timeout at ${this.IDLE_TIMEOUT/1000}s`);
   }
-  
+
   /**
    * Stop idle monitoring
    */
   private stopIdleMonitoring() {
+    console.log('🔴 Stopping idle monitoring');
+    
     if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
+      clearInterval(this.idleTimer);
       this.idleTimer = null;
     }
     
@@ -136,63 +151,27 @@ class SessionManager {
     
     this.showIdleWarning = false;
     this.idleTimeRemaining = 0;
-    
-    console.log('[Session Manager] Stopped idle monitoring');
   }
-  
+
   /**
    * Handle user activity - reset idle timer
    */
-  private onUserActivity() {
-    this.resetIdleTimer();
+  private handleActivity = () => {
+    console.log('🎯 Activity detected at:', new Date().toLocaleTimeString());
+    this.lastActivity = Date.now();
     
-    // Hide idle warning if user becomes active
+    // Reset idle warning if it was showing
     if (this.showIdleWarning) {
+      console.log('🔄 Resetting idle warning due to activity');
       this.showIdleWarning = false;
-      console.log('[Session Manager] User became active, hiding idle warning');
     }
-  }
+  };
   
-  /**
-   * Reset the idle timeout timer
-   */
-  private resetIdleTimer() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-    }
-    
-    this.idleTimeRemaining = this.IDLE_TIMEOUT;
-    
-    // Start countdown
-    const startTime = Date.now();
-    const updateCountdown = () => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, this.IDLE_TIMEOUT - elapsed);
-      this.idleTimeRemaining = remaining;
-      
-      // Show warning when approaching timeout
-      if (remaining <= (this.IDLE_TIMEOUT - this.IDLE_WARNING_TIME) && remaining > 0 && !this.showIdleWarning) {
-        this.showIdleWarning = true;
-        console.log(`[Session Manager] Idle warning: ${Math.floor(remaining / 1000)} seconds remaining`);
-      }
-      
-      // Continue countdown or trigger timeout
-      if (remaining > 0) {
-        setTimeout(updateCountdown, this.IDLE_CHECK_INTERVAL);
-      } else {
-        this.handleIdleTimeout();
-      }
-    };
-    
-    updateCountdown();
-  }
   
   /**
    * Handle idle timeout - logout user
    */
   private async handleIdleTimeout() {
-    console.log('[Session Manager] Idle timeout reached, logging out user');
-    
     this.stopMonitoring();
     
     // Logout user
@@ -301,22 +280,63 @@ class SessionManager {
     this.showWarning = false;
   }
   
-  /**
+   /**
    * Dismiss the idle warning and reset idle timer
    */
   dismissIdleWarning() {
+    console.log('✋ Dismissing idle warning');
     this.showIdleWarning = false;
-    this.resetIdleTimer(); // Reset timer when user acknowledges warning
+    this.lastActivity = Date.now(); // Reset activity timer
   }
   
   /**
    * Keep session active (for idle warning modal)
    */
   keepActive() {
+    console.log('🔄 Keeping session active');
     this.dismissIdleWarning();
     // Optionally extend session as well
     this.extendSession();
   }
+
+  /**
+   * Reset idle timer and last activity timestamp
+   */
+  private resetIdleTimer() {
+    this.lastActivity = Date.now();
+    this.idleTimeRemaining = this.IDLE_TIMEOUT;
+    this.showIdleWarning = false;
+    console.log('🔄 Idle timer reset');
+  }
+
+
+
+/**
+   * Check idle status (called every second)
+   */
+  private checkIdleStatus() {
+    const now = Date.now();
+    const timeSinceActivity = now - this.lastActivity;
+    
+    console.log(`⏱️ Idle check - Time since activity: ${timeSinceActivity}ms (${Math.floor(timeSinceActivity/1000)}s)`);
+    
+    // Update remaining time for UI display
+    this.idleTimeRemaining = Math.max(0, this.IDLE_TIMEOUT - timeSinceActivity);
+    
+    // Check if should show warning
+    if (timeSinceActivity >= this.IDLE_WARNING_TIME && !this.showIdleWarning) {
+      console.log('⚠️ Showing idle warning');
+      this.showIdleWarning = true;
+    }
+    
+    // Check if should logout
+    if (timeSinceActivity >= this.IDLE_TIMEOUT) {
+      console.log('🚪 Logging out due to idle timeout');
+      this.handleIdleTimeout();
+    }
+  }
 }
+
+
 
 export const sessionManager = new SessionManager();
