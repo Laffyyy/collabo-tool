@@ -1,15 +1,12 @@
 <script lang="ts">
 	//import {goto} from '$app/navigation';
-	import { getAllUsers } from '$lib/services/chatServices';
-	import { onMount } from 'svelte';
-	import { createConversation, getConversations, addMemberToConversation } from '$lib/services/chatServices';
+	import { onMount, onDestroy } from 'svelte';
+	import { getConversations, getAllUsers, createConversation, findOrCreateDirectConversation, checkExistingDirectConversation, addMemberToConversation, getMessagesForConversation, sendMessageToApi } from '$lib/services/chatServices';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import GroupAvatar from '$lib/components/GroupAvatar.svelte';
 	import UserProfileModal from '$lib/components/UserProfileModal.svelte';
-	import { onDestroy } from 'svelte';
-	import {  getMessagesForConversation, sendMessageToApi } from '$lib/services/chatServices';
 	import LoginBackground from '../login/LoginBackground.svelte';
 	import { 
 		Search, Plus, Archive, MessageCircle, Users, Send, Paperclip, 
@@ -102,6 +99,7 @@
 		type: 'direct' | 'group';
 		lastMessage: string;
 		lastMessageTime: Date | string;
+		updatedAt?: Date | string; // Add updatedAt property
 		unreadCount: number;
 		avatar: string;
 		isOnline: boolean;
@@ -116,6 +114,7 @@
 			links: Message[];
 		};
 		isTemporary?: boolean; // For conversations that haven't been saved yet
+		targetUser?: User; // Store target user for temporary conversations
 		settings?: {
 			allowEmojis: boolean;
 			allowAttachments: boolean;
@@ -127,6 +126,7 @@
 
 	// State management
 	let conversations = $state<Conversation[]>([]);
+	let directConversations = $state<Conversation[]>([]);
 	let groupChats = $state<Conversation[]>([]);
 	let currentConversation = $state<Conversation | null>(null);
 	let showGroupSettings = $state(false);
@@ -185,7 +185,7 @@
 	// Undo functionality for forwards
 	let recentForwards = $state<{id: string, messageId: string, conversationIds: string[], timestamp: Date}[]>([]);
 	let showUndoToast = $state(false);
-	let undoToastTimeout: number | null = null;
+	let undoToastTimeout: ReturnType<typeof setTimeout> | null = null;
 	let undoAction = $state<(() => void) | null>(null);
 	
 	// Confirmation modal state
@@ -203,7 +203,7 @@
 	// Sample data
 	let availableUsers: User[] = [];
 
-let currentUserId: string | null = null;
+let currentUserId = $state<string | null>(null);
 let jwtToken = $state<string | null>(null);
 if (typeof window !== 'undefined') {
   // If you store the whole user object as JSON:
@@ -218,10 +218,10 @@ if (typeof window !== 'undefined') {
   }
 }
 
-console.log('currentUserId:', currentUserId);
-
 onMount(async () => {
-if (typeof window !== 'undefined') {
+// Load user authentication data
+function loadUserIdFromAuth() {
+  if (typeof window !== 'undefined') {
     // Try different possible token keys
     jwtToken = localStorage.getItem('jwt') || 
                localStorage.getItem('auth_token') || 
@@ -247,18 +247,41 @@ if (typeof window !== 'undefined') {
       currentUserId
     });
   }
+}
 
   try {
+    console.log('Loading conversations and users from backend...');
+    loadUserIdFromAuth();
+    
     conversations = await getConversations();
-    groupChats = conversations.filter((c: any) => c.type === 'group');
+    console.log("Raw conversations from backend:", conversations);
+    console.log("Current user ID for filtering:", currentUserId);
+    
+    // Backend already filters conversations for the current user via JOIN with tblconversationparticipants
+    // So we can use all returned conversations directly
+    const userConversations = conversations;
+    
+    console.log("Using backend-filtered conversations:", userConversations);
+    
+    // Separate direct and group conversations
+    directConversations = userConversations
+      .filter((c: any) => c.type === 'direct')
+      .sort((a: any, b: any) => new Date(b.lastMessage?.timestamp || b.updatedAt || 0).getTime() - new Date(a.lastMessage?.timestamp || a.updatedAt || 0).getTime());
+    groupChats = userConversations
+      .filter((c: any) => c.type === 'group')
+      .sort((a: any, b: any) => new Date(b.lastMessage?.timestamp || b.updatedAt || 0).getTime() - new Date(a.lastMessage?.timestamp || a.updatedAt || 0).getTime());
+    
+    console.log('Direct conversations:', directConversations);
+    console.log('Group chats:', groupChats);
+    
     const users = await getAllUsers();
     
     // Debug what's actually coming from the server
     console.log("Raw users from backend:", users);
     
     // Map each property explicitly
- availableUsers = users.filter(u => u.id !== currentUserId)
-  .map(u => {
+ availableUsers = users.filter((u: any) => u.id !== currentUserId)
+  .map((u: any) => {
     // Log each user to see exact structure
     console.log("Processing user:", u);
     
@@ -272,7 +295,7 @@ if (typeof window !== 'undefined') {
       firstName: u.dfirstname || u.firstname || u.firstName,
       lastName: u.dlastname || u.lastname || u.lastName,
       username: u.dusername || u.username,
-      avatar: u.davatar || u.avatar || u.profilePhoto || u.image || '/placeholder.svg',
+      avatar: u.dprofilephotourl || u.avatar || u.profilePhoto || u.image || '/placeholder.svg',
       department: u.ddepartment || u.department || u.org_unit || 'Department',
       role: u.drole || u.role || 'Role'
     };
@@ -318,6 +341,18 @@ if (typeof window !== 'undefined') {
           const lastMsg = messages[messages.length - 1];
           currentConversation.lastMessage = lastMsg.content;
           currentConversation.lastMessageTime = lastMsg.timestamp;
+          
+          // Also update the conversation in the sidebar lists
+          const updateConversationInList = (list: Conversation[]) => {
+            const index = list.findIndex(c => c.id === conversationId);
+            if (index !== -1) {
+              list[index].lastMessage = lastMsg.content;
+              list[index].lastMessageTime = lastMsg.timestamp;
+            }
+          };
+          
+          updateConversationInList(directConversations);
+          updateConversationInList(groupChats);
         }
       }
     } catch (error) {
@@ -329,6 +364,9 @@ const selectConversation = async (conversation: Conversation) => {
   currentConversation = conversation;
   conversation.isRead = true;
   conversation.unreadCount = 0;
+  
+  console.log('Selected conversation:', conversation);
+  console.log('Conversation members:', conversation.members);
   
   try {
     const messages = await getMessagesForConversation(conversation.id);
@@ -354,9 +392,34 @@ onDestroy(() => {
 
   try {
     // Get the actual message content
-    const msgContent = attachment ? `Shared ${attachment.name}` : messageInput;
+    const msgContent = attachment && attachment.name ? `Shared ${attachment.name}` : messageInput.trim();
     
-    // Use the real user ID that we already loaded in onMount
+    // Check if this is a temporary conversation that needs to be created first
+    if (currentConversation.isTemporary && currentConversation.targetUser) {
+      console.log('Creating real conversation for temporary conversation...');
+      
+      // Create the actual conversation in the backend
+      const result = await findOrCreateDirectConversation({
+        targetUserId: currentConversation.targetUser.id,
+        targetUserName: currentConversation.targetUser.name
+      });
+      
+      const backendConversation = result.conversation;
+      
+      // Update the current conversation with real backend data
+      currentConversation.id = backendConversation.did;
+      currentConversation.isTemporary = false;
+      
+      // Update in the directConversations array as well
+      const conversationIndex = directConversations.findIndex(c => c.id.startsWith('temp-'));
+      if (conversationIndex !== -1) {
+        directConversations[conversationIndex] = { ...currentConversation };
+      }
+      
+      console.log('Conversation created with ID:', backendConversation.did);
+    }
+    
+    // Now send the message using the real conversation ID
     const sentMsg = await sendMessageToApi(currentConversation.id, msgContent);
     
     console.log('Message sent:', sentMsg);
@@ -383,6 +446,18 @@ onDestroy(() => {
     currentConversation.messages.push(newMessage);
     currentConversation.lastMessage = msgContent;
     currentConversation.lastMessageTime = new Date();
+    
+    // Also update the conversation in the sidebar lists
+    const updateConversationInList = (list: Conversation[]) => {
+      const index = list.findIndex(c => c.id === currentConversation?.id);
+      if (index !== -1) {
+        list[index].lastMessage = msgContent;
+        list[index].lastMessageTime = new Date();
+      }
+    };
+    
+    updateConversationInList(directConversations);
+    updateConversationInList(groupChats);
     
     // Clear input
     if (!attachment) {
@@ -462,19 +537,19 @@ const markConversationAsSeen = (conversationId?: string) => {
 
 		const existingReaction = message.reactions.find(r => r.emoji === emoji);
 		if (existingReaction) {
-			if (existingReaction.users.includes('1')) {
-				existingReaction.users = existingReaction.users.filter(u => u !== '1');
+			if (existingReaction.users.includes(currentUserId || '1')) {
+				existingReaction.users = existingReaction.users.filter(u => u !== (currentUserId || '1'));
 				existingReaction.count--;
 				if (existingReaction.count === 0) {
 					message.reactions = message.reactions.filter(r => r.emoji !== emoji);
 				}
 			} else {
-				existingReaction.users.push('1');
+				existingReaction.users.push(currentUserId || '1');
 				existingReaction.count++;
 				existingReaction.timestamp = new Date();
 			}
 		} else {
-			message.reactions.push({ emoji, users: ['1'], count: 1, timestamp: new Date() });
+			message.reactions.push({ emoji, users: [currentUserId || '1'], count: 1, timestamp: new Date() });
 		}
 	};
 
@@ -593,7 +668,7 @@ const markConversationAsSeen = (conversationId?: string) => {
 	};
 
 	const startEditMessage = (message: Message) => {
-		if (message.senderId === '1') {
+		if (message.senderId === currentUserId) {
 			editingMessage = message;
 			editingContent = message.content;
 			messageInput = message.content;
@@ -806,7 +881,25 @@ const createGroup = async () => {
     
     // Update frontend state
     conversations = [...conversations, enhancedGroup];
-    groupChats = conversations.filter((c) => c.type === 'group');
+    // Filter conversations to only show those where current user is a participant
+    const userConversations = conversations.filter((c: any) => {
+      if (c.type === 'direct') {
+        return c.members?.some((member: any) => member.id === currentUserId) ||
+               c.participants?.some((participant: any) => participant.userId === currentUserId);
+      }
+      if (c.type === 'group') {
+        return c.members?.some((member: any) => member.id === currentUserId) ||
+               c.participants?.some((participant: any) => participant.userId === currentUserId);
+      }
+      return false;
+    });
+    
+    directConversations = userConversations
+      .filter((c: any) => c.type === 'direct')
+      .sort((a: any, b: any) => new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - new Date(a.lastMessageTime || a.updatedAt || 0).getTime());
+    groupChats = userConversations
+      .filter((c: any) => c.type === 'group')
+      .sort((a: any, b: any) => new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - new Date(a.lastMessageTime || a.updatedAt || 0).getTime());
     
     // Close modal and reset form
     showCreateGroup = false;
@@ -814,7 +907,7 @@ const createGroup = async () => {
     selectedUsers = [];
   } catch (e) {
     console.error('Failed to create group:', e);
-    alert('Failed to create group: ' + (e.message || e));
+    alert('Failed to create group: ' + (e instanceof Error ? e.message : String(e)));
   }
 };
 
@@ -829,33 +922,33 @@ const createGroup = async () => {
 	};
 
 	// Derived state for filtered conversations
-	const filteredConversations = $derived(conversations.filter(conv => 
+	const filteredDirectConversations = $derived(directConversations.filter(conv => 
 		conv.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-		conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase())
+		(conv.lastMessage && conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase()))
 	));
 
 	const filteredGroupChats = $derived(groupChats.filter(conv => 
 		conv.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-		conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase())
+		(conv.lastMessage && conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase()))
 	));
 
 	// Calculate active (online) members for each group chat
 	const getActiveMemberCount = (conversation: Conversation) => {
-		if (conversation.type !== 'group') return 0;
-		return conversation.members.filter(member => member.isOnline).length;
+		if (conversation.type !== 'group' || !conversation.members) return 0;
+		return conversation.members.filter(member => member.isOnline === true).length;
 	};
 
 	// Auto-expand sections when there are search results
-	const shouldShowConversations = $derived(showConversations || (searchInput.trim() && filteredConversations.length > 0));
+	const shouldShowConversations = $derived(showConversations || (searchInput.trim() && filteredDirectConversations.length > 0));
 	const shouldShowGroups = $derived(showGroups || (searchInput.trim() && filteredGroupChats.length > 0));
 
 	// Derived state for filtered users (when searching)
 	const filteredUsers = $derived.by(() => {
 		if (!searchInput.trim()) return [];
 		
-		// Get users that don't already have conversations (including temporary ones)
-		const existingConversationUserIds = [...conversations, ...(currentConversation?.isTemporary ? [currentConversation] : [])]
-			.map(conv => conv.type === 'direct' ? conv.members.find(m => m.id !== '1')?.id : null)
+		// Get users that don't already have direct conversations
+		const existingConversationUserIds = [...directConversations, ...(currentConversation?.isTemporary ? [currentConversation] : [])]
+			.map(conv => conv.type === 'direct' ? conv.members.find(m => m.id !== currentUserId)?.id : null)
 			.filter(Boolean);
 		
 		return availableUsers.filter(user => 
@@ -866,47 +959,140 @@ const createGroup = async () => {
 		);
 	});
 
-	const startNewConversation = (user: User) => {
-		// Create a temporary conversation that won't be saved until a message is sent
-		const tempConversation: Conversation = {
-			id: 'temp-' + Date.now().toString(),
-			name: user.name,
-			department: user.department,
-			role: user.role,
-			type: 'direct',
-			lastMessage: '',
-			lastMessageTime: 'now',
-			unreadCount: 0,
-			isRead: true,
-			avatar: user.avatar,
-			isOnline: false,
-			messages: [],
-			members: [
-				{ 
-					id: '1', 
-					name: 'You', 
-					firstName: 'Current',
-					lastName: 'User',
-					avatar: '/placeholder.svg?height=32&width=32', 
-					isOnline: true, 
-					isMuted: false,
-					department: 'IT',
-					role: 'Manager'
-				},
-				{ ...user, isOnline: false, isMuted: false }
-			],
-			isTemporary: true, // Mark as temporary
-			settings: {
-				allowEmojis: true,
-				allowAttachments: true,
-				allowForwarding: true,
-				allowPinning: false,
-				isArchived: false
-			}
-		};
+	// Helper function to generate UUID v4
+	function generateUUID() {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+			const r = Math.random() * 16 | 0;
+			const v = c == 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
+	}
 
-		currentConversation = tempConversation;
-		searchInput = ''; // Clear search after starting conversation
+	const startNewConversation = async (user: User) => {
+		try {
+			console.log('Starting new conversation with user:', user);
+			console.log('Current user ID:', currentUserId);
+			console.log('Target user ID:', user.id);
+			
+			// Validate that we have proper UUIDs
+			if (!currentUserId) {
+				throw new Error('Current user ID is not available');
+			}
+			if (!user.id) {
+				throw new Error('Target user ID is not available');
+			}
+			
+			// First check if a conversation already exists locally
+			const existingDirectConversation = directConversations.find(conv => 
+				conv.type === 'direct' && 
+				conv.members.some(member => member.id === user.id)
+			);
+			
+			if (existingDirectConversation && !existingDirectConversation.isTemporary) {
+				console.log('Found existing conversation in UI, opening it...');
+				selectConversation(existingDirectConversation);
+				searchInput = ''; // Clear search
+				return;
+			}
+			
+			// Check backend for existing conversations only if no local conversation found
+			const result = await checkExistingDirectConversation({
+				targetUserId: user.id
+			});
+			
+			console.log('Check existing conversation result:', result);
+			
+			if (result.exists && result.conversation) {
+				console.log('Found existing conversation in backend, loading it...');
+				// If conversation already exists, just open it
+				const existingConversation: Conversation = {
+					id: result.conversation.did,
+					name: user.name,
+					department: user.department,
+					role: user.role,
+					type: 'direct',
+					lastMessage: 'No messages yet',
+					lastMessageTime: result.conversation.tcreatedat || new Date(),
+					unreadCount: 0,
+					avatar: user.avatar,
+					isOnline: user.isOnline || false,
+					isRead: true,
+					messages: [],
+					members: [user],
+					isTemporary: false
+				};
+				
+				// Load existing messages
+				const messages = await getMessagesForConversation(result.conversation.did);
+				existingConversation.messages = messages;
+				
+				// Add to directConversations if not already there
+				const existsInList = directConversations.some(c => c.id === existingConversation.id);
+				if (!existsInList) {
+					directConversations = [existingConversation, ...directConversations];
+				}
+				
+				selectConversation(existingConversation);
+				searchInput = ''; // Clear search
+				return;
+			}
+			
+			console.log('No existing conversation found, creating temporary conversation...');
+			
+			// Create a temporary frontend conversation (not saved to backend yet)
+			const tempConversation: Conversation = {
+				id: 'temp-' + generateUUID(), // Temporary ID
+				name: user.name,
+				department: user.department,
+				role: user.role,
+				type: 'direct',
+				lastMessage: '',
+				lastMessageTime: new Date(),
+				unreadCount: 0,
+				isRead: true,
+				avatar: user.avatar,
+				isOnline: user.isOnline || false,
+				messages: [],
+				members: [
+					{ 
+						id: currentUserId, 
+						name: 'You', 
+						firstName: 'Current',
+						lastName: 'User',
+						avatar: '/placeholder.svg?height=32&width=32', 
+						isOnline: true, 
+						isMuted: false,
+						department: 'IT',
+						role: 'Manager'
+					},
+					{ ...user, isOnline: user.status === 'online', isMuted: false }
+				],
+				isTemporary: true, // Mark as temporary
+				targetUser: user, // Store target user for later conversation creation
+				settings: {
+					allowEmojis: true,
+					allowAttachments: true,
+					allowForwarding: true,
+					allowPinning: false,
+					isArchived: false
+				}
+			};
+
+			// Add to conversations list and select it
+			directConversations = [...directConversations, tempConversation];
+			selectConversation(tempConversation);
+			searchInput = ''; // Clear search after starting conversation
+		
+		} catch (error) {
+			console.error('Failed to create conversation:', error);
+			console.error('Error details:', {
+				message: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined,
+				user: user,
+				currentUserId: currentUserId
+			});
+			alert('Failed to start conversation: ' + (error instanceof Error ? error.message : String(error)));
+		}
 	};
 
 	// Pin/Unpin message
@@ -1275,18 +1461,24 @@ const createGroup = async () => {
   const groups: { 
     timeLabel: string, 
     messages: Message[], 
-    timestamp: Date 
+    timestamp: Date,
+    uniqueId?: string 
   }[] = [];
   const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
   
-  messages.forEach((message, index) => {
+  // Sort messages by timestamp in descending order (newest first)
+  const sortedMessages = [...messages].sort((a, b) => 
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  
+  sortedMessages.forEach((message, index) => {
     const messageTime = new Date(message.timestamp);
-    const prevMessage = messages[index - 1];
+    const prevMessage = sortedMessages[index - 1];
     const prevTime = prevMessage ? new Date(prevMessage.timestamp) : null;
     
     // Check if we need a new time group
     const needNewGroup = !prevTime || 
-      (messageTime.getTime() - prevTime.getTime()) > TIME_THRESHOLD ||
+      (prevTime.getTime() - messageTime.getTime()) > TIME_THRESHOLD ||
       prevMessage.isDeleted ||
       message.isDeleted;
     
@@ -1507,8 +1699,20 @@ const groupedMessages = $derived(() => {
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'}">
-										{getActiveMemberCount(conversation)} active • {conversation.members.length} total
+									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet' && conversation.lastMessage !== 'Group created'}
+											{#if conversation.messages && conversation.messages.length > 0}
+												{#if conversation.messages[conversation.messages.length - 1].senderId === currentUserId}
+													Me: {conversation.lastMessage}
+												{:else}
+													{conversation.messages[conversation.messages.length - 1].senderName}: {conversation.lastMessage}
+												{/if}
+											{:else}
+												{conversation.lastMessage}
+											{/if}
+										{:else}
+											{getActiveMemberCount(conversation)} active • {conversation.members.length} total
+										{/if}
 									</p>
 								</div>
 								
@@ -1522,7 +1726,7 @@ const groupedMessages = $derived(() => {
 					{/if}
 				</div>
 
-				<!-- Conversations Section -->
+				<!-- Direct Messages Section -->
 				<div>
 					<button
 						onclick={() => showConversations = !showConversations}
@@ -1534,13 +1738,13 @@ const groupedMessages = $derived(() => {
 							{:else}
 								<ChevronRight class="w-4 h-4 text-gray-500" />
 							{/if}
-							<span class="font-medium text-gray-700 text-sm">Conversations</span>
+							<span class="font-medium text-gray-700 text-sm">Direct Messages</span>
 						</div>
-						<span class="text-xs text-gray-500">{conversations.length}</span>
+						<span class="text-xs text-gray-500">{directConversations.length}</span>
 					</button>
 					
 					{#if shouldShowConversations}
-						{#each filteredConversations as conversation (conversation.id)}
+						{#each filteredDirectConversations as conversation (conversation.id)}
 							<button
 								onclick={(e) => {
 									// Check if the click was on the avatar
@@ -1564,26 +1768,17 @@ const groupedMessages = $derived(() => {
 								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
-									{#if conversation.type === 'group'}
-										<GroupAvatar 
-											members={conversation.members || []} 
-											groupName={conversation.name}
+									<div 
+										data-avatar-click="true"
+										class="hover:scale-110 transition-transform cursor-pointer"
+									>
+										<ProfileAvatar 
+											user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
 											size="sm" 
-											showOnlineStatus={false}
+											showOnlineStatus={conversation.isOnline}
+											onlineStatus={conversation.isOnline ? 'online' : 'offline'}
 										/>
-									{:else}
-										<div 
-											data-avatar-click="true"
-											class="hover:scale-110 transition-transform cursor-pointer"
-										>
-											<ProfileAvatar 
-												user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
-												size="sm" 
-												showOnlineStatus={conversation.isOnline}
-												onlineStatus={conversation.isOnline ? 'online' : 'offline'}
-											/>
-										</div>
-									{/if}
+									</div>
 								</div>
 								
 								<div class="flex-1 min-w-0">
@@ -1593,7 +1788,22 @@ const groupedMessages = $derived(() => {
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'}">{conversation.department} • {conversation.role}</p>
+									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet'}
+											{#if conversation.messages && conversation.messages.length > 0}
+												{@const lastMessage = conversation.messages[conversation.messages.length - 1]}
+												{#if lastMessage?.senderId === currentUserId || lastMessage?.senderId === '1'}
+													Me: {conversation.lastMessage}
+												{:else}
+													{conversation.lastMessage}
+												{/if}
+											{:else}
+												{conversation.lastMessage}
+											{/if}
+										{:else}
+											{conversation.department && conversation.role ? `${conversation.department} • ${conversation.role}` : 'No messages yet'}
+										{/if}
+									</p>
 								</div>
 								
 								{#if conversation.unreadCount > 0}
@@ -1625,7 +1835,8 @@ const groupedMessages = $derived(() => {
 									<ProfileAvatar 
 										user={{ name: user.name, profilePhoto: user.avatar }} 
 										size="sm" 
-										showOnlineStatus={false}
+										showOnlineStatus={user.status === 'online'}
+										onlineStatus={user.status || 'offline'}
 									/>
 								</div>
 								
@@ -1636,7 +1847,8 @@ const groupedMessages = $derived(() => {
 										</h3>
 										<MessageCircle class="w-3 h-3 text-gray-400" />
 									</div>
-									<p class="text-xs text-gray-500">{user.department} • {user.role}</p>
+									<p class="text-xs text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
+									<p class="text-xs text-gray-400">{user.status === 'online' ? 'Online' : 'Offline'}</p>
 								</div>
 							</button>
 						{/each}
@@ -1800,7 +2012,7 @@ const groupedMessages = $derived(() => {
 										class="flex items-start space-x-2 max-w-xs lg:max-w-md cursor-pointer"
 										title={formatExactTime(message.timestamp)}
 									>
-										{#if message.senderId !== '1'}
+										{#if message.senderId !== currentUserId}
 											{@const sender = currentConversation.members.find(m => m.id === message.senderId)}
 											<div class="mt-1">
 												<button 
@@ -1830,31 +2042,28 @@ const groupedMessages = $derived(() => {
 											</div>
 										{/if}
 										
-										<div class="flex flex-col {message.senderId === '1' ? 'items-end' : 'items-start'}">
-											{#if message.senderId !== '1'}
+										<div class="flex flex-col {message.senderId === currentUserId ? 'items-end' : 'items-start'}">
+											{#if message.senderId !== currentUserId}
 												<div class="text-xs text-gray-500 mb-1">
 													{message.senderName}
-													{#if message.senderDepartment && message.senderRole}
-														<span class="text-gray-400">• {message.senderDepartment} • {message.senderRole}</span>
-													{/if}
 												</div>
 											{/if}
 											
 											{#if message.replyTo}
 												<div class="mb-2 p-2 bg-gray-100 rounded-lg border-l-2 border-[#01c0a4] text-sm">
-													<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderName}</div>
+													<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderId === currentUserId ? 'Me' : message.replyTo.senderName}</div>
 													<div class="text-gray-700 {message.replyTo.isDeleted ? 'italic text-gray-500' : ''}">{message.replyTo.content}</div>
 												</div>
 											{/if}
 											
 											<div class="relative">
-												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === '1' ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
+												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === currentUserId ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
 													<p class="whitespace-pre-wrap {message.isDeleted ? 'italic' : ''}">{message.content}</p>
 												</div>
 												
 												<!-- Message actions - hide for deleted messages -->
 												{#if !message.isDeleted}
-											<div class="absolute top-0 {message.senderId === '1' ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+											<div class="absolute top-0 {message.senderId === currentUserId ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
 											<button
 												onclick={() => startReply(message)}
 												class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
@@ -1887,7 +2096,7 @@ const groupedMessages = $derived(() => {
 													{/if}
 												</button>
 											{/if}
-											{#if message.senderId === '1'}
+											{#if message.senderId === currentUserId}
 												<button
 													onclick={() => startEditMessage(message)}
 													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
@@ -1929,7 +2138,7 @@ const groupedMessages = $derived(() => {
 															{#each message.reactions as reaction}
 																<button
 																	onclick={() => addReaction(message.id, reaction.emoji)}
-																	class="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200 transition-colors {reaction.users.includes('1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
+																	class="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200 transition-colors {reaction.users.includes(currentUserId || '1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
 																	aria-label={`Toggle ${reaction.emoji} reaction`}
 																	title={`${reaction.emoji} ${reaction.count}`}
 																>
@@ -1953,7 +2162,7 @@ const groupedMessages = $derived(() => {
 													{/if}
 
 													<!-- Seen indicators for sent messages -->
-													{#if message.senderId === '1' && message.seenBy && message.seenBy.length > 0}
+													{#if message.senderId === currentUserId && message.seenBy && message.seenBy.length > 0}
 														<div class="flex items-center space-x-1 mt-1">
 															<span class="text-xs text-gray-500">Seen by</span>
 															<div class="flex -space-x-1">
@@ -1993,8 +2202,10 @@ const groupedMessages = $derived(() => {
 													{/if}
 												</div>
 												
-												{#if message.senderId === '1'}
-													<ProfileAvatar user={{ name: 'Current User' }} size="sm" showOnlineStatus={false} />
+												{#if message.senderId === currentUserId}
+													<div class="w-8 h-8 rounded-full bg-[#01c0a4] text-white text-xs font-medium flex items-center justify-center">
+														Me
+													</div>
 												{/if}
 											</div>
 										</div>
@@ -2040,7 +2251,7 @@ const groupedMessages = $derived(() => {
 					<div class="px-4 py-2 bg-gray-100 border-t border-gray-300 flex items-center justify-between">
 						<div class="flex items-center space-x-2">
 							<Reply class="w-4 h-4 text-gray-500" />
-							<span class="text-sm text-gray-600">Replying to {replyingTo.senderName}</span>
+							<span class="text-sm text-gray-600">Replying to {replyingTo.senderId === currentUserId ? 'Me' : replyingTo.senderName}</span>
 							<span class="text-sm text-gray-500 truncate max-w-xs">{replyingTo.content}</span>
 						</div>
 						<button onclick={cancelReply} class="text-gray-500 hover:text-gray-700" aria-label="Cancel reply">
@@ -2275,14 +2486,14 @@ const groupedMessages = $derived(() => {
 				<div class="flex-1 overflow-y-auto">
 					{#if currentMembersTab === 'members'}
 						<!-- Members List -->
-						{#each currentConversation.members as member (member.id)}
+						{#each currentConversation.members as member, index (member.id || member.userId || `member-${index}`)}
 							<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
 								<div class="flex items-center space-x-3">
 									<button 
 										type="button"
 										onclick={(event) => {
 											event.stopPropagation();
-											const fullUserData = getUserDetails(member.id);
+											const fullUserData = getUserDetails(member.id || member.userId);
 											if (fullUserData) {
 												showUserProfile(fullUserData);
 											}
@@ -2300,12 +2511,12 @@ const groupedMessages = $derived(() => {
 									<div>
 										<div class="flex items-center space-x-2">
 											<h4 class="font-medium text-gray-900">{member.name}</h4>
-											{#if member.id === '1'}
+											{#if member.id === currentUserId}
 												<Crown class="w-3 h-3 text-yellow-500" />
 											{/if}
 										</div>
 										<p class="text-sm text-gray-500">
-											{member.department} • {member.role}
+											{member.department || member.organizationalUnit || 'No Department'} • {member.role || 'No Role'}
 										</p>
 										<p class="text-xs text-gray-400">
 											{member.isOnline ? 'Online' : 'Offline'}
@@ -2499,8 +2710,20 @@ const groupedMessages = $derived(() => {
 						</div>
 					</div>
 
-					<div class="text-sm text-gray-500">
-						{currentConversation?.members.length} members
+					<div class="space-y-2">
+						<div class="text-sm text-gray-500">
+							{currentConversation?.members.length} members
+						</div>
+						{#if currentConversation?.department}
+							<div class="text-sm text-gray-600">
+								<span class="font-medium">Department:</span> {currentConversation.department}
+							</div>
+						{/if}
+						{#if currentConversation?.role}
+							<div class="text-sm text-gray-600">
+								<span class="font-medium">Role:</span> {currentConversation.role}
+							</div>
+						{/if}
 					</div>
 				</div>
 
@@ -2695,7 +2918,7 @@ const groupedMessages = $derived(() => {
 										aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
 									>
 										<p class="font-medium text-gray-900">{user.name}</p>
-										<p class="text-sm text-gray-500">{user.department} • {user.role}</p>
+										<p class="text-sm text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
 									</button>
 									{#if selectedUsers.some(u => u.id === user.id)}
 										<div class="w-5 h-5 bg-[#01c0a4] rounded-full flex items-center justify-center">
@@ -2739,7 +2962,7 @@ const groupedMessages = $derived(() => {
 										</button>
 										<div class="flex-1 min-w-0">
 											<p class="font-medium text-gray-900 text-sm truncate">{user.name}</p>
-											<p class="text-xs text-gray-500 truncate">{user.department}</p>
+											<p class="text-xs text-gray-500 truncate">{user.organizationalUnit || user.department}</p>
 											<p class="text-xs text-gray-400 truncate">{user.role}</p>
 										</div>
 										<button

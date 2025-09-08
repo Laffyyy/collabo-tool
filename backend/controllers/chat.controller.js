@@ -10,6 +10,60 @@ exports.createConversation = async (req, res, next) => {
   }
 };
 
+exports.findOrCreateDirectConversation = async (req, res, next) => {
+  try {
+    const { targetUserId, targetUserName } = req.body;
+    const currentUserId = req.user?.id;
+    
+    if (!currentUserId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    
+    if (!targetUserId || !targetUserName) {
+      return res.status(400).json({ message: 'Missing target user information' });
+    }
+    
+    const result = await chatService.findOrCreateDirectConversation({
+      userId1: currentUserId,
+      userId2: targetUserId,
+      userName1: req.user.username || 'User',
+      userName2: targetUserName
+    });
+    
+    return res.json(result);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.checkExistingDirectConversation = async (req, res, next) => {
+  try {
+    const { targetUserId } = req.params;
+    const currentUserId = req.user?.id;
+    
+    if (!currentUserId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'Missing target user ID' });
+    }
+    
+    const existingConversation = await chatService.checkExistingDirectConversation({
+      userId1: currentUserId,
+      userId2: targetUserId
+    });
+    
+    if (existingConversation) {
+      return res.json(existingConversation);
+    } else {
+      return res.status(404).json({ message: 'No existing conversation found' });
+    }
+  } catch (err) {
+    return next(err);
+  }
+};
+
 exports.addMessage = async (req, res, next) => {
   try {
     const { dconversationId, dsenderId, dcontent, dmessageType } = req.body;

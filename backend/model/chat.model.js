@@ -11,6 +11,31 @@ class ChatModel {
     return result.rows[0];
   }
 
+  static async findExistingDirectConversation(userId1, userId2) {
+    try {
+      console.log('Checking for existing direct conversation between:', userId1, 'and', userId2);
+      
+      const result = await query(
+        `SELECT DISTINCT c.*
+         FROM tblconversations c
+         JOIN tblconversationparticipants cp1 ON c.did = cp1.dconversationid
+         JOIN tblconversationparticipants cp2 ON c.did = cp2.dconversationid
+         WHERE c.dtype = 'direct'
+           AND cp1.duserid = $1
+           AND cp2.duserid = $2
+           AND cp1.duserid != cp2.duserid
+         LIMIT 1`,
+        [userId1, userId2]
+      );
+      
+      console.log(`Found ${result.rows.length} existing direct conversations`);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error checking for existing conversation:', error);
+      throw error;
+    }
+  }
+
 static async addMessage({ dconversationId, dsenderId, dcontent, dmessageType }) {
   try {
     console.log('Adding message to database:', { 
@@ -50,16 +75,32 @@ static async getUserConversations(userId) {
   
   try {
     const result = await query(
-      `SELECT DISTINCT c.*
+      `SELECT DISTINCT c.*, 
+              jsonb_agg(
+                jsonb_build_object(
+                  'userId', u.did,
+                  'username', u.dusername,
+                  'firstName', u.dfirstname,
+                  'lastName', u.dlastname,
+                  'avatar', u.dprofilephotourl
+                )
+              ) as members
        FROM tblconversations c
-       JOIN tblconversationparticipants cm ON c.did = cm.dconversationid
-       WHERE cm.duserid = $1
+       JOIN tblconversationparticipants cp ON c.did = cp.dconversationid
+       JOIN tblusers u ON cp.duserid = u.did
+       WHERE c.did IN (
+         SELECT DISTINCT c2.did
+         FROM tblconversations c2
+         JOIN tblconversationparticipants cp2 ON c2.did = cp2.dconversationid
+         WHERE cp2.duserid = $1
+       )
+       GROUP BY c.did, c.dname, c.dtype, c.dcreatedby, c.tcreatedat, c.tupdatedat
        ORDER BY c.tcreatedat DESC`,
       [userId]
     );
     
     // Log and return the results
-    console.log(`Found ${result.rows.length} conversations in database`);
+    console.log(`Found ${result.rows.length} conversations in database with member info`);
     return result.rows;
   } catch (error) {
     console.error('Database error:', error);

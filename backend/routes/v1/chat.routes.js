@@ -19,6 +19,12 @@ router.use(requireAuth);
 // Create conversation
 router.post('/conversations', validateCreateConversation, chatController.createConversation);
 
+// Find or create direct conversation
+router.post('/conversations/direct', chatController.findOrCreateDirectConversation);
+
+// Check for existing direct conversation (without creating)
+router.get('/conversations/check-existing/:targetUserId', chatController.checkExistingDirectConversation);
+
 // Add message
 router.post('/messages', validateAddMessage, chatController.addMessage);
 

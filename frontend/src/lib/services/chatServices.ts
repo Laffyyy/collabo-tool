@@ -10,7 +10,7 @@ export async function createConversation({
   dtype: string,
   dcreatedBy: string
 }) {
-  const token = localStorage.getItem('jwt');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   
   console.log('Creating conversation with:', { dname, dtype, dcreatedBy });
 
@@ -33,8 +33,71 @@ export async function createConversation({
   return await response.json();
 }
 
+export async function findOrCreateDirectConversation({
+  targetUserId,
+  targetUserName
+}: {
+  targetUserId: string,
+  targetUserName: string
+}) {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  
+  console.log('Finding or creating direct conversation with:', { targetUserId, targetUserName });
+
+  const response = await fetch('http://localhost:5000/api/chat/conversations/direct', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include',
+    body: JSON.stringify({ targetUserId, targetUserName })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Error finding/creating direct conversation:', error);
+    throw new Error(error);
+  }
+
+  return await response.json();
+}
+
+// New function that only checks for existing conversations without creating
+export async function checkExistingDirectConversation({
+  targetUserId
+}: {
+  targetUserId: string
+}) {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  
+  console.log('Checking for existing direct conversation with:', { targetUserId });
+
+  const response = await fetch(`http://localhost:5000/api/chat/conversations/check-existing/${targetUserId}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      // No existing conversation found
+      return { exists: false, conversation: null };
+    }
+    const error = await response.text();
+    console.error('Error checking existing conversation:', error);
+    throw new Error(error);
+  }
+
+  const conversation = await response.json();
+  return { exists: true, conversation };
+}
+
 export async function getConversations() {
-  const token = localStorage.getItem('jwt');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   
   try {
     const response = await fetch('http://localhost:5000/api/chat/conversations', {
@@ -55,23 +118,66 @@ export async function getConversations() {
     console.log('Conversations from server:', data);
     
     // Transform the data to match your UI format
-    return data.map((conv: any) => ({
-      id: conv.did || conv.id,
-      name: conv.dname || 'Unnamed Conversation',
-      type: conv.dtype || 'group',
-      lastMessage: 'No messages yet',
-      lastMessageTime: conv.tcreatedat || new Date(),
-      unreadCount: 0,
-      isRead: true,
-      avatar: '/placeholder.svg',
-      isOnline: false,
-      messages: [],
-      members: []
-    }));
+    return data.map((conv: any) => {
+      let displayName = conv.dname || 'Unnamed Conversation';
+      
+      // For direct conversations, show the other person's name instead of "Direct chat with [Name]"
+      if (conv.dtype === 'direct' && conv.members && conv.members.length >= 2) {
+        // Get current user ID from localStorage
+        const currentUserId = getCurrentUserId();
+        
+        // Find the other person in the conversation
+        const otherPerson = conv.members.find((member: any) => member.userId !== currentUserId);
+        if (otherPerson) {
+          // Use their full name if available, otherwise use username
+          if (otherPerson.firstName && otherPerson.lastName) {
+            displayName = `${otherPerson.firstName} ${otherPerson.lastName}`;
+          } else if (otherPerson.username) {
+            displayName = otherPerson.username;
+          }
+        }
+      }
+      
+      return {
+        id: conv.did || conv.id,
+        name: displayName,
+        type: conv.dtype || 'group',
+        lastMessage: 'No messages yet',
+        lastMessageTime: conv.tcreatedat || new Date(),
+        unreadCount: 0,
+        isRead: true,
+        avatar: '/placeholder.svg',
+        isOnline: false,
+        messages: [],
+        members: conv.members || []
+      };
+    });
   } catch (error) {
     console.error('Error in getConversations:', error);
     return []; // Return empty array to prevent UI errors
   }
+}
+
+// Helper function to get current user ID
+function getCurrentUserId(): string | null {
+  // Try different possible user ID keys
+  let currentUserId = localStorage.getItem('auth_userId') || 
+                     localStorage.getItem('userId');
+                     
+  // Try to extract from auth_user if needed
+  if (!currentUserId) {
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        currentUserId = user.id || user.did || user._id || user.userId;
+      } catch (e) {
+        console.error('Failed to parse user object:', e);
+      }
+    }
+  }
+  
+  return currentUserId;
 }
 
 // In chatServices.ts
@@ -109,7 +215,7 @@ export async function sendMessage(conversationId: string, content: string, messa
 }
 
 export async function getAllUsers() {
-  const token = localStorage.getItem('jwt');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   const response = await fetch('http://localhost:5000/api/users', {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -159,7 +265,7 @@ export async function addMemberToConversation({
 }
 
 export async function getMessagesForConversation(conversationId: string) {
-  const token = localStorage.getItem('jwt');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   
   try {
     const response = await fetch(`http://localhost:5000/api/chat/messages/${conversationId}`, {
@@ -198,7 +304,7 @@ export async function getMessagesForConversation(conversationId: string) {
 }
 // In chatServices.ts
 export async function sendMessageToApi(conversationId: string, content: string, messageType: string = 'text') {
-  const token = localStorage.getItem('jwt');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   
   // Try to get user ID from various sources
   let userId = localStorage.getItem('auth_userId') || 
