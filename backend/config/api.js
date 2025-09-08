@@ -35,7 +35,11 @@ const apiConfig = {
       forgotPassword: '/auth/forgot-password',
       resetPassword: '/auth/reset-password',
       securityQuestions: '/auth/security-questions',
-      firstTimeSetup: '/auth/first-time'
+      firstTimeSetup: '/auth/first-time',
+      validateSession: '/api/v1/auth/validate-session',
+      sessionInfo: '/api/v1/auth/session-info',
+      refreshSession: '/api/v1/auth/refresh-session',
+      sessionInfo: '/api/auth/session-info' // Added missing property
     },
     user: {
       profile: '/user/profile',

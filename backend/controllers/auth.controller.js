@@ -227,6 +227,50 @@ async function logout(req, res, next) {
   }
 }
 
+/**
+ * Get session info including expiry time
+ */
+async function getSessionInfo(req, res, next) {
+  try {
+    const { session } = req;
+    
+    res.status(200).json({
+      ok: true,
+      data: {
+        expiresAt: session.expiresAt,
+        timeRemaining: new Date(session.expiresAt) - new Date(),
+        isActive: session.isActive
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Refresh session token
+ */
+async function refreshSession(req, res, next) {
+  try {
+    const { session } = req;
+    
+    // Extend session by 24 hours from now
+    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    const updatedSession = await sessionModel.updateExpiry(session.id, newExpiresAt);
+    
+    res.status(200).json({
+      ok: true,
+      data: {
+        expiresAt: updatedSession.expiresAt,
+        timeRemaining: new Date(updatedSession.expiresAt) - new Date()
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   verifyOtp,
@@ -237,6 +281,8 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
-  logout
+  logout,
+  getSessionInfo,
+  refreshSession
 };
 
