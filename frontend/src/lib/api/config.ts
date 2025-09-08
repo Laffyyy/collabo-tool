@@ -13,8 +13,8 @@ export const API_CONFIG = {
       resetPassword: '/api/v1/auth/reset-password',
       securityQuestions: '/api/v1/auth/security-questions',
       answerSecurityQuestions: '/api/v1/auth/answer-security-questions',
-      sessionInfo: '/api/auth/session-info', // Added missing endpoint
-      refreshSession: '/api/auth/refresh-session'
+      sessionInfo: '/api/v1/auth/session-info', // Fixed: added v1
+      refreshSession: '/api/v1/auth/refresh-session'
     },
     user: {
       profile: '/api/v1/user/profile',
