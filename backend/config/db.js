@@ -89,5 +89,6 @@ function closePool() {
 
 module.exports = {
   getPool,
+  query,
   closePool
 };

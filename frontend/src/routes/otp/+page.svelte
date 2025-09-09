@@ -225,6 +225,9 @@ onMount(() => {
                             data.token,
                             data.sessionToken
                         );
+                        // Set cookies for backend authentication
+                        document.cookie = `token=${data.token}; path=/; SameSite=Strict`;
+                        document.cookie = `session=${data.sessionToken}; path=/; SameSite=Strict`;
                         
                         // Clear OTP-related localStorage
                         localStorage.removeItem('auth_userId');
