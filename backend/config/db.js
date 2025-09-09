@@ -1,7 +1,9 @@
 const { Pool } = require('pg');
+const postgres = require('postgres');
 
 // Database pool for connection reuse
 let pool = null;
+let sqlClient = null;
 
 /**
  * Get PostgreSQL connection pool
@@ -56,6 +58,28 @@ function getPool() {
 }
 
 /**
+ * Get postgres.js sql client (tagged template)
+ * @returns {Function} postgres.js sql function
+ */
+function getSql() {
+  if (!sqlClient) {
+    const connectionString = process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+
+    // Create a singleton postgres.js client
+    sqlClient = postgres(connectionString, {
+      max: 20,
+      idle_timeout: 30,
+      connect_timeout: 5,
+    });
+  }
+  return sqlClient;
+}
+
+/**
  * Starts a periodic connection tester to keep the pool healthy
  */
 function startConnectionTester() {
@@ -107,10 +131,19 @@ function closePool() {
     pool.end();
     pool = null;
   }
+  if (sqlClient) {
+    try { sqlClient.end({ timeout: 5 }); } catch (_) {}
+    sqlClient = null;
+  }
 }
 
 module.exports = {
   db,
   getPool,
-  closePool
+  closePool,
+  // Export a convenience query function for callers that import { query }
+  query: db.query,
+  // Export postgres.js tagged-template function. Use a thin wrapper to ensure singleton.
+  sql: (...args) => getSql()(...args),
+  getSql
 };
