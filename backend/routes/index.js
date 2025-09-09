@@ -1,12 +1,14 @@
 const { Router } = require('express');
 const authRoutes = require('./v1/auth.routes');
+
+const OUmanagerRoutes = require('./v1/oumanegament.routes');
 const adminRoutes = require('./v1/admin.routes');
 const userManagementRoutes = require('./v1/user-management.routes');
 const devRoutes = require('./v1/dev.routes');
 const retrieveBroadcastRoutes = require('./v1/retrieve-broadcasts.routes');
 const uploadbroadcastRoutes = require('./v1/upload-broadcast.routes');
-const responseBroadcastRoutes = require('./v1/response-broadcast.routes'); // Add this line
-const broadcastManagementRoutes = require('./v1/broadcast-management.routes'); // Add this line
+const responseBroadcastRoutes = require('./v1/response-broadcast.routes');
+const broadcastManagementRoutes = require('./v1/broadcast-management.routes');
 const globalSettingsRoutes = require('./v1/global-settings.routes');
 const profileRoutes = require('./v1/profile.routes');
 //const chatRoutes = require('./v1/chat.routes');
@@ -39,5 +41,9 @@ router.use('/v1/global-settings', globalSettingsRoutes);
 router.use('/v1/profile', profileRoutes);
 //router.use('/users', require('./v1/user.routes'));
 router.use('/users', userRoutes);
+
+//OU management
+
+router.use('/OUmanager', OUmanagerRoutes);
 
 module.exports = router;
