@@ -78,15 +78,14 @@
 
   // State variables
   let config = $state({ ...defaultConfig });
-  let isLoading = $state(false);
+  let isSaving = $state(false);
   let hasChanges = $state(false);
   let savedConfigString = $state('');
   let activeTab = $state<'general' | 'chat' | 'broadcast'>('general');
 
-  // Load configuration from backend
+  // Load configuration from backend (without loading overlay)
   const loadConfiguration = async () => {
     try {
-      isLoading = true;
       const response = await fetch(GENERAL_API_URL, {
         method: 'GET',
         headers: {
@@ -139,12 +138,11 @@
       console.error('Error loading configuration:', error);
       // Use defaults if loading fails
       savedConfigString = JSON.stringify(config);
-    } finally {
-      isLoading = false;
     }
+    // No finally block needed since we removed isLoading
   };
 
-  // Load configuration on mount
+  // Load configuration on mount (no loading overlay)
   onMount(() => {
     loadConfiguration();
   });
@@ -169,7 +167,7 @@
   const saveConfiguration = async () => {
     if (activeTab === 'general') {
       try {
-        isLoading = true;
+        isSaving = true;
         const generalSettings = getGeneralSettings(config);
         const response = await fetch(GENERAL_API_URL, {
           method: 'POST',
@@ -184,27 +182,32 @@
         if (result.success) {
           savedConfigString = JSON.stringify(config);
           hasChanges = false;
-          alert('Global configuration saved successfully!');
+          
+          // Show inline success message instead of alert
+          console.log('✅ Configuration saved successfully');
+          
+          // You could add a toast notification here instead of the loading overlay
         } else {
-          alert(result.message || 'Failed to save configuration');
+          console.error('❌ Failed to save configuration:', result.message);
         }
       } catch (error) {
-        console.error('Error saving configuration:', error);
-        alert('Failed to save configuration');
+        console.error('❌ Error saving configuration:', error);
       } finally {
-        isLoading = false;
+        isSaving = false;
       }
     } else {
-      // For chat and broadcast tabs, simulate save for now
+      // For chat and broadcast tabs, simulate save
+      isSaving = true;
       setTimeout(() => {
         savedConfigString = JSON.stringify(config);
         hasChanges = false;
-        alert('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
+        isSaving = false;
+        console.log('✅ Configuration saved successfully');
       }, 500);
     }
   };
 
-const resetConfiguration = async () => {
+  const resetConfiguration = async () => {
     if (confirm('Are you sure you want to reset all changes?')) {
       await loadConfiguration(); // Reload from backend
       hasChanges = false;
@@ -238,15 +241,6 @@ const resetConfiguration = async () => {
   <title>Global Configuration - Admin Controls</title>
 </svelte:head>
 
-{#if isLoading}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#01c0a4]"></div>
-      <span class="text-gray-700">Loading configuration...</span>
-    </div>
-  </div>
-{/if}
-
 <div class="min-h-screen bg-gray-50">
   <div class="max-w-5xl mx-auto px-6 py-8">
     <!-- Header -->
@@ -261,7 +255,7 @@ const resetConfiguration = async () => {
             <button
               onclick={resetConfiguration}
               class="secondary-button flex items-center space-x-2"
-              disabled={isLoading}
+              disabled={isSaving}
             >
               <RotateCcw class="w-4 h-4" />
               <span>Reset</span>
@@ -269,11 +263,16 @@ const resetConfiguration = async () => {
           {/if}
           <button
             onclick={saveConfiguration}
-            disabled={!hasChanges || isLoading}
+            disabled={!hasChanges || isSaving}
             class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save class="w-4 h-4" />
-            <span>{isLoading ? 'Saving...' : 'Save Changes'}</span>
+            {#if isSaving}
+              <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <span>Saving...</span>
+            {:else}
+              <Save class="w-4 h-4" />
+              <span>Save Changes</span>
+            {/if}
           </button>
         </div>
       </div>
