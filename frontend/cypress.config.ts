@@ -2,14 +2,15 @@ import { defineConfig } from "cypress";
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { Client } from 'pg';
+
 export default defineConfig({
   e2e: {
-    setupNodeEvents(on, config) {
+    setupNodeEvents(on) {
       // implement node event listeners here
       on('task', {
-        getLatestOtp({ email }) {
-          // Replace this with actual database query logic
-          const { Client } = require('pg');
+        getLatestOtp({ email }: { email: string }) {
+          // Create a new client instance for each task
           const client = new Client({
             connectionString: process.env.DATABASE_URL,
             ssl: {
@@ -18,21 +19,18 @@ export default defineConfig({
             connectionTimeoutMillis: 5000, // 5 second timeout
             query_timeout: 10000 // 10 second timeout
           });
-          
-          let connected = false;
-          
+
           return client.connect()
             .then(() => {
-              connected = true;
               return client.query(
                 'SELECT o.dotpcode FROM tblotp o JOIN tblusers u ON o.duserid = u.did WHERE u.demail = $1 ORDER BY o.tcreatedat DESC LIMIT 1',
                 [email]
               );
             })
-            .then((res) => {
+            .then((res: { rows: { dotpcode: string }[] }) => {
               return res.rows[0]?.dotpcode;
             })
-            .catch((err) => {
+            .catch((err: any) => {
               console.error('Database error:', err);
               if (err.code === 'ECONNREFUSED') {
                 console.error('Could not connect to database. Please check if database is running and DATABASE_URL is correct');
@@ -40,13 +38,41 @@ export default defineConfig({
               return null;
             })
             .finally(() => {
-              if (connected) {
-                return client.end().catch(err => {
-                  console.error('Error closing connection:', err);
-                });
-              }
+              return client.end().catch((err: any) => {
+                console.error('Error closing connection:', err);
+              });
             });
         },
+        ThisreturnsEMPID({ EMPID }: { EMPID: string }) {
+          const client = new Client({
+            connectionString: process.env.DATABASE_URL,
+            ssl: {
+              rejectUnauthorized: false // Required for Supabase connections
+            },
+            connectionTimeoutMillis: 5000, // 5 second timeout
+            query_timeout: 10000 // 10 second timeout
+          });
+        
+          return client.connect()
+            .then(() => {
+              return client.query(
+                'SELECT * FROM tblusers WHERE demployeeid = $1',
+                [EMPID] 
+              );
+            })
+            .then((res: { rows: any[] }) => {
+              return res.rows;
+            })
+            .catch((err: any) => {
+              console.error('Database error:', err);
+              return [];
+            })
+            .finally(() => {
+              return client.end().catch((err: any) => {
+                console.error('Error closing connection:', err);
+              });
+            });
+        }
       });
     },
   },
