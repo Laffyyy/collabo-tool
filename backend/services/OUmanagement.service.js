@@ -140,7 +140,7 @@ async function getDeactiveOU(howmany, page, sort) {
  */
 async function createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
     try {
-        const result = await ouModel.createOU(OrgName, Description, parentouid, Location, jsSettings);
+        const result = await ouModel.createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings);
         if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
             result.jsSettings = deserializeJsSettings(result.jsSettings);
         }
