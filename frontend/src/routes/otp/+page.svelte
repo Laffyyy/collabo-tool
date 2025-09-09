@@ -158,6 +158,7 @@ onMount(() => {
                         profilePhotoUrl?: string;
                         organizationUnit?: string;
                         onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
+                        ouId?: string;
                     };
                     token: string;
                     sessionToken: string;
@@ -214,7 +215,8 @@ onMount(() => {
                             lastName: data.user.lastName,
                             organizationUnit: data.user.organizationUnit,
                             onlineStatus: data.user.onlineStatus || 'online',
-                            profilePhoto: data.user.profilePhotoUrl
+                            profilePhoto: data.user.profilePhotoUrl,
+                            ouId: data.user.ouId
                         };
                         
                         // Login with the properly formatted user data

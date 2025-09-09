@@ -1,23 +1,24 @@
-const db = require('../config/db');
+const { getPool } = require('../config/db');
 
 /**
  * Get all organizational units
  */
 const getAllOUs = async () => {
+  const pool = getPool();
   const query = `
     SELECT 
-      id,
-      name,
-      description,
-      parent_id,
-      created_at,
-      updated_at
-    FROM organizational_units 
-    WHERE active = true
-    ORDER BY name ASC
+      did as id,
+      dname as name,
+      ddescription as description,
+      dparentouid as parent_id,
+      tcreatedat as created_at,
+      "bisActive" as active
+    FROM tblorganizationalunits 
+    WHERE "bisActive" = true
+    ORDER BY dname ASC
   `;
   
-  const { rows } = await db.query(query);
+  const { rows } = await pool.query(query);
   return rows.map(formatOU);
 };
 
@@ -25,19 +26,20 @@ const getAllOUs = async () => {
  * Get organizational unit by name
  */
 const getOUByName = async (name) => {
+  const pool = getPool();
   const query = `
     SELECT 
-      id,
-      name,
-      description,
-      parent_id,
-      created_at,
-      updated_at
-    FROM organizational_units 
-    WHERE name = $1 AND active = true
+      did as id,
+      dname as name,
+      ddescription as description,
+      dparentouid as parent_id,
+      tcreatedat as created_at,
+      "bisActive" as active
+    FROM tblorganizationalunits 
+    WHERE dname = $1 AND "bisActive" = true
   `;
   
-  const { rows } = await db.query(query, [name]);
+  const { rows } = await pool.query(query, [name]);
   return rows.length > 0 ? formatOU(rows[0]) : null;
 };
 
@@ -45,19 +47,20 @@ const getOUByName = async (name) => {
  * Get organizational unit by ID
  */
 const getOUById = async (id) => {
+  const pool = getPool();
   const query = `
     SELECT 
-      id,
-      name,
-      description,
-      parent_id,
-      created_at,
-      updated_at
-    FROM organizational_units 
-    WHERE id = $1 AND active = true
+      did as id,
+      dname as name,
+      ddescription as description,
+      dparentouid as parent_id,
+      tcreatedat as created_at,
+      "bisActive" as active
+    FROM tblorganizationalunits 
+    WHERE did = $1 AND "bisActive" = true
   `;
   
-  const { rows } = await db.query(query, [id]);
+  const { rows } = await pool.query(query, [id]);
   return rows.length > 0 ? formatOU(rows[0]) : null;
 };
 
@@ -65,15 +68,16 @@ const getOUById = async (id) => {
  * Create new organizational unit
  */
 const createOU = async (ouData) => {
+  const pool = getPool();
   const { name, description, parentId } = ouData;
   
   const query = `
-    INSERT INTO organizational_units (name, description, parent_id, active, created_at, updated_at)
-    VALUES ($1, $2, $3, true, NOW(), NOW())
-    RETURNING id, name, description, parent_id, created_at, updated_at
+    INSERT INTO tblorganizationalunits (dname, ddescription, dparentouid, "jsSettings", "bisActive", tcreatedat)
+    VALUES ($1, $2, $3, '{}', true, NOW())
+    RETURNING did as id, dname as name, ddescription as description, dparentouid as parent_id, tcreatedat as created_at
   `;
   
-  const { rows } = await db.query(query, [name, description, parentId || null]);
+  const { rows } = await pool.query(query, [name, description, parentId || null]);
   return formatOU(rows[0]);
 };
 
@@ -81,36 +85,40 @@ const createOU = async (ouData) => {
  * Update organizational unit
  */
 const updateOU = async (id, updates) => {
+  const pool = getPool();
   const updateFields = [];
   const values = [];
   let paramCount = 1;
 
   if (updates.name !== undefined) {
-    updateFields.push(`name = $${paramCount++}`);
+    updateFields.push(`dname = $${paramCount++}`);
     values.push(updates.name);
   }
 
   if (updates.description !== undefined) {
-    updateFields.push(`description = $${paramCount++}`);
+    updateFields.push(`ddescription = $${paramCount++}`);
     values.push(updates.description);
   }
 
   if (updates.parentId !== undefined) {
-    updateFields.push(`parent_id = $${paramCount++}`);
+    updateFields.push(`dparentouid = $${paramCount++}`);
     values.push(updates.parentId);
   }
 
-  updateFields.push(`updated_at = NOW()`);
+  if (updateFields.length === 0) {
+    return await getOUById(id);
+  }
+
   values.push(id);
 
   const query = `
-    UPDATE organizational_units 
+    UPDATE tblorganizationalunits 
     SET ${updateFields.join(', ')}
-    WHERE id = $${paramCount} AND active = true
-    RETURNING id, name, description, parent_id, created_at, updated_at
+    WHERE did = $${paramCount} AND "bisActive" = true
+    RETURNING did as id, dname as name, ddescription as description, dparentouid as parent_id, tcreatedat as created_at
   `;
 
-  const { rows } = await db.query(query, values);
+  const { rows } = await pool.query(query, values);
   return rows.length > 0 ? formatOU(rows[0]) : null;
 };
 
@@ -118,42 +126,41 @@ const updateOU = async (id, updates) => {
  * Get organizational units hierarchy
  */
 const getOUHierarchy = async () => {
+  const pool = getPool();
   const query = `
     WITH RECURSIVE ou_hierarchy AS (
       -- Base case: root OUs (no parent)
       SELECT 
-        id,
-        name,
-        description,
-        parent_id,
-        created_at,
-        updated_at,
+        did as id,
+        dname as name,
+        ddescription as description,
+        dparentouid as parent_id,
+        tcreatedat as created_at,
         0 as level,
-        ARRAY[name] as path
-      FROM organizational_units 
-      WHERE parent_id IS NULL AND active = true
+        ARRAY[dname] as path
+      FROM tblorganizationalunits 
+      WHERE dparentouid IS NULL AND "bisActive" = true
       
       UNION ALL
       
       -- Recursive case: child OUs
       SELECT 
-        ou.id,
-        ou.name,
-        ou.description,
-        ou.parent_id,
-        ou.created_at,
-        ou.updated_at,
+        ou.did as id,
+        ou.dname as name,
+        ou.ddescription as description,
+        ou.dparentouid as parent_id,
+        ou.tcreatedat as created_at,
         h.level + 1,
-        h.path || ou.name
-      FROM organizational_units ou
-      INNER JOIN ou_hierarchy h ON ou.parent_id = h.id
-      WHERE ou.active = true
+        h.path || ou.dname
+      FROM tblorganizationalunits ou
+      INNER JOIN ou_hierarchy h ON ou.dparentouid = h.id
+      WHERE ou."bisActive" = true
     )
     SELECT * FROM ou_hierarchy
     ORDER BY path
   `;
   
-  const { rows } = await db.query(query);
+  const { rows } = await pool.query(query);
   return rows.map(row => ({
     ...formatOU(row),
     level: row.level,
@@ -172,8 +179,8 @@ const formatOU = (ouRow) => {
     name: ouRow.name,
     description: ouRow.description,
     parentId: ouRow.parent_id,
-    createdAt: ouRow.created_at,
-    updatedAt: ouRow.updated_at
+    active: ouRow.active,
+    createdAt: ouRow.created_at
   };
 };
 

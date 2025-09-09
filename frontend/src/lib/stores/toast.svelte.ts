@@ -1,4 +1,3 @@
-import { writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -52,4 +51,4 @@ class ToastStore {
   }
 }
 
-export const toastStore = writable(new ToastStore());
+export const toastStore = new ToastStore();
