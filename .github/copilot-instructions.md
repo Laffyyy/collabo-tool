@@ -22,6 +22,7 @@ npm run dev -- --open  # Auto-opens browser at localhost:5173
 ```bash
 cd backend
 npm run dev  # Starts Express server at localhost:4000
+npm run db:check  # Verify database connection
 ```
 
 **Network Config**: 
@@ -55,29 +56,46 @@ npm run format   # Auto-format codebase
 **Directory Structure & Responsibilities**:
 ```
 backend/
-├── models/          # Database interaction layer (PostgreSQL)
-│   ├── user.model.js        # User CRUD operations, password hashing, formatting
+├── model/           # Database interaction layer (PostgreSQL) - Note: "model" not "models"
+│   ├── user.model.js        # User CRUD operations, password hashing, constants (ACCOUNT_STATUS, PRESENCE_STATUS)
 │   ├── session.model.js     # JWT session management, token validation
 │   ├── otp.model.js         # OTP generation, verification, cleanup
 │   ├── role.model.js        # Role definitions and permissions
-│   └── user-role.model.js   # User-role relationship management
+│   ├── user-role.model.js   # User-role relationship management
+│   ├── chat.model.js        # Chat conversation and message management
+│   ├── chat.user.model.js   # Chat user relationship management
+│   └── ou.model.js          # Organizational unit management
 ├── services/        # Business logic layer
-│   └── auth.service.js      # Authentication workflows, OTP generation, validation
+│   ├── auth.service.js      # Authentication workflows, OTP generation, validation
+│   └── chat.services.js     # Chat business logic and conversation management
 ├── controllers/     # HTTP request/response handling
-│   └── auth.controller.js   # Route handlers, request validation, response formatting
-├── routes/          # API endpoint definitions
-│   └── v1/auth.routes.js    # Route definitions with validation middleware
+│   ├── auth.controller.js   # Route handlers, request validation, response formatting
+│   ├── user.controller.js   # User profile and account management
+│   ├── user-management.controller.js # Admin user management operations
+│   └── chat.controller.js   # Chat API endpoints and message handling
+├── routes/          # API endpoint definitions with versioned structure
+│   ├── index.js             # Main router aggregating all route modules
+│   └── v1/                  # Version 1 API routes
+│       ├── auth.routes.js   # Authentication endpoints with express-validator
+│       ├── admin.routes.js  # Admin-only operations and management
+│       ├── user.routes.js   # User profile and account operations
+│       ├── user-management.routes.js # Bulk user operations and admin tools
+│       ├── chat.routes.js   # Chat conversations and messaging
+│       └── dev.routes.js    # Development utilities and debug endpoints
 ├── auth/            # Authentication middleware
 │   ├── requireAuth.js       # JWT token validation middleware
 │   └── requireRole.js       # Role-based authorization middleware
+├── scripts/         # Database and utility scripts
+│   ├── db-check.js          # Database connection verification
+│   └── init-db.js           # Database initialization and schema setup
 ├── config/          # Configuration management
-│   ├── index.js             # Environment variables
-│   ├── db.js                # PostgreSQL connection pool
+│   ├── index.js             # Environment variables and app settings
+│   ├── db.js                # PostgreSQL connection pool configuration
 │   └── api.js               # API endpoints and settings centralization
 └── utils/           # Utility functions
     ├── errors.js            # Custom error classes (HttpError, BadRequestError, etc.)
     ├── otp.js               # OTP generation and verification utilities
-    └── validate.js          # Express-validator error handling
+    └── validate.js          # Express-validator error handling middleware
 ```
 
 **Data Flow Pattern**:
@@ -145,19 +163,46 @@ frontend/src/
 
 ### Store Architecture - Class-Based Pattern
 ```typescript
-// src/lib/stores/auth.svelte.ts
+// src/lib/stores/auth.svelte.ts - Uses writable() wrapper for class-based stores
 class AuthStore {
   user = $state<User | null>(null);
   isAuthenticated = $state(false);
+  token = $state<string | null>(null);
+  sessionToken = $state<string | null>(null);
+  
+  // Computed getters for UI display
+  get userDisplayName() { return this.user?.firstName && this.user?.lastName 
+    ? `${this.user.firstName} ${this.user.lastName}` : this.user?.username || ''; }
+  get userInitials() { return this.user?.firstName && this.user?.lastName 
+    ? `${this.user.firstName[0]}${this.user.lastName[0]}` : this.user?.username.substring(0, 2).toUpperCase() || ''; }
   
   // Permission getters for role-based access
-  get canAccessAdmin() { return this.user?.role === 'admin'; }
-  get canSendBroadcasts() { return ['admin', 'manager', 'supervisor', 'support'].includes(this.user?.role || ''); }
+  get canAccessAdmin() { return this.user?.role?.toLowerCase() === 'admin'; }
+  get canCreateChannels() { return ['admin', 'manager', 'supervisor'].includes(this.user?.role?.toLowerCase() || ''); }
   
-  // Initialize with demo data for frontend-only behavior
-  constructor() {
-    this.user = { id: '1', username: 'admin', role: 'admin', /* ... */ };
+  // Session management with localStorage persistence
+  login(userData: User, token: string, sessionToken: string) {
+    this.user = userData;
     this.isAuthenticated = true;
+    this.token = token;
+    this.sessionToken = sessionToken;
+    localStorage.setItem('auth_user', JSON.stringify(userData));
+    localStorage.setItem('auth_token', token);
+    localStorage.setItem('auth_session', sessionToken);
+  }
+  
+  restoreSession() {
+    try {
+      const userData = localStorage.getItem('auth_user');
+      const token = localStorage.getItem('auth_token');
+      if (userData && token) {
+        this.user = JSON.parse(userData);
+        this.isAuthenticated = true;
+        this.token = token;
+        return true;
+      }
+    } catch (error) { /* handle gracefully */ }
+    return false;
   }
 }
 
@@ -198,6 +243,8 @@ get canManageUsers() { return ['admin', 'manager'].includes(this.user?.role || '
 **Bulk Operations**: CSV import with role-specific field validation  
 **Hierarchical Views**: Team/supervisor relationships displayed in expandable tree views
 **Unified Layout**: All admin pages share consistent navigation via admin `+layout.svelte`
+**Input Validation**: Custom filtering functions prevent special characters in search fields
+**Permission Guards**: Admin routes use `+layout.svelte` with `$effect()` to check `canAccessAdmin` and redirect unauthorized users
 
 ### Chat System Architecture
 **File Sharing Permissions**: Granular access control (per person, per role, per OU, and dynamic combinations like "per role of OU")
