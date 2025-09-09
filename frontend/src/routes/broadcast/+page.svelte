@@ -50,6 +50,7 @@
     targetOUs: string[];
     createdBy: string;
     createdAt: Date;
+    sentAt?: Date;
     scheduledFor?: Date;
     requiresAcknowledgment: boolean;
     responseType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
@@ -677,7 +678,7 @@ const performCSVExport = (broadcast: Broadcast) => {
   csvData.push(['Created By:', broadcast.createdBy]);
   csvData.push(['Created Date:', broadcast.createdAt ? new Date(broadcast.createdAt).toLocaleString() : 'N/A']);
   csvData.push(['Response Type:', getResponseTypeDisplay(broadcast.responseType)]);
-  csvData.push(['Status:', broadcast.status.toUpperCase()]);
+  csvData.push(['Status:', broadcast.status ? broadcast.status.toUpperCase() : 'N/A']);
   
   // Add target information
   if (broadcast.targetRoles && broadcast.targetRoles.length > 0) {
@@ -1769,15 +1770,26 @@ onMount(async () => {
                 {#if newBroadcast.scheduleType === 'pick'}
                   <div class="bg-white rounded border border-gray-200 p-4">
                     <label for="scheduledFor" class="block text-sm font-medium text-gray-700 mb-2">Schedule Date & Time</label>
-                      <div 
-                        class="relative w-full cursor-pointer"
-                        onclick={() => document.getElementById('scheduledFor')?.showPicker?.()}
+                      <div
+                        role="button"
+                        tabindex="0"
+                        onclick={() => {
+                          const input = document.getElementById('endDate') as HTMLInputElement | null;
+                          input?.showPicker?.();
+                        }}
+                        onkeydown={(e) => {
+                          if (e.key === 'Enter') {
+                            const input = document.getElementById('endDate') as HTMLInputElement | null;
+                            input?.showPicker?.();
+                          }
+                        }}
                       >
                       <input
-                        id="scheduledFor"
+                        id="endDate"
                         type="datetime-local"
-                        bind:value={newBroadcast.scheduledFor}
-                        class="input-field cursor-pointer"
+                        bind:value={newBroadcast.endDate}
+                        class="input-field w-full cursor-pointer"
+                        placeholder="Select end date..."
                       />
                     </div>
                   </div>
