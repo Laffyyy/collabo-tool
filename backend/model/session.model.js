@@ -38,19 +38,38 @@ class SessionModel {
   }
 
   /**
-   * Find session by session token
-   * @param {string} sessionToken - Session token
-   * @returns {Promise<Object|null>} Session object or null
-   */
-  async findBySessionToken(sessionToken) {
-    const query = `
-      SELECT * FROM tblusersessions 
-      WHERE dsessiontoken = $1
-    `;
-    
+ * Find session by session token
+ * @param {string} sessionToken - Session token
+ * @returns {Promise<Object|null>} Session object or null
+ */
+async findBySessionToken(sessionToken) {
+  const query = `
+    SELECT * FROM tblusersessions
+    WHERE dsessiontoken = $1
+  `;
+
+  try {
     const { rows } = await this.pool.query(query, [sessionToken]);
-    return rows.length > 0 ? this.formatSession(rows[0]) : null;
+    
+    if (rows.length === 0) {
+      console.log('[SessionModel] No session found for token');
+      return null;
+    }
+    
+    const session = this.formatSession(rows[0]);
+    console.log('[SessionModel] Session found and formatted:', {
+      id: session.id,
+      userId: session.userId,
+      expiresAt: session.expiresAt,
+      isActive: session.isActive
+    });
+    
+    return session;
+  } catch (error) {
+    console.error('[SessionModel] Error finding session:', error);
+    throw error;
   }
+}
 
   /**
    * Find session by refresh token
@@ -133,23 +152,23 @@ class SessionModel {
   }
 
   /**
-   * Format session object
-   * @param {Object} session - Raw session object from database
-   * @returns {Object} Formatted session object
-   */
-  formatSession(session) {
-    if (!session) return null;
-    
-    return {
-      id: session.did,
-      userId: session.duserid,
-      sessionToken: session.dsessiontoken,
-      refreshToken: session.drefreshtoken,
-      expiresAt: session.texpiresat,
-      ipAddress: session.dipaddress,
-      userAgent: session.duseragent,
-      isActive: session.disactive,
-      createdAt: session.tcreatedat,
+ * Format session data from database
+ * @param {Object} row - Database row
+ * @returns {Object} Formatted session
+ */
+formatSession(row) {
+  if (!row) return null;
+  
+  return {
+      id: row.did,
+      userId: row.duserid,
+      sessionToken: row.dsessiontoken,
+      refreshToken: row.drefreshtoken,
+      expiresAt: row.texpiresat, // This should be a Date object or ISO string
+      ipAddress: row.dipaddress,
+      userAgent: row.duseragent,
+      isActive: row.disactive,
+      createdAt: row.tcreatedat
     };
   }
 }

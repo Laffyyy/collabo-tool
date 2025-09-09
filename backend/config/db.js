@@ -58,24 +58,6 @@ function getPool() {
 }
 
 /**
-<<<<<<< HEAD
- * Execute a database query
- * @param {string} text - SQL query text
- * @param {Array} params - Query parameters
- * @returns {Promise} Query result
- */
-async function query(text, params) {
-  const client = await getPool().connect();
-  try {
-    const result = await client.query(text, params);
-    return result;
-  } catch (err) {
-    console.error('Database query error:', err);
-    throw err;
-  } finally {
-    client.release();
-  }
-=======
  * Get postgres.js sql client (tagged template)
  * @returns {Function} postgres.js sql function
  */
@@ -95,7 +77,25 @@ function getSql() {
     });
   }
   return sqlClient;
->>>>>>> main
+}
+
+/**
+ * Execute a database query
+ * @param {string} text - SQL query text
+ * @param {Array} params - Query parameters
+ * @returns {Promise} Query result
+ */
+async function query(text, params) {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(text, params);
+    return result;
+  } catch (err) {
+    console.error('Database query error:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
