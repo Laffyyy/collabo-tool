@@ -10,6 +10,8 @@ const OTPModel = require('../model/otp.model');
 const SessionModel = require('../model/session.model');
 const UserRoleModel = require('../model/user-role.model');
 const RoleModel = require('../model/role.model');
+const GlobalSettingsService = require('../services/global-settings.service');
+
 
 // Initialize UserModel with database pool
 const pool = getPool(); // Get the pool once
@@ -32,9 +34,11 @@ function signToken(payload) {
  * @param {Object} credentials - Login credentials
  * @param {string} credentials.username - User's email/username
  * @param {string} credentials.password - User's password
+ * @param {string} credentials.ipAddress - Client IP address
+ * @param {string} credentials.userAgent - Client user agent
  * @returns {Promise<Object>} Login result with next step
  */
-async function login({ username, password }) {
+async function login({ username, password, ipAddress = null, userAgent = null }) {
   try {
     console.log(`[Auth Service] Login attempt for user: ${username}`);
     
@@ -72,19 +76,45 @@ async function login({ username, password }) {
     const user = userModel.formatUser(userData);
     console.log(`[Auth Service] Formatted user data:`, JSON.stringify(user));
     
+    // Get session timeout from database configuration
+    const sessionTimeoutMinutes = await getSessionTimeoutMinutes();
+    console.log(`[Auth Service] Using session timeout of ${sessionTimeoutMinutes} minutes`);
+    
+    // Generate session tokens
+    const sessionToken = uuidv4();
+    const refreshToken = uuidv4();
+    
+    // Create session with dynamic timeout from database
+    const expiresAt = new Date(Date.now() + sessionTimeoutMinutes * 60 * 1000);
+    
+    console.log(`[Auth Service] Session will expire at: ${expiresAt.toISOString()}`);
+    
+    // Create session record in database
+    await sessionModel.create({
+      userId: user.id,
+      sessionToken,
+      refreshToken,
+      expiresAt,
+      ipAddress: ipAddress || '127.0.0.1',
+      userAgent: userAgent || 'Unknown'
+    });
+    
+    console.log(`[Auth Service] Session created with timeout of ${sessionTimeoutMinutes} minutes`);
+
     // Generate OTP and send it to user's email
     const otpData = await generateAndSendOtp(user.email);
     console.log(`[Auth Service] OTP generated for user: ${username}, expires: ${new Date(otpData.expiresAt).toISOString()}`);
     
-    // Store the OTP in the database or in-memory store
+    // Store the OTP in the database
     await otpModel.create({
       userId: user.id,
       code: otpData.code,
       expiresAt: new Date(otpData.expiresAt)
     });
+    
     console.log(`[Auth Service] OTP stored in database for user: ${user.id}`);
     
-    // Return success with user info for OTP verification
+    // Return success with user info and session configuration for OTP verification
     return {
       ok: true,
       step: 'OTP',
@@ -92,7 +122,11 @@ async function login({ username, password }) {
       message: 'OTP sent to your email',
       userId: user.id,
       email: user.email,
-      username: user.username
+      username: user.username,
+      sessionToken,
+      sessionTimeout: sessionTimeoutMinutes,
+      sessionExpiresAt: expiresAt.toISOString(),
+      otpExpiresAt: new Date(otpData.expiresAt).toISOString()
     };
     
   } catch (error) {
@@ -383,6 +417,38 @@ async function answerSecurityQuestions({ username, answers }) {
   return { token };
 }
 
+/**
+ * Get session timeout from global settings
+ */
+async function getSessionTimeoutMinutes() {
+  try {
+    console.log('[Auth Service] Fetching session timeout from global settings...');
+    const globalSettings = await GlobalSettingsService.getGeneralSettings();
+    
+    if (globalSettings) {
+      console.log('[Auth Service] Raw global settings:', globalSettings);
+      
+      const settings = typeof globalSettings === 'string' 
+        ? JSON.parse(globalSettings) 
+        : globalSettings;
+      
+      console.log('[Auth Service] Parsed settings:', settings);
+      
+      if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+        console.log(`[Auth Service] Using database session timeout: ${settings.sessionTimeout} minutes`);
+        return settings.sessionTimeout;
+      }
+    }
+  } catch (error) {
+    console.warn('[Auth Service] Failed to load session timeout from global settings:', error);
+  }
+  
+  console.log('[Auth Service] Using default session timeout: 480 minutes');
+  return 480; // Default 8 hours if unable to load from database
+}
+
+
+
 module.exports = {
   login,
   verifyOtp,
@@ -393,5 +459,6 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  getSessionTimeoutMinutes, 
 };
 

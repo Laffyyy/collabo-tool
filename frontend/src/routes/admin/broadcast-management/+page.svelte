@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import { authStore } from '$lib/stores/auth.svelte';
   
 
   interface Broadcast {
@@ -51,6 +52,15 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
 
+  // Add global settings state
+  let globalSettings = $state<{
+    dateFormat: string;
+    timeFormat: string;
+  }>({
+    dateFormat: 'MM/DD/YYYY',
+    timeFormat: '12h'
+  });
+
   // let currentPage = $state(1);
   const rowsPerPage = 6;
 
@@ -91,9 +101,11 @@ async function fetchAllBroadcasts() {
   }
 }
 
-// Call fetchAllBroadcasts when the page loads
-onMount(() => {
+// To this:
+onMount(async () => {
   fetchAllBroadcasts();
+  await loadGlobalSettings();  
+  loadBroadcasts();
 });
 
 const allowedStatuses = ['sent', 'scheduled', 'archived'];
@@ -150,12 +162,117 @@ const filteredBroadcasts = $derived(() => {
     };
   });
 
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleString();
+  // Load global settings from backend
+  const loadGlobalSettings = async () => {
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}/api/v1/global-settings/general`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const settings = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+          globalSettings = {
+            dateFormat: settings.dateFormat || 'MM/DD/YYYY',
+            timeFormat: settings.timeFormat || '12h'
+          };
+          console.log('✅ Global settings loaded:', globalSettings);
+        }
+      } else {
+        console.warn('Failed to load global settings, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading global settings:', error);
+    }
   };
 
+  // Enhanced timestamp formatting using global settings
+  const formatTimestamp = (date: Date) => {
+    if (!date || isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+
+    // For full timestamps, use appropriate locale for date formatting but 'en-US' for 12-hour time
+    let locale = 'en-US';
+    
+    // Only change locale for 24-hour format
+    if (globalSettings.timeFormat === '24h') {
+      if (globalSettings.dateFormat === 'DD/MM/YYYY') {
+        locale = 'en-GB';
+      } else if (globalSettings.dateFormat === 'YYYY-MM-DD') {
+        locale = 'sv-SE';
+      }
+    }
+
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: globalSettings.timeFormat === '12h'
+    };
+
+    return new Intl.DateTimeFormat(locale, options).format(date);
+  };
+
+  // Enhanced date formatting for date-only display
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString();
+    if (!date || isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+
+    // Always use 'en-US' locale for consistent formatting
+    let locale = 'en-US';
+    
+    // Use appropriate locale based on date format setting
+    if (globalSettings.dateFormat === 'DD/MM/YYYY') {
+      locale = 'en-GB';
+    } else if (globalSettings.dateFormat === 'YYYY-MM-DD') {
+      locale = 'sv-SE';
+    }
+
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    };
+
+    return new Intl.DateTimeFormat(locale, options).format(date);
+  };
+
+  // Enhanced short date formatting for relative display
+  const formatShortDate = (date: Date) => {
+    if (!date || isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const timeOptions: Intl.DateTimeFormatOptions = {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: globalSettings.timeFormat === '12h'
+    };
+
+    if (isToday) {
+      // Always use 'en-US' for consistent AM/PM display
+      return `Today ${new Intl.DateTimeFormat('en-US', timeOptions).format(date)}`;
+    } else if (isYesterday) {
+      const timeStr = new Intl.DateTimeFormat('en-US', timeOptions).format(date);
+      return `Yesterday ${timeStr}`;
+    } else {
+      return formatDate(date);
+    }
   };
 
   const getPriorityColor = (priority: string) => {

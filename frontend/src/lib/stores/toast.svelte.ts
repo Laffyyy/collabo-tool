@@ -11,9 +11,11 @@ export interface Toast {
 }
 
 class ToastStore {
+  items(items: any) {
+	  throw new Error('Method not implemented.');
+  }
   // Changed to have a single toast instead of an array
   currentToast = $state<Toast | null>(null);
-  
   show(message: string, type: ToastType = 'info', duration: number = 5000) {
     const id = uuidv4();
     
