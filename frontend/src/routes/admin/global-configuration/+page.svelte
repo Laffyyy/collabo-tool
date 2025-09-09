@@ -1,8 +1,10 @@
 <script lang="ts">
-    import { API_CONFIG } from '$lib/api/config';
-    import { onMount } from 'svelte';
+  import { API_CONFIG } from '$lib/api/config';
+  import { onMount } from 'svelte';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
-  
+  import { toastStore } from '$lib/stores/toast.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
+
   const API_BASE_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings`;
   const GENERAL_API_URL = `${API_BASE_URL}/general`;
   
@@ -183,15 +185,16 @@
           savedConfigString = JSON.stringify(config);
           hasChanges = false;
           
-          // Show inline success message instead of alert
-          console.log('✅ Configuration saved successfully');
-          
-          // You could add a toast notification here instead of the loading overlay
+          // Use toast notification like broadcast management
+          toastStore.success('Global configuration saved successfully!');
         } else {
-          console.error('❌ Failed to save configuration:', result.message);
+          // Show error toast with specific message
+          toastStore.error(result.message || 'Failed to save configuration');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Error saving configuration:', error);
+        // Show error toast for network/connection issues
+        toastStore.error('Failed to save configuration. Please check your connection and try again.');
       } finally {
         isSaving = false;
       }
@@ -202,7 +205,9 @@
         savedConfigString = JSON.stringify(config);
         hasChanges = false;
         isSaving = false;
-        console.log('✅ Configuration saved successfully');
+        
+        // Show success toast for simulated saves
+        toastStore.success('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
       }, 500);
     }
   };
@@ -242,6 +247,9 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
+  <!-- Remove the custom alert container since we're using ToastContainer -->
+  
+  <!-- Rest of your existing template -->
   <div class="max-w-5xl mx-auto px-6 py-8">
     <!-- Header -->
     <div class="mb-8 fade-in">
@@ -261,6 +269,7 @@
               <span>Reset</span>
             </button>
           {/if}
+          <!-- Save button with inline loading -->
           <button
             onclick={saveConfiguration}
             disabled={!hasChanges || isSaving}
@@ -992,3 +1001,6 @@
     {/if}
   </div>
 </div>
+
+<!-- Add ToastContainer at the end like broadcast management -->
+<ToastContainer />
