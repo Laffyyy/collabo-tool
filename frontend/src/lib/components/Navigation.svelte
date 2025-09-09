@@ -358,10 +358,10 @@
 							<div>
 								<p class="text-sm font-medium text-gray-900">
 									{user?.firstName && user?.lastName 
-										? `${user.firstName} ${user.lastName}` 
-										: user?.username || 'User'}
+									? `${user.firstName} ${user.lastName}` 
+									: user?.username || 'Loading...'}
 								</p>
-								<p class="text-xs text-gray-500 capitalize">{user?.role || 'User'}</p>
+								<p class="text-xs text-gray-500 capitalize">{user?.role || 'Loading...'}</p>
 								<p class="text-xs text-gray-400 capitalize">{user?.onlineStatus || 'offline'}</p>
 							</div>
 						</div>

@@ -23,6 +23,11 @@ class AuthStore {
   token = $state<string | null>(null);
   sessionToken = $state<string | null>(null);
 
+  constructor() {
+    // Restore session on initialization
+    this.restoreSession();
+  }
+
   get userRole() {
     return this.user?.role || '';
   }

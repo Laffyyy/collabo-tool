@@ -7,6 +7,7 @@ const uploadbroadcastRoutes = require('./v1/upload-broadcast.routes');
 const responseBroadcastRoutes = require('./v1/response-broadcast.routes'); // Add this line
 const broadcastManagementRoutes = require('./v1/broadcast-management.routes'); // Add this line
 const globalSettingsRoutes = require('./v1/global-settings.routes');
+const profileRoutes = require('./v1/profile.routes');
 
 const router = Router();
 
@@ -24,5 +25,7 @@ router.use('/v1/broadcast-responses', responseBroadcastRoutes);
 router.use('/v1/admin/broadcasts', broadcastManagementRoutes);
 //Admin global settings
 router.use('/v1/global-settings', globalSettingsRoutes);
+//Profile
+router.use('/v1/profile', profileRoutes);
 
 module.exports = router;
