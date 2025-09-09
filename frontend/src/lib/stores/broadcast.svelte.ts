@@ -1,103 +1,167 @@
-import { writable } from "svelte/store"
+// src/lib/stores/broadcast.svelte.ts
+import { writable } from 'svelte/store';
+import { receivedBroadcastAPI } from '$lib/api/received-broadcasts';
+import type { ReceivedBroadcast } from '$lib/api/types';
 
-interface Broadcast {
-  id: string
-  title: string
-  content: string
-  priority: "low" | "medium" | "high"
-  targetRoles: string[]
-  targetOUs: string[]
-  createdBy: string
-  createdAt: Date
-  scheduledFor?: Date
-  requiresAcknowledgment: boolean
-  eventDate?: Date
-  acknowledgments: { userId: string; acknowledgedAt: Date; attending?: boolean }[]
-  isActive: boolean
+interface BroadcastNotification {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  createdAt: Date;
+  requiresAcknowledgment: boolean;
+  responseType: string;
+  targetRoles?: string[];
+  isRead: boolean;
+  readAt?: Date;
 }
 
 class BroadcastStore {
-  broadcasts = $state<Broadcast[]>([]);
-  templates = $state<any[]>([]);
+  notifications = $state<BroadcastNotification[]>([]);
   isLoading = $state(false);
+  lastFetchTime = $state<Date>(new Date());
 
-  get sortedBroadcasts() {
-    return this.broadcasts.sort((a, b) => {
-      if (a.priority === "high" && b.priority !== "high") return -1
-      if (b.priority === "high" && a.priority !== "high") return 1
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    });
-  }
-
-  get unreadBroadcasts() {
-    // For notification purposes - broadcasts from last 24 hours
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    return this.broadcasts.filter(b => 
-      new Date(b.createdAt) > oneDayAgo && 
-      b.isActive
-    );
-  }
-
-  addBroadcast(broadcast: Broadcast) {
-    this.broadcasts = [...this.broadcasts, broadcast];
-  }
-
-  setBroadcasts(broadcasts: Broadcast[]) {
-    this.broadcasts = broadcasts;
-  }
-
-  acknowledgeBroadcast(broadcastId: string, userId: string, attending?: boolean) {
-    this.broadcasts = this.broadcasts.map((b) => {
-      if (b.id === broadcastId) {
-        const existingAck = b.acknowledgments.find((a) => a.userId === userId)
-        if (existingAck) {
-          existingAck.attending = attending
-        } else {
-          b.acknowledgments.push({
-            userId,
-            acknowledgedAt: new Date(),
-            attending,
-          })
-        }
-      }
-      return b
-    });
-  }
-
-  setLoading(loading: boolean) {
-    this.isLoading = loading;
-  }
-
-  // Initialize with mock data
   constructor() {
-    this.broadcasts = [
-      {
-        id: "1",
-        title: "Team Meeting Tomorrow",
-        content: "Don't forget about our team meeting tomorrow at 2 PM in the conference room.",
-        priority: "medium",
-        targetRoles: ["admin", "manager", "supervisor"],
-        targetOUs: ["Engineering"],
-        createdBy: "admin",
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        requiresAcknowledgment: true,
-        acknowledgments: [],
-        isActive: true
-      },
-      {
-        id: "2", 
-        title: "System Maintenance Alert",
-        content: "Scheduled system maintenance will occur this weekend. Please save your work frequently.",
-        priority: "high",
-        targetRoles: ["admin", "manager", "supervisor", "support", "frontline"],
-        targetOUs: ["All"],
-        createdBy: "admin",
-        createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-        requiresAcknowledgment: false,
-        acknowledgments: [],
-        isActive: true
+    // Initialize with any stored data
+    if (typeof window !== 'undefined') {
+      this.loadFromStorage();
+    }
+  }
+
+  // Get unread notifications (for badge count)
+  get unreadBroadcasts() {
+    return this.notifications.filter(n => !n.isRead);
+  }
+
+  // Get visible notifications (not older than 2 days)
+  get visibleNotifications() {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    return this.notifications.filter(n => n.createdAt > twoDaysAgo);
+  }
+
+  async loadReceivedBroadcasts() {
+    // Don't run on server side
+    if (typeof window === 'undefined') return;
+    
+    if (this.isLoading) return; // Prevent multiple simultaneous calls
+    
+    this.isLoading = true;
+    
+    try {
+      const response = await receivedBroadcastAPI.getReceivedBroadcasts({
+        limit: 20, // Get more broadcasts to cover 2-day window
+        page: 1
+      });
+
+      if (response.success && response.broadcasts) {
+        // Filter to only show broadcasts from last 2 days
+        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+        
+        const recentBroadcasts = response.broadcasts
+          .filter(broadcast => {
+            const broadcastDate = new Date(broadcast.createdAt);
+            return broadcastDate > twoDaysAgo;
+          })
+          .slice(0, 10) // Limit to 10 most recent for performance
+          .map(broadcast => {
+            const existingNotification = this.notifications.find(n => n.id === broadcast.id);
+            return {
+              id: broadcast.id,
+              title: broadcast.title,
+              content: broadcast.content,
+              priority: broadcast.priority,
+              createdAt: new Date(broadcast.createdAt),
+              requiresAcknowledgment: broadcast.requiresAcknowledgment || false,
+              responseType: broadcast.responseType || 'none',
+              targetRoles: broadcast.targetRoles,
+              // Preserve existing read status if notification already exists
+              isRead: existingNotification?.isRead || false,
+              readAt: existingNotification?.readAt
+            };
+          });
+
+        this.notifications = recentBroadcasts;
+        this.lastFetchTime = new Date();
+        this.saveToStorage();
       }
-    ];
+    } catch (error) {
+      console.error('Error loading received broadcasts for notifications:', error);
+      // Don't throw error to prevent breaking other functionality
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  markAsRead(broadcastId: string) {
+    const notification = this.notifications.find(n => n.id === broadcastId);
+    if (notification && !notification.isRead) {
+      notification.isRead = true;
+      notification.readAt = new Date();
+      this.markReadInStorage(broadcastId);
+      this.saveToStorage();
+    }
+  }
+
+  markAllAsRead() {
+    const unreadNotifications = this.notifications.filter(n => !n.isRead);
+    if (unreadNotifications.length === 0) return;
+    
+    const now = new Date();
+    unreadNotifications.forEach(notification => {
+      notification.isRead = true;
+      notification.readAt = now;
+      this.markReadInStorage(notification.id);
+    });
+    
+    this.saveToStorage();
+  }
+
+  private markReadInStorage(broadcastId: string) {
+    if (typeof window === 'undefined') return;
+    try {
+      const readBroadcasts = JSON.parse(localStorage.getItem('readBroadcastNotifications') || '[]');
+      if (!readBroadcasts.includes(broadcastId)) {
+        readBroadcasts.push(broadcastId);
+        localStorage.setItem('readBroadcastNotifications', JSON.stringify(readBroadcasts));
+      }
+    } catch (error) {
+      console.error('Error saving read status:', error);
+    }
+  }
+
+  private saveToStorage() {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      localStorage.setItem('broadcastNotifications', JSON.stringify({
+        notifications: this.notifications,
+        lastFetchTime: this.lastFetchTime.toISOString()
+      }));
+    } catch (error) {
+      console.error('Error saving to storage:', error);
+    }
+  }
+
+  private loadFromStorage() {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const stored = localStorage.getItem('broadcastNotifications');
+      if (stored) {
+        const data = JSON.parse(stored);
+        this.notifications = data.notifications?.map((n: any) => ({
+          ...n,
+          createdAt: new Date(n.createdAt),
+          readAt: n.readAt ? new Date(n.readAt) : undefined
+        })) || [];
+        this.lastFetchTime = data.lastFetchTime ? new Date(data.lastFetchTime) : new Date();
+      }
+    } catch (error) {
+      console.error('Error loading broadcast notifications from storage:', error);
+      // Reset to defaults on error
+      this.notifications = [];
+      this.lastFetchTime = new Date();
+    }
   }
 }
 

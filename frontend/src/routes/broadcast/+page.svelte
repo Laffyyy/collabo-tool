@@ -89,7 +89,6 @@
     targetOUs: string[];
     createdBy: string;
     createdAt: Date;
-    sentAt?: Date;
     scheduledFor?: Date;
     requiresAcknowledgment: boolean;
     responseType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
@@ -228,8 +227,6 @@
   let reportBroadcast = $state<Broadcast | null>(null);
   let reportResponses = $state<any[]>([]);
   let isLoadingReport = $state(false);
-  //Broadcast Modal OU Search
-  let ouSearchQuery = $state('');
 
     const loadMyBroadcasts = async () => {
       console.log('🔄 Loading user broadcasts from API...');
@@ -697,15 +694,23 @@ const formatFullTimestamp = (date: Date) => {
     return formatFullTimestamp(date);
   };
 
-  // Update existing onMount to load global settings first
-  onMount(async () => {
-    await loadGlobalSettings();
-    // Continue with existing broadcast loading logic...
-    loadBroadcasts();
-    loadReceivedBroadcasts();
-    loadTemplates();
-    loadTargetData();
+onMount(async () => {
+  await loadGlobalSettings();
+  
+  // Mark notifications as read when user visits broadcast page
+  broadcastStore.update(store => {
+    if (store) {
+      store.markAllAsRead();
+    }
+    return store;
   });
+  
+  // Continue with existing broadcast loading logic...
+  loadBroadcasts();
+  loadReceivedBroadcasts();
+  loadTemplates();
+  loadTargetData();
+});
 
   const getPriorityStyle = (priority: string) => {
     const p = priorities.find(p => p.value === priority);
@@ -777,12 +782,11 @@ let prevTab = $state(activeTab);
 
  $effect(() => {
     const handleClickOutside = (event: Event) => {
-      // Close OU dropdown if clicking outside
-      if (showOUDropdown) {
+      // Close filter dropdown if clicking outside
+      if (showFilterDropdown) {
         const target = event.target as Element;
-        if (!target.closest('#ou-selector') && !target.closest('.absolute')) {
-          showOUDropdown = false;
-          ouSearchQuery = ''; // Reset search when closing
+        if (!target.closest('.relative')) {
+          showFilterDropdown = false;
         }
       }
       
@@ -980,7 +984,7 @@ const performCSVExport = (broadcast: Broadcast) => {
   csvData.push(['Created By:', broadcast.createdBy]);
   csvData.push(['Created Date:', broadcast.createdAt ? new Date(broadcast.createdAt).toLocaleString() : 'N/A']);
   csvData.push(['Response Type:', getResponseTypeDisplay(broadcast.responseType)]);
-  csvData.push(['Status:', broadcast.status ? broadcast.status.toUpperCase() : 'N/A']);
+  csvData.push(['Status:', broadcast.status.toUpperCase()]);
   
   // Add target information
   if (broadcast.targetRoles && broadcast.targetRoles.length > 0) {
@@ -1558,31 +1562,6 @@ onMount(async () => {
     }
   };
 
-  // Filter OUs based on search query
-  let filteredOUs = $derived(
-    availableOUs.filter(ou => 
-      ou.name.toLowerCase().includes(ouSearchQuery.toLowerCase())
-    )
-  );
-
-  // Function to toggle all OUs
-  const toggleAllOUs = () => {
-    if (newBroadcast.targetOUs.length === availableOUs.length) {
-      // Deselect all
-      newBroadcast.targetOUs = [];
-    } else {
-      // Select all
-      newBroadcast.targetOUs = availableOUs.map(ou => ou.id);
-    }
-  };
-
-  // Check if all OUs are selected
-  let allOUsSelected = $derived(
-    availableOUs.length > 0 && newBroadcast.targetOUs.length === availableOUs.length
-  );
-
-
-
 </script>
 
 <svelte:head>
@@ -1841,87 +1820,38 @@ onMount(async () => {
                   </button>
                   
                   {#if showOUDropdown}
-                    <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-hidden">
-                      <!-- Search input -->
-                      <div class="p-2 border-b border-gray-200">
-                        <input
-                          type="text"
-                          bind:value={ouSearchQuery}
-                          placeholder="Search organizational units..."
-                          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
-                          onclick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      
-                      <div class="max-h-48 overflow-y-auto">
-                        {#if isLoadingOUs}
-                          <div class="p-3 text-center text-gray-500">Loading organizational units...</div>
-                        {:else if availableOUs.length === 0}
-                          <div class="p-3 text-center text-gray-500">No organizational units found</div>
-                        {:else}
-                          <!-- Select All option -->
-                          <div class="p-2 hover:bg-gray-100 border-b border-gray-100">
-                            <label class="flex items-center space-x-2 cursor-pointer w-full font-medium">
+                    <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto">
+                      {#if isLoadingOUs}
+                        <div class="p-3 text-center text-gray-500">Loading organizational units...</div>
+                      {:else if availableOUs.length === 0}
+                        <div class="p-3 text-center text-gray-500">No organizational units found</div>
+                      {:else}
+                        {#each availableOUs as ou}
+                          <div class="p-2 hover:bg-gray-100">
+                            <label class="flex items-center space-x-2 cursor-pointer w-full">
                               <input
                                 type="checkbox"
-                                checked={allOUsSelected}
-                                onclick={(e) => {
-                                  e.stopPropagation();
-                                  toggleAllOUs();
+                                checked={newBroadcast.targetOUs.includes(ou.id)}
+                                onclick={() => {
+                                  const index = newBroadcast.targetOUs.indexOf(ou.id);
+                                  if (index === -1) {
+                                    if (newBroadcast.targetOUs.length < 3) {
+                                      newBroadcast.targetOUs = [...newBroadcast.targetOUs, ou.id];
+                                    }
+                                  } else {
+                                    newBroadcast.targetOUs = newBroadcast.targetOUs.filter(id => id !== ou.id);
+                                  }
                                 }}
                                 class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                               />
-                              <span class="text-[#01c0a4]">
-                                {allOUsSelected ? 'Deselect All' : 'Select All'} ({availableOUs.length})
-                              </span>
+                              <span>{ou.name}</span>
                             </label>
                           </div>
-                          
-                          {#if filteredOUs.length === 0}
-                            <div class="p-3 text-center text-gray-500">
-                              No units match "{ouSearchQuery}"
-                            </div>
-                          {:else}
-                            {#each filteredOUs as ou}
-                              <div class="p-2 hover:bg-gray-100">
-                                <label class="flex items-center space-x-2 cursor-pointer w-full">
-                                  <input
-                                    type="checkbox"
-                                    checked={newBroadcast.targetOUs.includes(ou.id)}
-                                    onclick={(e) => {
-                                      e.stopPropagation();
-                                      const index = newBroadcast.targetOUs.indexOf(ou.id);
-                                      if (index === -1) {
-                                        newBroadcast.targetOUs = [...newBroadcast.targetOUs, ou.id];
-                                      } else {
-                                        newBroadcast.targetOUs = newBroadcast.targetOUs.filter(id => id !== ou.id);
-                                      }
-                                    }}
-                                    class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                                  />
-                                  <span>{ou.name}</span>
-                                </label>
-                              </div>
-                            {/each}
-                          {/if}
-                        {/if}
-                      </div>
+                        {/each}
+                      {/if}
                     </div>
                   {/if}
                 </div>
-
-                <!-- Show selected OUs count and names -->
-                {#if newBroadcast.targetOUs.length > 0}
-                  <div class="mt-2 text-xs text-gray-600">
-                    <span class="font-medium">Selected:</span>
-                    {#if newBroadcast.targetOUs.length <= 5}
-                      {newBroadcast.targetOUs.map(id => availableOUs.find(ou => ou.id === id)?.name).filter(Boolean).join(', ')}
-                    {:else}
-                      {newBroadcast.targetOUs.slice(0, 3).map(id => availableOUs.find(ou => ou.id === id)?.name).filter(Boolean).join(', ')} 
-                      and {newBroadcast.targetOUs.length - 3} more
-                    {/if}
-                  </div>
-                {/if}
               </div>
 
                 <!-- Target Roles selection -->
@@ -2072,26 +2002,18 @@ onMount(async () => {
                 {#if newBroadcast.scheduleType === 'pick'}
                   <div class="bg-white rounded border border-gray-200 p-4">
                     <label for="scheduledFor" class="block text-sm font-medium text-gray-700 mb-2">Schedule Date & Time</label>
-                      <div
-                        role="button"
-                        tabindex="0"
-                        onclick={() => {
-                          const input = document.getElementById('endDate') as HTMLInputElement | null;
-                          input?.showPicker?.();
-                        }}
-                        onkeydown={(e) => {
-                          if (e.key === 'Enter') {
-                            const input = document.getElementById('endDate') as HTMLInputElement | null;
-                            input?.showPicker?.();
-                          }
-                        }}
-                      >
+                    <div 
+                      class="relative cursor-pointer"
+                      role="button"
+                      tabindex="0"
+                      onclick={() => document.getElementById('scheduledFor')?.focus()}
+                      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('scheduledFor')?.focus(); } }}
+                    >
                       <input
-                        id="endDate"
+                        id="scheduledFor"
                         type="datetime-local"
-                        bind:value={newBroadcast.endDate}
-                        class="input-field w-full cursor-pointer"
-                        placeholder="Select end date..."
+                        bind:value={newBroadcast.scheduledFor}
+                        class="input-field cursor-pointer"
                       />
                     </div>
                   </div>
@@ -2101,16 +2023,24 @@ onMount(async () => {
                 <div class="bg-white rounded border border-gray-200 p-4">
                   <label for="endDate" class="block text-sm font-medium text-gray-700 mb-2">End Date (Optional)</label>
                   <p class="text-xs text-gray-500 mb-3">Set when this broadcast should expire and be marked as "Done"</p>
-                  <input
-                    id="endDate"
-                    type="datetime-local"
-                    bind:value={newBroadcast.endDate}
-                    onclick={(e) => (e.target as HTMLInputElement).showPicker()}
-                    class="input-field w-full cursor-pointer"
-                    placeholder="Select end date..."
-                  />
+                  <div 
+                    class="relative cursor-pointer"
+                    role="button"
+                    tabindex="0"
+                    onclick={() => document.getElementById('endDate')?.focus()}
+                    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('endDate')?.focus(); } }}
+                  >
+                    <input
+                      id="endDate"
+                      type="datetime-local"
+                      bind:value={newBroadcast.endDate}
+                      class="input-field cursor-pointer"
+                      placeholder="Select end date..."
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
 
             <!-- Show API error if any -->
             {#if apiError}
