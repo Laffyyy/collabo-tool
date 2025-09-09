@@ -10,30 +10,71 @@ let pool = null;
 function getPool() {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
+    
     pool = new Pool({ 
       connectionString,
-      ssl: {
-        rejectUnauthorized: false // Required for Supabase
-      },
-      max: 10 // Maximum number of clients in the pool
+      // Add robust connection pool settings
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+      // Add error event handler for pool recovery
+      on: {
+        error: (err, client) => {
+          console.error('Unexpected error on idle client', err);
+          
+          // Log detailed error information
+          if (err.message && err.message.includes('termination')) {
+            console.log('Database connection terminated - will reconnect automatically');
+          }
+        }
+      }
     });
+    
+    // Add explicit error handler to the pool itself to prevent crashes
+    pool.on('error', (err) => {
+      console.error('Postgres pool error:', err);
+      // Don't let this error crash the application
+      // The pool will attempt to reconnect on next query
+    });
+    
+    pool.on('connect', () => {
+      console.log('New database connection established');
+    });
+    
+    pool.on('remove', () => {
+      console.log('Database connection removed from pool');
+    });
+    
+    // Add regular connection testing to keep connections alive
+    startConnectionTester();
   }
   return pool;
 }
 
 /**
- * Execute SQL query with parameters
- * @param {string} text - SQL query text
- * @param {Array} params - Query parameters
- * @returns {Promise} Query result
+ * Starts a periodic connection tester to keep the pool healthy
  */
-async function query(text, params) {
-  const client = await pool.connect();
-  try {
-    return await client.query(text, params);
-  } finally {
-    client.release();
-  }
+function startConnectionTester() {
+  // Test a connection from the pool more frequently (every 1 minute instead of 5)
+  const interval = 60 * 1000; // 1 minute
+  
+  setInterval(async () => {
+    try {
+      const client = await pool.connect();
+      const result = await client.query('SELECT 1');
+      client.release();
+      console.log('Connection test successful');
+    } catch (err) {
+      console.error('Connection test failed:', err.message);
+      
+      // If pool is unresponsive or broken, recreate it
+      if (err.message.includes('termination') || err.message.includes('connection')) {
+        console.log('Attempting to recreate the connection pool');
+        closePool();
+        pool = null; // Reset pool to null so getPool() will create a new one
+      }
+    }
+  }, interval);
 }
 
 /**
