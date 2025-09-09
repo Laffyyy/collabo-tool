@@ -1,4 +1,5 @@
 import { API_CONFIG } from './config';
+import type { ApiUser, UsersResponse, Role, OrganizationalUnit } from './types';
 
 /**
  * User Management API Service
@@ -16,39 +17,6 @@ function makeAuthenticatedRequest(url: string, options: RequestInit = {}) {
   });
 }
 
-// Types for API responses
-export interface ApiUser {
-  id: string;
-  employeeId: string;
-  name: string;
-  email: string;
-  ou: string | null;
-  role: string;
-  status: string;
-  type: 'admin' | 'user';
-  supervisorId?: string;
-  managerId?: string;
-  mustChangePassword?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaginationInfo {
-  currentPage: number;
-  totalPages: number;
-  totalUsers: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
-}
-
-export interface UsersResponse {
-  ok: boolean;
-  data: {
-    users: ApiUser[];
-    pagination: PaginationInfo;
-  };
-}
-
 export interface CreateUserRequest {
   employeeId: string;
   name: string;
@@ -63,10 +31,10 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   name?: string;
   email?: string;
-  ou?: string;
+  ou?: string | null;
   role?: string;
-  supervisorId?: string;
-  managerId?: string;
+  supervisorId?: string | null;
+  managerId?: string | null;
   status?: string;
 }
 
@@ -83,13 +51,6 @@ export interface BulkStatusRequest {
 export interface PasswordChangeRequest {
   newPassword: string;
   requirePasswordChange?: boolean;
-}
-
-export interface OrganizationalUnit {
-  id: string;
-  name: string;
-  description: string;
-  parentId?: string;
 }
 
 export interface HierarchyOptions {

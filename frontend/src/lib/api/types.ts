@@ -14,6 +14,28 @@ export interface User {
   mustChangePassword: boolean;
 }
 
+export interface ApiUser {
+  id: string;
+  employeeId: string;
+  name: string;
+  email: string;
+  ou: string;
+  role: string;
+  status: string;
+  type: string;
+  supervisorId: string | null;
+  managerId: string | null;
+  mustChangePassword: boolean;
+  presenceStatus: string;
+  lastLogin: string | null;
+  lastSeen: string | null;
+  joinDate: string;
+  createdAt: string;
+  updatedAt: string;
+  supervisorName: string | null;
+  managerName: string | null;
+}
+
 export interface ApiResponse {
   ok: boolean;
   message: string;
@@ -30,6 +52,56 @@ export interface LoginResponse extends ApiResponse {
 export interface OtpVerificationResponse extends ApiResponse {
   user?: User;
   token?: string;
+}
+
+export interface UsersResponse extends ApiResponse {
+  data: {
+    users: ApiUser[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalUsers: number;
+      itemsPerPage: number;
+    };
+  };
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface OrganizationalUnit {
+  id: string;
+  name: string;
+  description?: string;
+  parentId?: string;
+}
+
+export interface UsersResponse extends ApiResponse {
+  data: {
+    users: ApiUser[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalUsers: number;
+      itemsPerPage: number;
+    };
+  };
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface OrganizationalUnit {
+  id: string;
+  name: string;
+  description?: string;
+  parentId?: string;
 }
 
 export interface OrganizationalUnit {

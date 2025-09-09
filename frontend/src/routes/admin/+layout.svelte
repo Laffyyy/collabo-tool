@@ -38,7 +38,7 @@
 
 <!-- Only render admin content if user has access -->
 {#if isAuthenticated && canAccessAdmin}
-	{@render children()}
+	{@render children?.()}
 {:else}
 	<!-- Loading state or redirect happening -->
 	<div class="min-h-screen flex items-center justify-center bg-gray-50">

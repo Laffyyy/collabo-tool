@@ -4,8 +4,93 @@ const { getPool } = require('../../config/db');
 const UserModel = require('../../model/user.model');
 const RoleModel = require('../../model/role.model');
 const UserRoleModel = require('../../model/user-role.model');
+const userManagementController = require('../../controllers/user-management.controller');
+const ouModel = require('../../model/ou.model');
 
 const router = express.Router();
+
+/**
+ * Development endpoints that bypass authentication
+ * WARNING: Only available in development mode
+ */
+
+// Middleware to ensure dev mode only
+const devOnly = (req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ ok: false, message: 'Not found' });
+  }
+  next();
+};
+
+/**
+ * Get users without authentication (dev only)
+ */
+router.get('/users', devOnly, async (req, res, next) => {
+  try {
+    // Mock the auth middleware requirements
+    req.user = { id: 'dev-user', role: 'admin' };
+    
+    // Call the actual controller
+    await userManagementController.getUsers(req, res, next);
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get users',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get organizational units without authentication (dev only)
+ */
+router.get('/ous', devOnly, async (req, res, next) => {
+  try {
+    const ous = await ouModel.getAllOUs();
+    res.status(200).json({
+      ok: true,
+      data: { ous }
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get organizational units',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get user by ID without authentication (dev only)
+ */
+router.get('/users/:id', devOnly, async (req, res, next) => {
+  try {
+    req.user = { id: 'dev-user', role: 'admin' };
+    await userManagementController.getUserById(req, res, next);
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get user',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Create user without authentication (dev only)
+ */
+router.post('/users', devOnly, async (req, res, next) => {
+  try {
+    req.user = { id: 'dev-user', role: 'admin' };
+    await userManagementController.createUser(req, res, next);
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to create user',
+      error: error.message
+    });
+  }
+});
 
 /**
  * Development-only admin user creation endpoint
