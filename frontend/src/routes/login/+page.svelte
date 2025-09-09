@@ -4,10 +4,17 @@
 	import LoginBackground from './LoginBackground.svelte';
 	import LoginHeader from './LoginHeader.svelte';
 	import { onMount } from 'svelte';
+	import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
+    import type { LoginResponse } from '$lib/api/types';
+	import { toastStore } from '$lib/stores/toast.svelte';
+  	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	
-	let loginUsername = $state('');
-	let loginPassword = $state('');
-	let loginShowPassword = $state(false);
+   	let loginUsername = $state('');
+    let loginPassword = $state('');
+    let loginShowPassword = $state(false);
+    let loginIsLoading = $state(false);
+    let loginError = $state('');
 	
 	// Forgot password modal state
 	let showForgotPasswordModal = $state(false);
@@ -17,10 +24,48 @@
 	let forgotPasswordSuccess = $state(false);
 	let forgotPasswordEmailInput: HTMLInputElement | undefined;
 	
-	const handleLoginSubmit = (event: Event) => {
+	const handleLoginSubmit = async (event: Event) => {
 		event.preventDefault();
-		// Navigate to OTP page after successful login
+		loginIsLoading = true;
+		loginError = '';
+		
+		try {
+		// Use the API client instead of direct fetch
+		const data = await apiClient.post<LoginResponse>(
+			API_CONFIG.endpoints.auth.login,
+			{
+			username: loginUsername,
+			password: loginPassword
+			}
+		);
+		
+		if (data.step === 'FAILED') {
+			// Show error toast for invalid credentials
+			$toastStore.error(data.message || 'Invalid Email/Password');
+			loginError = data.message || 'Invalid Email/Password';
+			loginIsLoading = false;
+			return;
+		}
+		
+		// Store info needed for OTP verification
+		localStorage.setItem('auth_userId', data.userId);
+		localStorage.setItem('auth_userEmail', data.email);
+		localStorage.setItem('auth_username', data.username || loginUsername);
+		localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
+	
+		
+		// Set OTP expiry time (5 minutes from now)
+		const expiryTime = Date.now() + (5 * 60 * 1000);
+		localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+		
+		// Navigate to OTP verification page
 		goto('/otp');
+		} catch (error: any) {
+		$toastStore.error(error.message || 'Invalid credentials');
+		loginError = error.message || 'Invalid credentials';
+		} finally {
+		loginIsLoading = false;
+		}
 	};
 	
 	const toggleLoginPasswordVisibility = () => {
@@ -167,6 +212,8 @@
 
 <svelte:window onkeydown={forgotPasswordHandleKeydown} />
 
+<ToastContainer />
+
 <div class="min-h-screen flex items-center justify-center p-4" style="background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);">
 	<LoginBackground />
 	
@@ -178,6 +225,8 @@
 				bind:loginUsername
 				bind:loginPassword
 				bind:loginShowPassword
+				isLoading={loginIsLoading}
+				error={loginError}
 				onSubmit={handleLoginSubmit}
 				onTogglePassword={toggleLoginPasswordVisibility}
 				onForgotPassword={openForgotPasswordModal}

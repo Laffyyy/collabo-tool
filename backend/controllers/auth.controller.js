@@ -1,21 +1,138 @@
 const authService = require('../services/auth.service');
+const SessionModel = require('../model/session.model');
+const { getPool } = require('../config/db');
+const GlobalSettingsService = require('../services/global-settings.service');
 
+
+// Initialize SessionModel with database pool
+const pool = getPool();
+const sessionModel = new SessionModel(getPool());
+
+/**
+ * Login controller - handles user authentication requests
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
 async function login(req, res, next) {
   try {
     const { username, password } = req.body;
-    const result = await authService.login({ username, password });
-    res.status(200).json({ ok: true, ...result });
+    
+    // Get IP and user agent for session tracking
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    
+    const result = await authService.login({ 
+      username, 
+      password, 
+      ipAddress, 
+      userAgent 
+    });
+    
+    // For the initial integration, we'll return a simple response
+    // that the frontend can use to show an alert
+    res.status(200).json({ 
+      ok: true,
+      exists: result.exists, 
+      message: result.message,
+      step: result.step,
+      userId: result.userId,
+      email: result.email,
+      username: result.username,
+      sessionTimeout: result.sessionTimeout,
+      sessionExpiresAt: result.sessionExpiresAt,
+      otpExpiresAt: result.otpExpiresAt
+    });
   } catch (err) {
     next(err);
   }
 }
 
+/**
+ * OTP verification controller
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
 async function verifyOtp(req, res, next) {
   try {
-    const { username, otp } = req.body;
-    const result = await authService.verifyOtp({ username, otp });
-    res.status(200).json({ ok: true, ...result });
+    console.log('OTP verification request body:', req.body);
+    const { userId, otp } = req.body;
+    console.log(`Extracted userId: ${userId}, otp: ${otp}`);
+    
+    // Return early if userId is missing
+    if (!userId) {
+      return res.status(400).json({
+        ok: false,
+        message: 'User ID is required for OTP verification'
+      });
+    }
+    
+    // Get IP and user agent for the session
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    
+    const result = await authService.verifyOtp({ userId, otp, ipAddress, userAgent });
+    
+    // Set cookies for authentication
+    const cookieOptions = {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    };
+    
+    // Set JWT token in cookie
+    res.cookie('token', result.token, cookieOptions);
+    
+    // Set session token in cookie
+    res.cookie('session', result.sessionToken, {
+      ...cookieOptions,
+      maxAge: result.expiresAt - Date.now() // Use the exact expiry time
+    });
+    
+    res.status(200).json({
+      ok: true,
+      user: {
+        id: result.user.id,
+        name: `${result.user.firstName} ${result.user.lastName}`,
+        email: result.user.email,
+        role: result.user.role,
+        username: result.user.username,
+        ouId: result.user.ouId
+      },
+      token: result.token,
+      sessionToken: result.sessionToken,
+      message: 'Authentication successful'
+    });
   } catch (err) {
+    console.error('Error in verifyOtp controller:', err);
+    next(err);
+  }
+}
+
+/**
+ * Resend OTP controller
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function resendOtp(req, res, next) {
+  try {
+    const { username } = req.body;
+    console.log(`Resending OTP for user: ${username}`);
+    
+    const result = await authService.resendOtp({ username });
+    
+    res.status(200).json({
+      ok: true,
+      message: result.message,
+      userId: result.userId,
+      email: result.email,
+      username: result.username
+    });
+  } catch (err) {
+    console.error('Error in resendOtp controller:', err);
     next(err);
   }
 }
@@ -82,14 +199,143 @@ async function answerSecurityQuestions(req, res, next) {
   }
 }
 
+/**
+ * Logout controller - invalidates the user's session
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function logout(req, res, next) {
+  try {
+    const { user, session } = req;
+    
+    console.log(`[Auth Controller] Logout request received for user: ${user?.id || 'unknown'}`);
+    console.log(`[Auth Controller] Session details: ${JSON.stringify({
+      sessionId: session?.id,
+      isActive: session?.isActive,
+      expiresAt: session?.expiresAt
+    })}`);
+    
+    if (session) {
+      // Invalidate the session
+      await sessionModel.invalidate(session.id);
+      console.log(`[Auth Controller] Session invalidated successfully: ${session.id}`);
+    } else {
+      console.log('[Auth Controller] No active session found to invalidate');
+    }
+    
+    // Clear cookies
+    res.clearCookie('token');
+    res.clearCookie('session');
+    console.log('[Auth Controller] Authentication cookies cleared');
+    
+    res.status(200).json({ 
+      ok: true, 
+      message: 'Logged out successfully' 
+    });
+  } catch (err) {
+    console.error('[Auth Controller] Error during logout:', err);
+    // Even if there's an error, try to clear cookies
+    res.clearCookie('token');
+    res.clearCookie('session');
+    next(err);
+  }
+}
+
+/**
+ * Get session info including expiry time and session timeout configuration
+ */
+async function getSessionInfo(req, res, next) {
+  try {
+    const { session } = req;
+    
+    // Get session timeout from global settings
+    let sessionTimeoutMinutes = 480; // Default 8 hours
+    try {
+      const globalSettings = await GlobalSettingsService.getGeneralSettings();
+      if (globalSettings) {
+        const settings = typeof globalSettings === 'string' 
+          ? JSON.parse(globalSettings) 
+          : globalSettings;
+        
+        if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+          sessionTimeoutMinutes = settings.sessionTimeout;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load session timeout from global settings:', error);
+      // Continue with default value
+    }
+    
+    res.status(200).json({
+      ok: true,
+      data: {
+        expiresAt: session.expiresAt,
+        timeRemaining: new Date(session.expiresAt) - new Date(),
+        isActive: session.isActive,
+        sessionTimeout: sessionTimeoutMinutes
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Refresh session token with dynamic session timeout
+ */
+async function refreshSession(req, res, next) {
+  try {
+    const { session } = req;
+    
+    // Get session timeout from global settings
+    let sessionTimeoutMinutes = 480; // Default 8 hours
+    try {
+      const globalSettings = await GlobalSettingsService.getGeneralSettings();
+      if (globalSettings) {
+        const settings = typeof globalSettings === 'string' 
+          ? JSON.parse(globalSettings) 
+          : globalSettings;
+        
+        if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+          sessionTimeoutMinutes = settings.sessionTimeout;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load session timeout from global settings:', error);
+      // Continue with default value
+    }
+    
+    // Extend session by configured timeout from now
+    const newExpiresAt = new Date(Date.now() + sessionTimeoutMinutes * 60 * 1000);
+    
+    const updatedSession = await sessionModel.updateExpiry(session.id, newExpiresAt);
+    
+    res.status(200).json({
+      ok: true,
+      data: {
+        expiresAt: updatedSession.expiresAt,
+        timeRemaining: new Date(updatedSession.expiresAt) - new Date(),
+        sessionTimeout: sessionTimeoutMinutes
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   verifyOtp,
+  resendOtp,
   firstTimeSetup,
   changePassword,
   setSecurityQuestions,
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  logout,
+  getSessionInfo,
+  refreshSession
 };
 

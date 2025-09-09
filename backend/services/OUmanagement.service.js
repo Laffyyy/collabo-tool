@@ -1,6 +1,6 @@
 // OU Management Service
 // This service handles all OU (Organizational Unit) related operations
-const OUmodel = require('../model/ou.model');
+const OUmodel = require('../model/ouManagement.model');
 const { mergeSettings, transformSettingsToJSSettings, transformOUSettingsToSettings } = require('../utils/settingsTransformer');
 const ouModel = new OUmodel();
 
