@@ -7,6 +7,8 @@
 		loginUsername: string;
 		loginPassword: string;
 		loginShowPassword: boolean;
+		 isLoading: boolean;
+        error?: string;
 		onSubmit: (event: Event) => void;
 		onTogglePassword: () => void;
 		onForgotPassword: () => void;
@@ -16,6 +18,8 @@
 		loginUsername = $bindable(),
 		loginPassword = $bindable(),
 		loginShowPassword = $bindable(),
+		isLoading = false,
+		error = '',
 		onSubmit,
 		onTogglePassword,
 		onForgotPassword
