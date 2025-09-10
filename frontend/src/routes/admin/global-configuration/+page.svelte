@@ -214,7 +214,7 @@
             const reloadSuccess = await sessionManager.reloadSessionConfig();
             
             if (reloadSuccess) {
-              toastStore.success(`Global configuration saved! Session timeout updated to ${newSessionTimeout} minutes and applied immediately.`);
+              toastStore.success(`Global configuration saved.`);
             } else {
               toastStore.success('Global configuration saved! Session timeout will apply on next login.');
             }
