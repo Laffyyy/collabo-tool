@@ -429,6 +429,56 @@ class SessionManager {
       // Silent operation - keep defaults if config loading fails
     }
   }
+
+  /**
+   * Reload session configuration from database immediately
+   * Used when admin changes global settings
+   */
+  async reloadSessionConfig() {
+    console.log('[Session Manager] 🔄 Reloading session configuration due to admin changes...');
+    
+    try {
+      const response = await apiClient.get<{ success: boolean; data: string }>(
+        '/api/v1/global-settings/general'
+      );
+      
+      if (response.success && response.data) {
+        const settings: GlobalSettings = typeof response.data === 'string' 
+          ? JSON.parse(response.data) 
+          : response.data;
+        
+        const oldTimeout = this.sessionTimeoutMinutes;
+        
+        if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+          this.sessionTimeoutMinutes = settings.sessionTimeout;
+          
+          console.log(`[Session Manager] ✅ Session timeout updated: ${oldTimeout} → ${this.sessionTimeoutMinutes} minutes`);
+          console.log(`[Session Manager] ✅ Idle timeout updated to: ${Math.floor(this.IDLE_TIMEOUT / 60000)} minutes`);
+          console.log(`[Session Manager] ✅ Idle warning at: ${Math.floor(this.IDLE_WARNING_TIME / 60000)} minutes`);
+          
+          // Clear session cache to force fresh check with new timeout
+          localStorage.removeItem('session_cache');
+          this.lastSessionCheck = 0;
+          
+          // Immediately check session with new timeout
+          if (!this.isPaused && this.isUserActive()) {
+            console.log('[Session Manager] 🔍 Performing immediate session check with new configuration...');
+            this.checkSession();
+          }
+          
+          return true;
+        }
+      }
+      
+      console.log('[Session Manager] ⚠️ No valid session timeout found in configuration');
+      return false;
+    } catch (error) {
+      console.error('[Session Manager] ❌ Failed to reload session configuration:', error);
+      return false;
+    }
+  }
+
+
 }
 
 export const sessionManager = new SessionManager();
