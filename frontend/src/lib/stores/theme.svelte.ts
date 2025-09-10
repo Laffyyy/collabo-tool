@@ -1,37 +1,80 @@
 import { browser } from '$app/environment';
+import { writable } from 'svelte/store';
 
 /**
- * Theme store for managing application settings (dark mode removed for stability)
+ * Theme store for managing application theme settings
  */
 class ThemeStore {
-	// Simple theme store without dark mode functionality
+	currentTheme = $state<'light' | 'dark' | 'system'>('system');
+	
 	constructor() {
 		if (browser) {
-			// Remove any existing dark mode classes
+			this.initializeTheme();
+			this.setupSystemThemeListener();
+		}
+	}
+
+	private initializeTheme() {
+		// Check localStorage for saved theme preference
+		const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
+		if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
+			this.currentTheme = savedTheme;
+		} else {
+			this.currentTheme = 'system';
+		}
+		this.applyTheme();
+	}
+
+	private setupSystemThemeListener() {
+		if (!browser || !window.matchMedia) return;
+		
+		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+		mediaQuery.addEventListener('change', () => {
+			if (this.currentTheme === 'system') {
+				this.applyTheme();
+			}
+		});
+	}
+
+	private getSystemTheme(): 'light' | 'dark' {
+		if (browser && window.matchMedia) {
+			return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+		}
+		return 'light';
+	}
+
+	private applyTheme() {
+		if (!browser) return;
+
+		const effectiveTheme = this.currentTheme === 'system' ? this.getSystemTheme() : this.currentTheme;
+		
+		if (effectiveTheme === 'dark') {
+			document.documentElement.classList.add('dark');
+		} else {
 			document.documentElement.classList.remove('dark');
-			localStorage.removeItem('theme');
 		}
 	}
 
 	get isDarkMode() {
-		return false; // Always light mode
+		const effectiveTheme = this.currentTheme === 'system' ? this.getSystemTheme() : this.currentTheme;
+		return effectiveTheme === 'dark';
 	}
 
 	get theme() {
-		return 'light';
+		return this.currentTheme;
 	}
 
-	get currentTheme() {
-		return 'light' as const;
+	setTheme(theme: 'light' | 'dark' | 'system') {
+		this.currentTheme = theme;
+		if (browser) {
+			localStorage.setItem('theme', theme);
+			this.applyTheme();
+		}
 	}
 
-	// Disabled methods for compatibility
 	toggle() {
-		// No-op
-	}
-
-	setTheme(theme: 'light' | 'dark' | 'auto') {
-		// No-op
+		const newTheme = this.isDarkMode ? 'light' : 'dark';
+		this.setTheme(newTheme);
 	}
 }
 
