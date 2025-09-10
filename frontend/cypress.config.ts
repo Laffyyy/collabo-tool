@@ -16,8 +16,8 @@ export default defineConfig({
             ssl: {
               rejectUnauthorized: false // Required for Supabase connections
             },
-            connectionTimeoutMillis: 5000, // 5 second timeout
-            query_timeout: 10000 // 10 second timeout
+            connectionTimeoutMillis: 10000, // 10 second timeout
+            query_timeout: 20000 // 10 second timeout
           });
 
           return client.connect()
