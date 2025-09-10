@@ -7,6 +7,9 @@
 	let broadcastNotifications = $state(true);
 	let chatNotifications = $state(true);
 
+	// Theme settings
+	let selectedTheme = $state('system'); // 'system', 'light', 'dark'
+
 	// Privacy settings
 	let onlineStatus = $state(true);
 	let readReceipts = $state(true);
@@ -55,13 +58,89 @@
 						<Palette class="w-5 h-5" />
 						<span>Appearance</span>
 					</h2>
-					<p class="text-sm text-gray-600 mt-1">Application appearance is set to light mode for stability</p>
+					<p class="text-sm text-gray-600 mt-1">Choose your preferred theme for the application</p>
 				</div>
 				<div class="p-6">
-					<div class="flex items-center justify-center py-8 text-gray-500">
-						<div class="text-center">
-							<Palette class="w-12 h-12 mx-auto mb-4 text-gray-400" />
-							<p class="text-sm">Light mode is enabled for optimal performance</p>
+					<div class="space-y-4">
+						<div class="text-sm font-medium text-gray-700 mb-3">Theme</div>
+						<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+							<!-- System Default -->
+							<label class="relative cursor-pointer">
+								<input 
+									type="radio" 
+									name="theme" 
+									value="system" 
+									bind:group={selectedTheme} 
+									class="sr-only peer" 
+								/>
+								<div class="p-4 border-2 border-gray-200 rounded-lg transition-all peer-checked:border-[#01c0a4] peer-checked:bg-[#01c0a4]/5 hover:border-gray-300">
+									<div class="flex items-center space-x-3">
+										<div class="flex-shrink-0">
+											<div class="w-6 h-6 rounded-full border-2 transition-all {selectedTheme === 'system' ? 'border-[#01c0a4] bg-[#01c0a4]' : 'border-gray-300 bg-white'} flex items-center justify-center">
+												{#if selectedTheme === 'system'}
+													<div class="w-3 h-3 bg-white rounded-full"></div>
+												{/if}
+											</div>
+										</div>
+										<div>
+											<div class="font-medium text-gray-900">System Default</div>
+											<div class="text-sm text-gray-500">Follow system preferences</div>
+										</div>
+									</div>
+								</div>
+							</label>
+
+							<!-- Light Mode -->
+							<label class="relative cursor-pointer">
+								<input 
+									type="radio" 
+									name="theme" 
+									value="light" 
+									bind:group={selectedTheme} 
+									class="sr-only peer" 
+								/>
+								<div class="p-4 border-2 border-gray-200 rounded-lg transition-all peer-checked:border-[#01c0a4] peer-checked:bg-[#01c0a4]/5 hover:border-gray-300">
+									<div class="flex items-center space-x-3">
+										<div class="flex-shrink-0">
+											<div class="w-6 h-6 rounded-full border-2 transition-all {selectedTheme === 'light' ? 'border-[#01c0a4] bg-[#01c0a4]' : 'border-gray-300 bg-white'} flex items-center justify-center">
+												{#if selectedTheme === 'light'}
+													<div class="w-3 h-3 bg-white rounded-full"></div>
+												{/if}
+											</div>
+										</div>
+										<div>
+											<div class="font-medium text-gray-900">Light Mode</div>
+											<div class="text-sm text-gray-500">Clean and bright interface</div>
+										</div>
+									</div>
+								</div>
+							</label>
+
+							<!-- Dark Mode -->
+							<label class="relative cursor-pointer">
+								<input 
+									type="radio" 
+									name="theme" 
+									value="dark" 
+									bind:group={selectedTheme} 
+									class="sr-only peer" 
+								/>
+								<div class="p-4 border-2 border-gray-200 rounded-lg transition-all peer-checked:border-[#01c0a4] peer-checked:bg-[#01c0a4]/5 hover:border-gray-300">
+									<div class="flex items-center space-x-3">
+										<div class="flex-shrink-0">
+											<div class="w-6 h-6 rounded-full border-2 transition-all {selectedTheme === 'dark' ? 'border-[#01c0a4] bg-[#01c0a4]' : 'border-gray-300 bg-white'} flex items-center justify-center">
+												{#if selectedTheme === 'dark'}
+													<div class="w-3 h-3 bg-white rounded-full"></div>
+												{/if}
+											</div>
+										</div>
+										<div>
+											<div class="font-medium text-gray-900">Dark Mode</div>
+											<div class="text-sm text-gray-500">Easy on the eyes</div>
+										</div>
+									</div>
+								</div>
+							</label>
 						</div>
 					</div>
 				</div>
