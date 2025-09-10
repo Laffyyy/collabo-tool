@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	//import {goto} from '$app/navigation';
+	import { onMount, onDestroy } from 'svelte';
+	import { getConversations, getAllUsers, createConversation, findOrCreateDirectConversation, checkExistingDirectConversation, addMemberToConversation, getMessagesForConversation, sendMessageToApi } from '$lib/services/chatServices';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
@@ -97,6 +99,7 @@
 		type: 'direct' | 'group';
 		lastMessage: string;
 		lastMessageTime: Date | string;
+		updatedAt?: Date | string; // Add updatedAt property
 		unreadCount: number;
 		avatar: string;
 		isOnline: boolean;
@@ -111,6 +114,7 @@
 			links: Message[];
 		};
 		isTemporary?: boolean; // For conversations that haven't been saved yet
+		targetUser?: User; // Store target user for temporary conversations
 		settings?: {
 			allowEmojis: boolean;
 			allowAttachments: boolean;
@@ -122,6 +126,7 @@
 
 	// State management
 	let conversations = $state<Conversation[]>([]);
+	let directConversations = $state<Conversation[]>([]);
 	let groupChats = $state<Conversation[]>([]);
 	let currentConversation = $state<Conversation | null>(null);
 	let showGroupSettings = $state(false);
@@ -132,6 +137,7 @@
 	let showPinnedPanel = $state(false);
 	let showForwardModal = $state(false);
 	let currentMembersTab = $state<'members' | 'files' | 'media' | 'links'>('members');
+	let messagePollingInterval: ReturnType<typeof setInterval> | null = null;
 	
 	// Reaction modal state
 	let showReactionModal = $state(false);
@@ -179,7 +185,7 @@
 	// Undo functionality for forwards
 	let recentForwards = $state<{id: string, messageId: string, conversationIds: string[], timestamp: Date}[]>([]);
 	let showUndoToast = $state(false);
-	let undoToastTimeout: number | null = null;
+	let undoToastTimeout: ReturnType<typeof setTimeout> | null = null;
 	let undoAction = $state<(() => void) | null>(null);
 	
 	// Confirmation modal state
@@ -195,275 +201,111 @@
 	let editingGroupName = $state('');
 
 	// Sample data
-	const availableUsers: User[] = [
-		{ 
-			id: '2', 
-			name: 'John Doe', 
-			firstName: 'John',
-			lastName: 'Doe',
-			avatar: '/placeholder.svg',
-			department: 'Engineering',
-			role: 'Manager',
-			organizationalUnit: 'Product Development',
-			email: 'john.doe@company.com',
-			status: 'online',
-			lastLogin: '2024-01-15 14:30',
-			managedTeams: ['Frontend Team', 'Backend Team'],
-			supervisors: ['Sarah Wilson (Director)'],
-			reportingTo: 'Sarah Wilson'
-		},
-		{ 
-			id: '3', 
-			name: 'Alice Johnson', 
-			firstName: 'Alice',
-			lastName: 'Johnson',
-			avatar: '/placeholder.svg',
-			department: 'Marketing',
-			role: 'Supervisor',
-			organizationalUnit: 'Digital Marketing',
-			email: 'alice.johnson@company.com',
-			status: 'online',
-			lastLogin: '2024-01-15 13:45',
-			managedTeams: ['Content Team'],
-			supervisors: ['Mike Chen (Manager)'],
-			reportingTo: 'Mike Chen'
-		},
-		{ 
-			id: '4', 
-			name: 'Bob Smith', 
-			firstName: 'Bob',
-			lastName: 'Smith',
-			avatar: '/placeholder.svg',
-			department: 'Sales',
-			role: 'Frontline',
-			organizationalUnit: 'Regional Sales',
-			email: 'bob.smith@company.com',
-			status: 'away',
-			lastLogin: '2024-01-15 12:20',
-			managedTeams: [],
-			supervisors: ['Lisa Brown (Supervisor)'],
-			reportingTo: 'Lisa Brown'
-		},
-		{ 
-			id: '5', 
-			name: 'Carol White', 
-			firstName: 'Carol',
-			lastName: 'White',
-			avatar: '/placeholder.svg',
-			department: 'Support',
-			role: 'Support',
-			organizationalUnit: 'Customer Success',
-			email: 'carol.white@company.com',
-			status: 'online',
-			lastLogin: '2024-01-15 15:10',
-			managedTeams: [],
-			supervisors: ['David Park (Supervisor)'],
-			reportingTo: 'David Park'
-		}
-	];
+	let availableUsers: User[] = [];
 
-	onMount(() => {
-		// Initialize conversations
-		conversations = [
-			{
-				id: '1',
-				name: 'John Doe',
-				department: 'Engineering',
-				role: 'Manager',
-				type: 'direct',
-				lastMessage: 'Hey, how are you doing?',
-				lastMessageTime: '2 min ago',
-				unreadCount: 2,
-				isRead: false,
-				avatar: '/placeholder.svg',
-				isOnline: true,
-				messages: [
-					{
-						id: '1',
-						senderId: '2',
-						senderName: 'John Doe',
-						senderDepartment: 'Engineering',
-						senderRole: 'Manager',
-						content: 'Hey, how are you doing?',
-						timestamp: new Date(Date.now() - 120000),
-						type: 'text',
-						forwardingEnabled: true,
-						reactions: [],
-						seenBy: [
-							{
-								userId: '1',
-								userName: 'You',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 60000)
-							}
-						]
-					}
-				],
-				members: [
-					{ 
-						id: '1', 
-						name: 'You', 
-						firstName: 'Current',
-						lastName: 'User',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'IT',
-						role: 'Manager'
-					},
-					{ 
-						id: '2', 
-						name: 'John Doe', 
-						firstName: 'John',
-						lastName: 'Doe',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'Engineering',
-						role: 'Manager'
-					}
-				],
-				settings: {
-					allowEmojis: true,
-					allowAttachments: true,
-					allowForwarding: true,
-					allowPinning: false,
-					isArchived: false
-				}
-			}
-		];
+let currentUserId = $state<string | null>(null);
+let jwtToken = $state<string | null>(null);
+if (typeof window !== 'undefined') {
+  // If you store the whole user object as JSON:
+  const userStr = localStorage.getItem('auth_user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      currentUserId = user.id || user._id; // adjust property name as needed
+    } catch (e) {
+      currentUserId = null;
+    }
+  }
+}
 
-		groupChats = [
-			{
-				id: '2',
-				name: 'Project Team',
-				type: 'group',
-				lastMessage: 'Alice: The deadline has been moved to next week',
-				lastMessageTime: '1 hour ago',
-				unreadCount: 0,
-				isRead: true,
-				avatar: '/placeholder.svg',
-				isOnline: false,
-				pinnedMessages: [],
-				mediaHistory: {
-					files: [],
-					media: [],
-					links: []
-				},
-				messages: [
-					{
-						id: '1',
-						senderId: '3',
-						senderName: 'Alice Johnson',
-						senderDepartment: 'Marketing',
-						senderRole: 'Supervisor',
-						content: 'The deadline has been moved to next week',
-						timestamp: new Date(Date.now() - 3600000),
-						type: 'text',
-						isPinned: false,
-						pinningEnabled: true,
-						forwardingEnabled: true,
-						reactions: [
-							{ emoji: '👍', users: ['1', '4'], count: 2, timestamp: new Date(Date.now() - 3550000) },
-							{ emoji: '😊', users: ['5'], count: 1, timestamp: new Date(Date.now() - 3540000) }
-						]
-					},
-					{
-						id: '2',
-						senderId: '1',
-						senderName: 'You',
-						senderDepartment: 'IT',
-						senderRole: 'Manager',
-						content: 'Thanks for the update! I\'ll adjust the schedule accordingly.',
-						timestamp: new Date(Date.now() - 3500000),
-						type: 'text',
-						isPinned: false,
-						pinningEnabled: true,
-						forwardingEnabled: true,
-						reactions: [
-							{ emoji: '👍', users: ['3', '4'], count: 2, timestamp: new Date(Date.now() - 3200000) }
-						],
-						seenBy: [
-							{
-								userId: '3',
-								userName: 'Alice Johnson',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 3400000)
-							},
-							{
-								userId: '4',
-								userName: 'Bob Smith',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 3300000)
-							},
-							{
-								userId: '5',
-								userName: 'Carol White',
-								userAvatar: '/placeholder.svg',
-								seenAt: new Date(Date.now() - 3200000)
-							}
-						]
-					}
-				],
-				members: [
-					{ 
-						id: '1', 
-						name: 'You', 
-						firstName: 'Current',
-						lastName: 'User',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'IT',
-						role: 'Manager'
-					},
-					{ 
-						id: '3', 
-						name: 'Alice Johnson', 
-						firstName: 'Alice',
-						lastName: 'Johnson',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: false,
-						department: 'Marketing',
-						role: 'Supervisor'
-					},
-					{ 
-						id: '4', 
-						name: 'Bob Smith', 
-						firstName: 'Bob',
-						lastName: 'Smith',
-						avatar: '/placeholder.svg', 
-						isOnline: false, 
-						isMuted: false,
-						department: 'Sales',
-						role: 'Frontline'
-					},
-					{ 
-						id: '5', 
-						name: 'Carol White', 
-						firstName: 'Carol',
-						lastName: 'White',
-						avatar: '/placeholder.svg', 
-						isOnline: true, 
-						isMuted: true,
-						department: 'Support',
-						role: 'Support'
-					}
-				],
-				settings: {
-					allowEmojis: true,
-					allowAttachments: true,
-					allowForwarding: false,
-					allowPinning: true,
-					isArchived: false
-				}
-			}
-		];
+onMount(async () => {
+// Load user authentication data
+function loadUserIdFromAuth() {
+  if (typeof window !== 'undefined') {
+    // Try different possible token keys
+    jwtToken = localStorage.getItem('jwt') || 
+               localStorage.getItem('auth_token') || 
+               localStorage.getItem('token');
+    
+    // Try different possible user ID keys
+    currentUserId = localStorage.getItem('auth_userId') || 
+                    localStorage.getItem('userId');
+    
+    // If we have a user object in storage, extract the ID
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr && !currentUserId) {
+      try {
+        const user = JSON.parse(userStr);
+        currentUserId = user.id || user._id || user.userId;
+      } catch (e) {
+        console.error('Failed to parse user object:', e);
+      }
+    }
+    
+    console.log('Auth state:', { 
+      jwtToken: jwtToken ? 'Present' : 'Missing',
+      currentUserId
+    });
+  }
+}
 
-		// Don't auto-select a conversation to prevent layout jumping
-		// currentConversation = groupChats[0];
-	});
+  try {
+    console.log('Loading conversations and users from backend...');
+    loadUserIdFromAuth();
+    
+    conversations = await getConversations();
+    console.log("Raw conversations from backend:", conversations);
+    console.log("Current user ID for filtering:", currentUserId);
+    
+    // Backend already filters conversations for the current user via JOIN with tblconversationparticipants
+    // So we can use all returned conversations directly
+    const userConversations = conversations;
+    
+    console.log("Using backend-filtered conversations:", userConversations);
+    
+    // Separate direct and group conversations
+    directConversations = userConversations
+      .filter((c: any) => c.type === 'direct')
+      .sort((a: any, b: any) => new Date(b.lastMessage?.timestamp || b.updatedAt || 0).getTime() - new Date(a.lastMessage?.timestamp || a.updatedAt || 0).getTime());
+    groupChats = userConversations
+      .filter((c: any) => c.type === 'group')
+      .sort((a: any, b: any) => new Date(b.lastMessage?.timestamp || b.updatedAt || 0).getTime() - new Date(a.lastMessage?.timestamp || a.updatedAt || 0).getTime());
+    
+    console.log('Direct conversations:', directConversations);
+    console.log('Group chats:', groupChats);
+    
+    const users = await getAllUsers();
+    
+    // Debug what's actually coming from the server
+    console.log("Raw users from backend:", users);
+    
+    // Map each property explicitly
+ availableUsers = users.filter((u: any) => u.id !== currentUserId)
+  .map((u: any) => {
+    // Log each user to see exact structure
+    console.log("Processing user:", u);
+    
+    return {
+      id: u.did || u.uid || u.id || u._id, 
+      name: u.firstname || u.firstname || 
+            (u.dfirstname && u.dlastname ? `${u.dfirstname} ${u.dlastname}` : null) ||
+            (u.firstname && u.lastname ? `${u.firstname} ${u.lastname}` : null) ||
+            u.name || 
+            'Unknown User',
+      firstName: u.dfirstname || u.firstname || u.firstName,
+      lastName: u.dlastname || u.lastname || u.lastName,
+      username: u.dusername || u.username,
+      avatar: u.dprofilephotourl || u.avatar || u.profilePhoto || u.image || '/placeholder.svg',
+      department: u.ddepartment || u.department || u.org_unit || 'Department',
+      role: u.drole || u.role || 'Role'
+    };
+  });
+      
+    console.log('Transformed users:', availableUsers);
+  } catch (e) {
+    console.error('Failed to fetch conversations or users:', e);
+  }
+}); 
 
 	// Available emojis for picker
 	const emojiGroups = {
@@ -476,57 +318,176 @@
 	const quickEmojis = ['👍', '❤️', '😂', '😊', '😮', '😢'];
 
 	// Functions
-	const selectConversation = (conversation: Conversation) => {
-		currentConversation = conversation;
-		// Mark conversation as read
-		conversation.isRead = true;
-		conversation.unreadCount = 0;
-		// Mark all messages as seen by current user
-		markConversationAsSeen(conversation.id);
-	};
 
-	const sendMessage = (attachment?: any) => {
-		if ((!messageInput.trim() && !attachment) || !currentConversation) return;
+	const startMessagePolling = (conversationId: string) => {
+  // Clear any existing polling
+  if (messagePollingInterval) {
+    clearInterval(messagePollingInterval);
+  }
+  
+  messagePollingInterval = setInterval(async () => {
+    if (!currentConversation || currentConversation.id !== conversationId) {
+      if (messagePollingInterval) clearInterval(messagePollingInterval);
+      return;
+    }
+    
+    try {
+      const messages = await getMessagesForConversation(conversationId);
+      if (messages.length > currentConversation.messages.length) {
+        // Update messages only if there are new ones
+        currentConversation.messages = messages;
+        // Update last message info
+        if (messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          currentConversation.lastMessage = lastMsg.content;
+          currentConversation.lastMessageTime = lastMsg.timestamp;
+          
+          // Also update the conversation in the sidebar lists
+          const updateConversationInList = (list: Conversation[]) => {
+            const index = list.findIndex(c => c.id === conversationId);
+            if (index !== -1) {
+              list[index].lastMessage = lastMsg.content;
+              list[index].lastMessageTime = lastMsg.timestamp;
+            }
+          };
+          
+          updateConversationInList(directConversations);
+          updateConversationInList(groupChats);
+        }
+      }
+    } catch (error) {
+      console.error('Error polling messages:', error);
+    }
+  }, 5000); // Poll every 5 seconds
+};
+const selectConversation = async (conversation: Conversation) => {
+  currentConversation = conversation;
+  conversation.isRead = true;
+  conversation.unreadCount = 0;
+  
+  console.log('Selected conversation:', conversation);
+  console.log('Conversation members:', conversation.members);
+  
+  try {
+    const messages = await getMessagesForConversation(conversation.id);
+    currentConversation.messages = messages;
+    markConversationAsSeen(conversation.id);
+    
+    // Start polling for new messages
+    startMessagePolling(conversation.id);
+  } catch (error) {
+    console.error('Failed to load messages:', error);
+  }
+};
 
-		// If this is a temporary conversation, save it to the conversations list
-		if (currentConversation.isTemporary) {
-			// Remove the temporary flag and generate a proper ID
-			const savedConversation = {
-				...currentConversation,
-				id: Date.now().toString(),
-				isTemporary: false
-			};
-			
-			conversations = [...conversations, savedConversation];
-			currentConversation = savedConversation;
-		}
+// Clean up polling on component unmount
+onDestroy(() => {
+  if (messagePollingInterval) {
+    clearInterval(messagePollingInterval);
+  }
+});
 
-		const newMessage: Message = {
-			id: Date.now().toString(),
-			senderId: '1',
-			senderName: 'You',
-			senderDepartment: 'IT',
-			senderRole: 'Manager',
-			content: attachment ? `Shared ${attachment.name}` : messageInput,
-			timestamp: new Date(),
-			type: 'text',
-			replyTo: replyingTo || undefined,
-			reactions: [],
-			hasAttachment: !!attachment,
-			attachment: attachment,
-			forwardingEnabled: true,
-			pinningEnabled: true
-		};
+	const sendMessage = async (attachment?: any) => {
+  if ((!messageInput.trim() && !attachment) || !currentConversation) return;
 
-		currentConversation.messages.push(newMessage);
-		currentConversation.lastMessage = attachment ? `Shared ${attachment.name}` : messageInput;
-		currentConversation.lastMessageTime = new Date();
-		
-		if (!attachment) {
-			messageInput = '';
-		}
-		replyingTo = null;
-	};
+  try {
+    // Get the actual message content
+    const msgContent = attachment && attachment.name ? `Shared ${attachment.name}` : messageInput.trim();
+    
+    // Check if this is a temporary conversation that needs to be created first
+    if (currentConversation.isTemporary && currentConversation.targetUser) {
+      console.log('Creating real conversation for temporary conversation...');
+      
+      // Create the actual conversation in the backend
+      const result = await findOrCreateDirectConversation({
+        targetUserId: currentConversation.targetUser.id,
+        targetUserName: currentConversation.targetUser.name
+      });
+      
+      const backendConversation = result.conversation;
+      
+      // Update the current conversation with real backend data
+      currentConversation.id = backendConversation.did;
+      currentConversation.isTemporary = false;
+      
+      // Update in the directConversations array as well
+      const conversationIndex = directConversations.findIndex(c => c.id.startsWith('temp-'));
+      if (conversationIndex !== -1) {
+        directConversations[conversationIndex] = { ...currentConversation };
+      }
+      
+      console.log('Conversation created with ID:', backendConversation.did);
+    }
+    
+    // Now send the message using the real conversation ID
+    const sentMsg = await sendMessageToApi(currentConversation.id, msgContent);
+    
+    console.log('Message sent:', sentMsg);
+
+    // Create UI message object
+    const newMessage: Message = {
+      id: sentMsg.did || Date.now().toString(),
+      senderId: currentUserId || '1', // Use real user ID if available
+      senderName: 'You',
+      senderDepartment: 'Your Department',
+      senderRole: 'Your Role',
+      content: msgContent,
+      timestamp: new Date(),
+      type: 'text',
+      replyTo: replyingTo || undefined,
+      reactions: [],
+      hasAttachment: !!attachment,
+      attachment: attachment,
+      forwardingEnabled: true,
+      pinningEnabled: true
+    };
+
+    // Update UI
+    currentConversation.messages.push(newMessage);
+    currentConversation.lastMessage = msgContent;
+    currentConversation.lastMessageTime = new Date();
+    
+    // Also update the conversation in the sidebar lists
+    const updateConversationInList = (list: Conversation[]) => {
+      const index = list.findIndex(c => c.id === currentConversation?.id);
+      if (index !== -1) {
+        list[index].lastMessage = msgContent;
+        list[index].lastMessageTime = new Date();
+      }
+    };
+    
+    updateConversationInList(directConversations);
+    updateConversationInList(groupChats);
+    
+    // Clear input
+    if (!attachment) {
+      messageInput = '';
+    }
+    replyingTo = null;
+    
+    // Fetch updated messages to ensure UI is in sync with backend
+    const updatedMessages = await getMessagesForConversation(currentConversation.id);
+    currentConversation.messages = updatedMessages;
+  } catch (error) {
+    console.error('Error sending message:', error);
+    alert('Failed to send message. Please try again.');
+  }
+};
+
+const markConversationAsSeen = (conversationId?: string) => {
+  const targetConversation = conversationId 
+    ? conversations.find(c => c.id === conversationId)
+    : currentConversation;
+    
+  if (!targetConversation) return;
+  
+  // Mark all messages from other users as seen
+  targetConversation.messages.forEach(message => {
+    if (message.senderId !== currentUserId) {
+      markMessageAsSeen(message.id, currentUserId || '1');
+    }
+  });
+};
 
 	const handleKeyPress = (event: KeyboardEvent) => {
 		if (event.key === 'Enter' && !event.shiftKey) {
@@ -576,19 +537,19 @@
 
 		const existingReaction = message.reactions.find(r => r.emoji === emoji);
 		if (existingReaction) {
-			if (existingReaction.users.includes('1')) {
-				existingReaction.users = existingReaction.users.filter(u => u !== '1');
+			if (existingReaction.users.includes(currentUserId || '1')) {
+				existingReaction.users = existingReaction.users.filter(u => u !== (currentUserId || '1'));
 				existingReaction.count--;
 				if (existingReaction.count === 0) {
 					message.reactions = message.reactions.filter(r => r.emoji !== emoji);
 				}
 			} else {
-				existingReaction.users.push('1');
+				existingReaction.users.push(currentUserId || '1');
 				existingReaction.count++;
 				existingReaction.timestamp = new Date();
 			}
 		} else {
-			message.reactions.push({ emoji, users: ['1'], count: 1, timestamp: new Date() });
+			message.reactions.push({ emoji, users: [currentUserId || '1'], count: 1, timestamp: new Date() });
 		}
 	};
 
@@ -707,7 +668,7 @@
 	};
 
 	const startEditMessage = (message: Message) => {
-		if (message.senderId === '1') {
+		if (message.senderId === currentUserId) {
 			editingMessage = message;
 			editingContent = message.content;
 			messageInput = message.content;
@@ -788,21 +749,6 @@
 		}
 	};
 
-	const markConversationAsSeen = (conversationId?: string) => {
-		const targetConversation = conversationId 
-			? conversations.find(c => c.id === conversationId)
-			: currentConversation;
-			
-		if (!targetConversation) return;
-		
-		// Mark all messages from other users as seen
-		targetConversation.messages.forEach(message => {
-			if (message.senderId !== '1') {
-				markMessageAsSeen(message.id, '1');
-			}
-		});
-	};
-
 	const saveEditedMessage = () => {
 		if (!editingMessage || !messageInput.trim()) return;
 		
@@ -875,47 +821,95 @@
 		}
 	};
 
-	const createGroup = () => {
-		if (!groupName.trim() || selectedUsers.length === 0) return;
 
-		const newGroup: Conversation = {
-			id: Date.now().toString(),
-			name: groupName,
-			type: 'group',
-			lastMessage: 'Group created',
-			lastMessageTime: 'now',
-			unreadCount: 0,
-			avatar: '/placeholder.svg?height=40&width=40',
-			isOnline: false,
-			messages: [],
-			members: [
-				{ 
-					id: '1', 
-					name: 'You', 
-					firstName: 'Current',
-					lastName: 'User',
-					avatar: '/placeholder.svg?height=32&width=32', 
-					isOnline: true, 
-					isMuted: false,
-					department: 'IT',
-					role: 'Manager'
-				},
-				...selectedUsers.map(user => ({ ...user, isOnline: false, isMuted: false } as User))
-			],
-			settings: {
-				allowEmojis: false,
-				allowAttachments: false,
-				allowForwarding: false,
-				allowPinning: false,
-				isArchived: false
-			}
-		};
+const createGroup = async () => {
+  console.log('Creating group with:', { groupName, selectedUsers, currentUserId });
+  
+  if (!groupName.trim() || selectedUsers.length === 0 || !currentUserId) {
+    console.error('Missing required fields:', { 
+      hasName: !!groupName.trim(), 
+      hasUsers: selectedUsers.length > 0, 
+      hasUserId: !!currentUserId 
+    });
+    return;
+  }
 
-		groupChats = [...groupChats, newGroup];
-		showCreateGroup = false;
-		groupName = '';
-		selectedUsers = [];
-	};
+  try {
+    // First create the conversation in the backend
+    const newGroup = await createConversation({
+      dname: groupName,
+      dtype: 'group',
+      dcreatedBy: currentUserId
+    });
+    
+    console.log("New group created:", newGroup);
+    
+    // Now add each member to the conversation in the backend
+  for (const user of selectedUsers) {
+  try {
+    console.log('Adding member:', user);
+    await addMemberToConversation({
+      conversationId: newGroup.did || newGroup.id,
+      userId: user.id
+    });
+  } catch (memberErr) {
+    console.error(`Failed to add member ${user.name}:`, memberErr);
+  }
+}
+    
+    // Now enhance with UI data for display
+    const enhancedGroup = {
+      ...newGroup,
+      id: newGroup.did || newGroup.id,
+      name: newGroup.dname || groupName,
+      type: 'group',
+      lastMessage: 'Group created',
+      lastMessageTime: new Date(),
+      unreadCount: 0,
+      isRead: true,
+      avatar: '/placeholder.svg',
+      isOnline: false,
+      messages: [],
+      members: [...selectedUsers, { 
+        id: currentUserId, 
+        name: 'You', 
+        avatar: '/placeholder.svg', 
+        department: 'My Dept', 
+        role: 'My Role' 
+      }]
+    };
+    
+    // Update frontend state
+    conversations = [...conversations, enhancedGroup];
+    // Filter conversations to only show those where current user is a participant
+    const userConversations = conversations.filter((c: any) => {
+      if (c.type === 'direct') {
+        return c.members?.some((member: any) => member.id === currentUserId) ||
+               c.participants?.some((participant: any) => participant.userId === currentUserId);
+      }
+      if (c.type === 'group') {
+        return c.members?.some((member: any) => member.id === currentUserId) ||
+               c.participants?.some((participant: any) => participant.userId === currentUserId);
+      }
+      return false;
+    });
+    
+    directConversations = userConversations
+      .filter((c: any) => c.type === 'direct')
+      .sort((a: any, b: any) => new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - new Date(a.lastMessageTime || a.updatedAt || 0).getTime());
+    groupChats = userConversations
+      .filter((c: any) => c.type === 'group')
+      .sort((a: any, b: any) => new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - new Date(a.lastMessageTime || a.updatedAt || 0).getTime());
+    
+    // Close modal and reset form
+    showCreateGroup = false;
+    groupName = '';
+    selectedUsers = [];
+  } catch (e) {
+    console.error('Failed to create group:', e);
+    alert('Failed to create group: ' + (e instanceof Error ? e.message : String(e)));
+  }
+};
 
 	const toggleUser = (user: User) => {
 		const index = selectedUsers.findIndex(u => u.id === user.id);
@@ -928,33 +922,33 @@
 	};
 
 	// Derived state for filtered conversations
-	const filteredConversations = $derived(conversations.filter(conv => 
+	const filteredDirectConversations = $derived(directConversations.filter(conv => 
 		conv.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-		conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase())
+		(conv.lastMessage && conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase()))
 	));
 
 	const filteredGroupChats = $derived(groupChats.filter(conv => 
 		conv.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-		conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase())
+		(conv.lastMessage && conv.lastMessage.toLowerCase().includes(searchInput.toLowerCase()))
 	));
 
 	// Calculate active (online) members for each group chat
 	const getActiveMemberCount = (conversation: Conversation) => {
-		if (conversation.type !== 'group') return 0;
-		return conversation.members.filter(member => member.isOnline).length;
+		if (conversation.type !== 'group' || !conversation.members) return 0;
+		return conversation.members.filter(member => member.isOnline === true).length;
 	};
 
 	// Auto-expand sections when there are search results
-	const shouldShowConversations = $derived(showConversations || (searchInput.trim() && filteredConversations.length > 0));
+	const shouldShowConversations = $derived(showConversations || (searchInput.trim() && filteredDirectConversations.length > 0));
 	const shouldShowGroups = $derived(showGroups || (searchInput.trim() && filteredGroupChats.length > 0));
 
 	// Derived state for filtered users (when searching)
 	const filteredUsers = $derived.by(() => {
 		if (!searchInput.trim()) return [];
 		
-		// Get users that don't already have conversations (including temporary ones)
-		const existingConversationUserIds = [...conversations, ...(currentConversation?.isTemporary ? [currentConversation] : [])]
-			.map(conv => conv.type === 'direct' ? conv.members.find(m => m.id !== '1')?.id : null)
+		// Get users that don't already have direct conversations
+		const existingConversationUserIds = [...directConversations, ...(currentConversation?.isTemporary ? [currentConversation] : [])]
+			.map(conv => conv.type === 'direct' ? conv.members.find(m => m.id !== currentUserId)?.id : null)
 			.filter(Boolean);
 		
 		return availableUsers.filter(user => 
@@ -965,47 +959,140 @@
 		);
 	});
 
-	const startNewConversation = (user: User) => {
-		// Create a temporary conversation that won't be saved until a message is sent
-		const tempConversation: Conversation = {
-			id: 'temp-' + Date.now().toString(),
-			name: user.name,
-			department: user.department,
-			role: user.role,
-			type: 'direct',
-			lastMessage: '',
-			lastMessageTime: 'now',
-			unreadCount: 0,
-			isRead: true,
-			avatar: user.avatar,
-			isOnline: false,
-			messages: [],
-			members: [
-				{ 
-					id: '1', 
-					name: 'You', 
-					firstName: 'Current',
-					lastName: 'User',
-					avatar: '/placeholder.svg?height=32&width=32', 
-					isOnline: true, 
-					isMuted: false,
-					department: 'IT',
-					role: 'Manager'
-				},
-				{ ...user, isOnline: false, isMuted: false }
-			],
-			isTemporary: true, // Mark as temporary
-			settings: {
-				allowEmojis: true,
-				allowAttachments: true,
-				allowForwarding: true,
-				allowPinning: false,
-				isArchived: false
-			}
-		};
+	// Helper function to generate UUID v4
+	function generateUUID() {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+			const r = Math.random() * 16 | 0;
+			const v = c == 'x' ? r : (r & 0x3 | 0x8);
+			return v.toString(16);
+		});
+	}
 
-		currentConversation = tempConversation;
-		searchInput = ''; // Clear search after starting conversation
+	const startNewConversation = async (user: User) => {
+		try {
+			console.log('Starting new conversation with user:', user);
+			console.log('Current user ID:', currentUserId);
+			console.log('Target user ID:', user.id);
+			
+			// Validate that we have proper UUIDs
+			if (!currentUserId) {
+				throw new Error('Current user ID is not available');
+			}
+			if (!user.id) {
+				throw new Error('Target user ID is not available');
+			}
+			
+			// First check if a conversation already exists locally
+			const existingDirectConversation = directConversations.find(conv => 
+				conv.type === 'direct' && 
+				conv.members.some(member => member.id === user.id)
+			);
+			
+			if (existingDirectConversation && !existingDirectConversation.isTemporary) {
+				console.log('Found existing conversation in UI, opening it...');
+				selectConversation(existingDirectConversation);
+				searchInput = ''; // Clear search
+				return;
+			}
+			
+			// Check backend for existing conversations only if no local conversation found
+			const result = await checkExistingDirectConversation({
+				targetUserId: user.id
+			});
+			
+			console.log('Check existing conversation result:', result);
+			
+			if (result.exists && result.conversation) {
+				console.log('Found existing conversation in backend, loading it...');
+				// If conversation already exists, just open it
+				const existingConversation: Conversation = {
+					id: result.conversation.did,
+					name: user.name,
+					department: user.department,
+					role: user.role,
+					type: 'direct',
+					lastMessage: 'No messages yet',
+					lastMessageTime: result.conversation.tcreatedat || new Date(),
+					unreadCount: 0,
+					avatar: user.avatar,
+					isOnline: user.isOnline || false,
+					isRead: true,
+					messages: [],
+					members: [user],
+					isTemporary: false
+				};
+				
+				// Load existing messages
+				const messages = await getMessagesForConversation(result.conversation.did);
+				existingConversation.messages = messages;
+				
+				// Add to directConversations if not already there
+				const existsInList = directConversations.some(c => c.id === existingConversation.id);
+				if (!existsInList) {
+					directConversations = [existingConversation, ...directConversations];
+				}
+				
+				selectConversation(existingConversation);
+				searchInput = ''; // Clear search
+				return;
+			}
+			
+			console.log('No existing conversation found, creating temporary conversation...');
+			
+			// Create a temporary frontend conversation (not saved to backend yet)
+			const tempConversation: Conversation = {
+				id: 'temp-' + generateUUID(), // Temporary ID
+				name: user.name,
+				department: user.department,
+				role: user.role,
+				type: 'direct',
+				lastMessage: '',
+				lastMessageTime: new Date(),
+				unreadCount: 0,
+				isRead: true,
+				avatar: user.avatar,
+				isOnline: user.isOnline || false,
+				messages: [],
+				members: [
+					{ 
+						id: currentUserId, 
+						name: 'You', 
+						firstName: 'Current',
+						lastName: 'User',
+						avatar: '/placeholder.svg?height=32&width=32', 
+						isOnline: true, 
+						isMuted: false,
+						department: 'IT',
+						role: 'Manager'
+					},
+					{ ...user, isOnline: user.status === 'online', isMuted: false }
+				],
+				isTemporary: true, // Mark as temporary
+				targetUser: user, // Store target user for later conversation creation
+				settings: {
+					allowEmojis: true,
+					allowAttachments: true,
+					allowForwarding: true,
+					allowPinning: false,
+					isArchived: false
+				}
+			};
+
+			// Add to conversations list and select it
+			directConversations = [...directConversations, tempConversation];
+			selectConversation(tempConversation);
+			searchInput = ''; // Clear search after starting conversation
+		
+		} catch (error) {
+			console.error('Failed to create conversation:', error);
+			console.error('Error details:', {
+				message: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined,
+				user: user,
+				currentUserId: currentUserId
+			});
+			alert('Failed to start conversation: ' + (error instanceof Error ? error.message : String(error)));
+		}
 	};
 
 	// Pin/Unpin message
@@ -1371,41 +1458,48 @@
 	}
 
 	function groupMessagesByTime(messages: Message[]) {
-		const groups: { 
-			timeLabel: string, 
-			messages: Message[], 
-			timestamp: Date 
-		}[] = [];
-		const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
-		
-		messages.forEach((message, index) => {
-			const messageTime = new Date(message.timestamp);
-			const prevMessage = messages[index - 1];
-			const prevTime = prevMessage ? new Date(prevMessage.timestamp) : null;
-			
-			// Check if we need a new time group
-			const needNewGroup = !prevTime || 
-				(messageTime.getTime() - prevTime.getTime()) > TIME_THRESHOLD ||
-				prevMessage.isDeleted ||
-				message.isDeleted;
-			
-			if (needNewGroup) {
-				// Create new time group
-				const timeLabel = formatTimeLabel(messageTime);
-				groups.push({
-					timeLabel,
-					messages: [message],
-					timestamp: messageTime
-				});
-			} else {
-				// Add to existing group
-				const lastGroup = groups[groups.length - 1];
-				lastGroup.messages.push(message);
-			}
-		});
-		
-		return groups;
-	}
+  const groups: { 
+    timeLabel: string, 
+    messages: Message[], 
+    timestamp: Date,
+    uniqueId?: string 
+  }[] = [];
+  const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
+  
+  // Sort messages by timestamp in descending order (newest first)
+  const sortedMessages = [...messages].sort((a, b) => 
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  
+  sortedMessages.forEach((message, index) => {
+    const messageTime = new Date(message.timestamp);
+    const prevMessage = sortedMessages[index - 1];
+    const prevTime = prevMessage ? new Date(prevMessage.timestamp) : null;
+    
+    // Check if we need a new time group
+    const needNewGroup = !prevTime || 
+      (prevTime.getTime() - messageTime.getTime()) > TIME_THRESHOLD ||
+      prevMessage.isDeleted ||
+      message.isDeleted;
+    
+    if (needNewGroup) {
+      // Create new time group with a unique identifier
+      const timeLabel = formatTimeLabel(messageTime);
+      groups.push({
+        timeLabel,
+        messages: [message],
+        timestamp: messageTime,
+        uniqueId: `${messageTime.getTime()}-${index}` // Add a uniqueId property
+      });
+    } else {
+      // Add to existing group
+      const lastGroup = groups[groups.length - 1];
+      lastGroup.messages.push(message);
+    }
+  });
+  
+  return groups;
+}
 
 	function formatTimeLabel(date: Date): string {
 		const now = new Date();
@@ -1445,10 +1539,16 @@
 	}
 
 	// Derived state for grouped messages
-	const groupedMessages = $derived(() => {
-		if (!currentConversation) return [];
-		return groupMessagesByTime(currentConversation.messages);
-	});
+const groupedMessages = $derived(() => {
+  if (!currentConversation) return [];
+  const groups = groupMessagesByTime(currentConversation.messages);
+  
+  // Add a unique identifier to each group to prevent duplicate keys
+  return groups.map((group, index) => ({
+    ...group,
+    uniqueKey: `${group.timestamp.getTime()}-${index}` // Create a truly unique key
+  }));
+});
 
 	function getMediaHistory(conversation: Conversation | null) {
 		if (!conversation) {
@@ -1599,8 +1699,20 @@
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'}">
-										{getActiveMemberCount(conversation)} active • {conversation.members.length} total
+									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet' && conversation.lastMessage !== 'Group created'}
+											{#if conversation.messages && conversation.messages.length > 0}
+												{#if conversation.messages[conversation.messages.length - 1].senderId === currentUserId}
+													Me: {conversation.lastMessage}
+												{:else}
+													{conversation.messages[conversation.messages.length - 1].senderName}: {conversation.lastMessage}
+												{/if}
+											{:else}
+												{conversation.lastMessage}
+											{/if}
+										{:else}
+											{getActiveMemberCount(conversation)} active • {conversation.members.length} total
+										{/if}
 									</p>
 								</div>
 								
@@ -1614,7 +1726,7 @@
 					{/if}
 				</div>
 
-				<!-- Conversations Section -->
+				<!-- Direct Messages Section -->
 				<div>
 					<button
 						onclick={() => showConversations = !showConversations}
@@ -1626,13 +1738,13 @@
 							{:else}
 								<ChevronRight class="w-4 h-4 text-gray-500" />
 							{/if}
-							<span class="font-medium text-gray-700 text-sm">Conversations</span>
+							<span class="font-medium text-gray-700 text-sm">Direct Messages</span>
 						</div>
-						<span class="text-xs text-gray-500">{conversations.length}</span>
+						<span class="text-xs text-gray-500">{directConversations.length}</span>
 					</button>
 					
 					{#if shouldShowConversations}
-						{#each filteredConversations as conversation (conversation.id)}
+						{#each filteredDirectConversations as conversation (conversation.id)}
 							<button
 								onclick={(e) => {
 									// Check if the click was on the avatar
@@ -1656,26 +1768,17 @@
 								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
-									{#if conversation.type === 'group'}
-										<GroupAvatar 
-											members={conversation.members || []} 
-											groupName={conversation.name}
+									<div 
+										data-avatar-click="true"
+										class="hover:scale-110 transition-transform cursor-pointer"
+									>
+										<ProfileAvatar 
+											user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
 											size="sm" 
-											showOnlineStatus={false}
+											showOnlineStatus={conversation.isOnline}
+											onlineStatus={conversation.isOnline ? 'online' : 'offline'}
 										/>
-									{:else}
-										<div 
-											data-avatar-click="true"
-											class="hover:scale-110 transition-transform cursor-pointer"
-										>
-											<ProfileAvatar 
-												user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
-												size="sm" 
-												showOnlineStatus={conversation.isOnline}
-												onlineStatus={conversation.isOnline ? 'online' : 'offline'}
-											/>
-										</div>
-									{/if}
+									</div>
 								</div>
 								
 								<div class="flex-1 min-w-0">
@@ -1685,7 +1788,22 @@
 										</h3>
 										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'}">{conversation.department} • {conversation.role}</p>
+									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet'}
+											{#if conversation.messages && conversation.messages.length > 0}
+												{@const lastMessage = conversation.messages[conversation.messages.length - 1]}
+												{#if lastMessage?.senderId === currentUserId || lastMessage?.senderId === '1'}
+													Me: {conversation.lastMessage}
+												{:else}
+													{conversation.lastMessage}
+												{/if}
+											{:else}
+												{conversation.lastMessage}
+											{/if}
+										{:else}
+											{conversation.department && conversation.role ? `${conversation.department} • ${conversation.role}` : 'No messages yet'}
+										{/if}
+									</p>
 								</div>
 								
 								{#if conversation.unreadCount > 0}
@@ -1717,7 +1835,8 @@
 									<ProfileAvatar 
 										user={{ name: user.name, profilePhoto: user.avatar }} 
 										size="sm" 
-										showOnlineStatus={false}
+										showOnlineStatus={user.status === 'online'}
+										onlineStatus={user.status || 'offline'}
 									/>
 								</div>
 								
@@ -1728,7 +1847,8 @@
 										</h3>
 										<MessageCircle class="w-3 h-3 text-gray-400" />
 									</div>
-									<p class="text-xs text-gray-500">{user.department} • {user.role}</p>
+									<p class="text-xs text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
+									<p class="text-xs text-gray-400">{user.status === 'online' ? 'Online' : 'Offline'}</p>
 								</div>
 							</button>
 						{/each}
@@ -1874,7 +1994,7 @@
 
 				<!-- Messages -->
 				<div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-					{#each groupedMessages() as timeGroup (timeGroup.timestamp.getTime())}
+					{#each groupedMessages() as timeGroup (timeGroup.uniqueKey)}
 						<!-- Time Divider -->
 						<div class="flex items-center space-x-4 my-6">
 							<div class="flex-1 h-px bg-gray-300"></div>
@@ -1887,12 +2007,12 @@
 						<!-- Messages in this time group -->
 						<div class="space-y-1">
 							{#each timeGroup.messages as message (message.id)}
-								<div class="flex {message.senderId === '1' ? 'justify-end' : 'justify-start'} group">
+								<div class="flex {message.senderId === currentUserId ? 'justify-end' : 'justify-start'} group">
 									<div 
 										class="flex items-start space-x-2 max-w-xs lg:max-w-md cursor-pointer"
 										title={formatExactTime(message.timestamp)}
 									>
-										{#if message.senderId !== '1'}
+										{#if message.senderId !== currentUserId}
 											{@const sender = currentConversation.members.find(m => m.id === message.senderId)}
 											<div class="mt-1">
 												<button 
@@ -1922,31 +2042,28 @@
 											</div>
 										{/if}
 										
-										<div class="flex flex-col {message.senderId === '1' ? 'items-end' : 'items-start'}">
-											{#if message.senderId !== '1'}
+										<div class="flex flex-col {message.senderId === currentUserId ? 'items-end' : 'items-start'}">
+											{#if message.senderId !== currentUserId}
 												<div class="text-xs text-gray-500 mb-1">
 													{message.senderName}
-													{#if message.senderDepartment && message.senderRole}
-														<span class="text-gray-400">• {message.senderDepartment} • {message.senderRole}</span>
-													{/if}
 												</div>
 											{/if}
 											
 											{#if message.replyTo}
 												<div class="mb-2 p-2 bg-gray-100 rounded-lg border-l-2 border-[#01c0a4] text-sm">
-													<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderName}</div>
+													<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderId === currentUserId ? 'Me' : message.replyTo.senderName}</div>
 													<div class="text-gray-700 {message.replyTo.isDeleted ? 'italic text-gray-500' : ''}">{message.replyTo.content}</div>
 												</div>
 											{/if}
 											
 											<div class="relative">
-												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === '1' ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
+												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === currentUserId ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
 													<p class="whitespace-pre-wrap {message.isDeleted ? 'italic' : ''}">{message.content}</p>
 												</div>
 												
 												<!-- Message actions - hide for deleted messages -->
 												{#if !message.isDeleted}
-											<div class="absolute top-0 {message.senderId === '1' ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+											<div class="absolute top-0 {message.senderId === currentUserId ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
 											<button
 												onclick={() => startReply(message)}
 												class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
@@ -1979,7 +2096,7 @@
 													{/if}
 												</button>
 											{/if}
-											{#if message.senderId === '1'}
+											{#if message.senderId === currentUserId}
 												<button
 													onclick={() => startEditMessage(message)}
 													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
@@ -2021,7 +2138,7 @@
 															{#each message.reactions as reaction}
 																<button
 																	onclick={() => addReaction(message.id, reaction.emoji)}
-																	class="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200 transition-colors {reaction.users.includes('1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
+																	class="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200 transition-colors {reaction.users.includes(currentUserId || '1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
 																	aria-label={`Toggle ${reaction.emoji} reaction`}
 																	title={`${reaction.emoji} ${reaction.count}`}
 																>
@@ -2045,7 +2162,7 @@
 													{/if}
 
 													<!-- Seen indicators for sent messages -->
-													{#if message.senderId === '1' && message.seenBy && message.seenBy.length > 0}
+													{#if message.senderId === currentUserId && message.seenBy && message.seenBy.length > 0}
 														<div class="flex items-center space-x-1 mt-1">
 															<span class="text-xs text-gray-500">Seen by</span>
 															<div class="flex -space-x-1">
@@ -2085,8 +2202,10 @@
 													{/if}
 												</div>
 												
-												{#if message.senderId === '1'}
-													<ProfileAvatar user={{ name: 'Current User' }} size="sm" showOnlineStatus={false} />
+												{#if message.senderId === currentUserId}
+													<div class="w-8 h-8 rounded-full bg-[#01c0a4] text-white text-xs font-medium flex items-center justify-center">
+														Me
+													</div>
 												{/if}
 											</div>
 										</div>
@@ -2132,7 +2251,7 @@
 					<div class="px-4 py-2 bg-gray-100 border-t border-gray-300 flex items-center justify-between">
 						<div class="flex items-center space-x-2">
 							<Reply class="w-4 h-4 text-gray-500" />
-							<span class="text-sm text-gray-600">Replying to {replyingTo.senderName}</span>
+							<span class="text-sm text-gray-600">Replying to {replyingTo.senderId === currentUserId ? 'Me' : replyingTo.senderName}</span>
 							<span class="text-sm text-gray-500 truncate max-w-xs">{replyingTo.content}</span>
 						</div>
 						<button onclick={cancelReply} class="text-gray-500 hover:text-gray-700" aria-label="Cancel reply">
@@ -2367,14 +2486,14 @@
 				<div class="flex-1 overflow-y-auto">
 					{#if currentMembersTab === 'members'}
 						<!-- Members List -->
-						{#each currentConversation.members as member (member.id)}
+						{#each currentConversation.members as member, index (member.id || member.userId || `member-${index}`)}
 							<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
 								<div class="flex items-center space-x-3">
 									<button 
 										type="button"
 										onclick={(event) => {
 											event.stopPropagation();
-											const fullUserData = getUserDetails(member.id);
+											const fullUserData = getUserDetails(member.id || member.userId);
 											if (fullUserData) {
 												showUserProfile(fullUserData);
 											}
@@ -2392,12 +2511,12 @@
 									<div>
 										<div class="flex items-center space-x-2">
 											<h4 class="font-medium text-gray-900">{member.name}</h4>
-											{#if member.id === '1'}
+											{#if member.id === currentUserId}
 												<Crown class="w-3 h-3 text-yellow-500" />
 											{/if}
 										</div>
 										<p class="text-sm text-gray-500">
-											{member.department} • {member.role}
+											{member.department || member.organizationalUnit || 'No Department'} • {member.role || 'No Role'}
 										</p>
 										<p class="text-xs text-gray-400">
 											{member.isOnline ? 'Online' : 'Offline'}
@@ -2591,8 +2710,20 @@
 						</div>
 					</div>
 
-					<div class="text-sm text-gray-500">
-						{currentConversation?.members.length} members
+					<div class="space-y-2">
+						<div class="text-sm text-gray-500">
+							{currentConversation?.members.length} members
+						</div>
+						{#if currentConversation?.department}
+							<div class="text-sm text-gray-600">
+								<span class="font-medium">Department:</span> {currentConversation.department}
+							</div>
+						{/if}
+						{#if currentConversation?.role}
+							<div class="text-sm text-gray-600">
+								<span class="font-medium">Role:</span> {currentConversation.role}
+							</div>
+						{/if}
 					</div>
 				</div>
 
@@ -2787,7 +2918,7 @@
 										aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
 									>
 										<p class="font-medium text-gray-900">{user.name}</p>
-										<p class="text-sm text-gray-500">{user.department} • {user.role}</p>
+										<p class="text-sm text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
 									</button>
 									{#if selectedUsers.some(u => u.id === user.id)}
 										<div class="w-5 h-5 bg-[#01c0a4] rounded-full flex items-center justify-center">
@@ -2831,7 +2962,7 @@
 										</button>
 										<div class="flex-1 min-w-0">
 											<p class="font-medium text-gray-900 text-sm truncate">{user.name}</p>
-											<p class="text-xs text-gray-500 truncate">{user.department}</p>
+											<p class="text-xs text-gray-500 truncate">{user.organizationalUnit || user.department}</p>
 											<p class="text-xs text-gray-400 truncate">{user.role}</p>
 										</div>
 										<button

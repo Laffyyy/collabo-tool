@@ -52,6 +52,7 @@
 		localStorage.setItem('auth_userEmail', data.email);
 		localStorage.setItem('auth_username', data.username || loginUsername);
 		localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
+	
 		
 		// Set OTP expiry time (5 minutes from now)
 		const expiryTime = Date.now() + (5 * 60 * 1000);

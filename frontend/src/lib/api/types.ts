@@ -79,4 +79,128 @@ export interface OrganizationalUnit {
   parentId?: string;
 }
 
-// Add other response types as needed
+export interface UsersResponse extends ApiResponse {
+  data: {
+    users: ApiUser[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalUsers: number;
+      itemsPerPage: number;
+    };
+  };
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface OrganizationalUnit {
+  id: string;
+  name: string;
+  description?: string;
+  parentId?: string;
+}
+
+export interface OrganizationalUnit {
+  id: string;
+  name: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+}
+
+export interface BroadcastTarget {
+  id: string;
+  broadcastId: string;
+  targetType: 'role' | 'ou' | 'user';
+  targetId: string;
+  targetName: string;
+}
+
+export interface Broadcast {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  createdBy: string;
+  createdAt: string;
+  scheduledFor?: string;
+  sentAt?: string;
+  eventDate?: string;
+  endDate?: string;
+  status: 'draft' | 'scheduled' | 'sent' | 'archived' | 'deleted';
+  requiresAcknowledgment: boolean;
+  responseType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  choices?: string[];
+  targets?: BroadcastTarget[];
+}
+
+export interface CreateBroadcastRequest {
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  targetRoles: string[];
+  targetOUs: string[];
+  responseType?: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  requiresAcknowledgment?: boolean;
+  scheduledFor?: string | null;
+  endDate?: string | null;
+  choices?: string[] | null; // Add this property
+}
+
+export interface CreateBroadcastResponse {
+  ok: boolean;
+  message: string;
+  broadcast: Broadcast;
+}
+
+export interface GetOrganizationalUnitsResponse {
+  ok: boolean;
+  organizationalUnits: OrganizationalUnit[];
+}
+
+export interface GetRolesResponse {
+  ok: boolean;
+  roles: Role[];
+}
+
+export interface BroadcastTemplate {
+  id: string;
+  name: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  targetRoles: string[];
+  targetOUs: string[];
+  acknowledgmentType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  choices?: string[];
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface SaveTemplateRequest {
+  name: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  acknowledgmentType?: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
+  choices?: string[] | null;
+  targetOUs?: string[]; // Add these fields
+  targetRoles?: string[];
+}
+
+export interface SaveTemplateResponse {
+  ok: boolean;
+  message: string;
+  template: BroadcastTemplate;
+}
+
+export interface GetTemplatesResponse {
+  ok: boolean;
+  templates: BroadcastTemplate[];
+}

@@ -100,5 +100,18 @@ router.get(
   }
 );
 
-module.exports = router;
+// Get session info
+router.get(
+  '/session-info',
+  requireAuth,
+  authController.getSessionInfo
+);
 
+// Refresh session
+router.post(
+  '/refresh-session',
+  requireAuth,
+  authController.refreshSession
+);
+
+module.exports = router;
