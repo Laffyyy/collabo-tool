@@ -38,38 +38,32 @@ class SessionModel {
   }
 
   /**
- * Find session by session token
- * @param {string} sessionToken - Session token
- * @returns {Promise<Object|null>} Session object or null
- */
-async findBySessionToken(sessionToken) {
-  const query = `
-    SELECT * FROM tblusersessions
-    WHERE dsessiontoken = $1
-  `;
+   * Find session by session token
+   * @param {string} sessionToken - Session token
+   * @returns {Promise<Object|null>} Session object or null
+   */
+  async findBySessionToken(sessionToken) {
+    const query = `
+      SELECT * FROM tblusersessions
+      WHERE dsessiontoken = $1
+    `;
 
-  try {
-    const { rows } = await this.pool.query(query, [sessionToken]);
-    
-    if (rows.length === 0) {
-      console.log('[SessionModel] No session found for token');
-      return null;
+    try {
+      const { rows } = await this.pool.query(query, [sessionToken]);
+      
+      if (rows.length === 0) {
+        return null; // Remove console.log
+      }
+      
+      const session = this.formatSession(rows[0]);
+      // Remove detailed logging - only log errors
+      
+      return session;
+    } catch (error) {
+      console.error('[SessionModel] Error finding session:', error);
+      throw error;
     }
-    
-    const session = this.formatSession(rows[0]);
-    console.log('[SessionModel] Session found and formatted:', {
-      id: session.id,
-      userId: session.userId,
-      expiresAt: session.expiresAt,
-      isActive: session.isActive
-    });
-    
-    return session;
-  } catch (error) {
-    console.error('[SessionModel] Error finding session:', error);
-    throw error;
   }
-}
 
   /**
    * Find session by refresh token

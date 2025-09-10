@@ -249,33 +249,24 @@ async function getSessionInfo(req, res, next) {
   try {
     const { session } = req;
     
-    console.log('[Auth Controller] Getting session info:', {
-      sessionExists: !!session,
-      sessionId: session?.id,
-      expiresAt: session?.expiresAt
-    });
-    
+    // Remove detailed logging for routine checks
     if (!session) {
-      console.log('[Auth Controller] No session found in request');
       return res.status(401).json({
         ok: false,
         message: 'No active session found'
       });
     }
     
-    // Ensure session has required properties
     if (!session.expiresAt) {
-      console.error('[Auth Controller] Session missing expiresAt:', session);
       return res.status(500).json({
         ok: false,
         message: 'Invalid session data'
       });
     }
     
-    // Get session timeout from global settings
-    let sessionTimeoutMinutes = 480; // Default 8 hours
+    // Get session timeout from global settings (keep this logged since it's configuration)
+    let sessionTimeoutMinutes = 480;
     try {
-      // Fix: Use GlobalSettingsService (capital G) instead of globalSettingsService
       const globalSettings = await GlobalSettingsService.getGeneralSettings();
       if (globalSettings) {
         const settings = typeof globalSettings === 'string' 
@@ -288,16 +279,17 @@ async function getSessionInfo(req, res, next) {
       }
     } catch (error) {
       console.warn('[Auth Controller] Failed to load session timeout from global settings:', error);
-      // Continue with default value
     }
     
     const timeRemaining = new Date(session.expiresAt) - new Date();
     
-    console.log('[Auth Controller] Session info calculated:', {
-      expiresAt: session.expiresAt,
-      timeRemaining,
-      sessionTimeout: sessionTimeoutMinutes
-    });
+    // Only log when session is about to expire or on errors
+    if (timeRemaining <= 5 * 60 * 1000) { // 5 minutes or less
+      console.log('[Auth Controller] Session expiring soon:', {
+        sessionId: session.id,
+        timeRemaining: Math.floor(timeRemaining / 1000) + 's'
+      });
+    }
     
     res.status(200).json({
       ok: true,

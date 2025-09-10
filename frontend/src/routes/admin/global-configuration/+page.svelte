@@ -1,9 +1,10 @@
 <script lang="ts">
   import { API_CONFIG } from '$lib/api/config';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import { sessionManager } from '$lib/stores/session.svelte';
 
   const API_BASE_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings`;
   const GENERAL_API_URL = `${API_BASE_URL}/general`;
@@ -146,7 +147,15 @@
 
   // Load configuration on mount (no loading overlay)
   onMount(() => {
+    // Pause session monitoring on admin pages to reduce server load
+    sessionManager.pauseMonitoring();
+    
     loadConfiguration();
+  });
+
+  onDestroy(() => {
+    // Resume session monitoring when leaving the page
+    sessionManager.resumeMonitoring();
   });
 
   // Watch for changes

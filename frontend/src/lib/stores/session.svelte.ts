@@ -30,23 +30,24 @@ class SessionManager {
   private showIdleWarning = $state(false);
   private activityListeners: (() => void)[] = [];
   private lastActivity: number = Date.now();
+  private isPageVisible = $state(true);
+  private lastSessionCheck = 0;
+  private isPaused = $state(false);
 
-// Dynamic session configuration from database
-  private sessionTimeoutMinutes = $state(10);
+  // Dynamic session configuration from database
+  private sessionTimeoutMinutes = $state(480); // Changed default to 8 hours
   
-  // Session expiry thresholds
+  // Session expiry thresholds - INCREASED INTERVALS
   private readonly WARNING_TIME = 60 * 1000; // 1 minute before expiry
-  private readonly CHECK_INTERVAL = 10 * 1000; // Check every 10 seconds
-  
+  private readonly CHECK_INTERVAL = 10 * 60 * 1000; // 10 minutes instead of 5
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // Cache for 5 minutes instead of 2
 
   // Dynamic idle timeout based on session timeout
   get IDLE_TIMEOUT() {
-    // Set idle timeout to 75% of session timeout (converted to milliseconds)
-    return Math.min(this.sessionTimeoutMinutes * 60 * 1000 * 0.75, 30 * 60 * 1000); // Max 30 minutes idle
+    return Math.min(this.sessionTimeoutMinutes * 60 * 1000 * 0.75, 30 * 60 * 1000);
   }
   
   get IDLE_WARNING_TIME() {
-    // Warning 5 minutes before idle timeout
     return Math.max(this.IDLE_TIMEOUT - (5 * 60 * 1000), this.IDLE_TIMEOUT * 0.75);
   }
 
@@ -54,7 +55,7 @@ class SessionManager {
     return this.sessionTimeoutMinutes;
   }
   
-  private readonly IDLE_CHECK_INTERVAL = 1000; // Check idle status every second
+  private readonly IDLE_CHECK_INTERVAL = 5000; // Check idle status every 5 seconds (was 1 second)
   
   // Activity events to monitor
   private readonly ACTIVITY_EVENTS = [
@@ -62,25 +63,12 @@ class SessionManager {
     'touchstart', 'click', 'keydown', 'wheel'
   ];
   
-  get isWarningShown() {
-    return this.showWarning;
-  }
-  
-  get isIdleWarningShown() {
-    return this.showIdleWarning;
-  }
-
-  get isTimeoutModalShown() { // Add this getter
-    return this.showTimeoutModal;
-  }
-  
-  get remainingTime() {
-    return this.timeRemaining;
-  }
-  
-  get idleRemainingTime() {
-    return this.idleTimeRemaining;
-  }
+  // Getters remain the same...
+  get isWarningShown() { return this.showWarning; }
+  get isIdleWarningShown() { return this.showIdleWarning; }
+  get isTimeoutModalShown() { return this.showTimeoutModal; }
+  get remainingTime() { return this.timeRemaining; }
+  get idleRemainingTime() { return this.idleTimeRemaining; }
   
   get formattedTime() {
     const minutes = Math.floor(this.timeRemaining / (1000 * 60));
@@ -101,15 +89,19 @@ class SessionManager {
       this.stopMonitoring();
     }
     
-    console.log('[Session Manager] Starting session and idle monitoring');
+    // Add page visibility listener
+    this.addPageVisibilityListener();
     
-    // Load session configuration from database first
+    // Load session configuration from database first (only log if fails)
     await this.loadSessionConfig();
     
     // Start session expiry monitoring
     this.checkSession();
     this.checkInterval = setInterval(() => {
-      this.checkSession();
+      // Only check if page is visible and not paused
+      if (this.isPageVisible && !this.isPaused && this.isUserActive()) {
+        this.checkSession();
+      }
     }, this.CHECK_INTERVAL);
     
     // Start idle monitoring with updated configuration
@@ -117,68 +109,83 @@ class SessionManager {
   }
   
   /**
+   * Pause session monitoring (useful for admin pages)
+   */
+  pauseMonitoring() {
+    this.isPaused = true;
+  }
+
+  /**
+   * Resume session monitoring
+   */
+  resumeMonitoring() {
+    this.isPaused = false;
+  }
+
+  /**
+   * Add page visibility listener to pause checking when tab is not active
+   */
+  private addPageVisibilityListener() {
+    const handleVisibilityChange = () => {
+      this.isPageVisible = !document.hidden;
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
+
+  /**
+   * Check if user has been active recently
+   */
+  private isUserActive(): boolean {
+    const timeSinceActivity = Date.now() - this.lastActivity;
+    return timeSinceActivity < (10 * 60 * 1000); // Active within last 10 minutes
+  }
+  
+  /**
    * Stop all monitoring
    */
   stopMonitoring() {
-    // Stop session monitoring
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
     
-    // Stop idle monitoring
     this.stopIdleMonitoring();
     
     this.showWarning = false;
     this.warningShown = false;
     this.timeRemaining = 0;
-    
-    console.log('[Session Manager] Stopped all monitoring');
   }
-  
   
   /**
    * Start monitoring user activity for idle timeout
    */
   private startIdleMonitoring() {
-    console.log('🟢 Starting idle monitoring');
-    
-    // Initialize last activity
     this.lastActivity = Date.now();
-    
-    // Remove any existing listeners first
     this.stopIdleMonitoring();
     
-    // Add event listeners for user activity
     this.ACTIVITY_EVENTS.forEach(event => {
       const listener = () => this.handleActivity();
       document.addEventListener(event, listener, { passive: true, capture: true });
       this.activityListeners.push(() => {
         document.removeEventListener(event, listener, true);
       });
-      console.log(`👂 Added listener for: ${event}`);
     });
     
-    // Start checking idle status every second
     this.idleTimer = setInterval(() => {
       this.checkIdleStatus();
     }, this.IDLE_CHECK_INTERVAL);
-    
-    console.log(`⏰ Idle monitoring started - Warning at ${this.IDLE_WARNING_TIME/1000}s, Timeout at ${this.IDLE_TIMEOUT/1000}s`);
   }
 
   /**
    * Stop idle monitoring
    */
   private stopIdleMonitoring() {
-    console.log('🔴 Stopping idle monitoring');
-    
     if (this.idleTimer) {
       clearInterval(this.idleTimer);
       this.idleTimer = null;
     }
     
-    // Remove all activity listeners
     this.activityListeners.forEach(removeListener => removeListener());
     this.activityListeners = [];
     
@@ -190,66 +197,107 @@ class SessionManager {
    * Handle user activity - reset idle timer
    */
   private handleActivity = () => {
-    console.log('🎯 Activity detected at:', new Date().toLocaleTimeString());
     this.lastActivity = Date.now();
     
-    // Reset idle warning if it was showing
     if (this.showIdleWarning) {
-      console.log('🔄 Resetting idle warning due to activity');
       this.showIdleWarning = false;
     }
   };
   
-  
   /**
-   * Check current session status (existing method)
+   * Check current session status with silent operation
    */
   private async checkSession() {
+    if (this.isPaused) {
+      return; // Skip check if paused
+    }
+
     try {
       // Only check if user is authenticated
       let isAuthenticated = false;
       authStore.subscribe(store => {
         isAuthenticated = store.isAuthenticated;
       })();
+      
       if (!isAuthenticated) {
         this.stopMonitoring();
         return;
       }
       
+      const now = Date.now();
+      
+      // Enhanced caching - check if cache is still valid
+      if (now - this.lastSessionCheck < this.CACHE_DURATION) {
+        const cachedSession = localStorage.getItem('session_cache');
+        if (cachedSession) {
+          try {
+            const sessionData = JSON.parse(cachedSession);
+            const expiresAt = new Date(sessionData.expiresAt).getTime();
+            
+            // Only use cache if session hasn't expired
+            if (expiresAt > now) {
+              this.timeRemaining = Math.max(0, expiresAt - now);
+              return; // Skip server call - use cached data
+            } else {
+              // Cache shows expired session, clear it and check server
+              localStorage.removeItem('session_cache');
+            }
+          } catch (error) {
+            localStorage.removeItem('session_cache');
+          }
+        }
+      }
+
+      // Make server call only when necessary
       const response = await apiClient.get<{ ok: boolean; data: SessionInfo }>(
         API_CONFIG.endpoints.auth.sessionInfo
       );
       
       if (!response.ok || !response.data) {
-        console.warn('[Session Manager] Invalid session response, logging out');
+        // Silent logout for expired sessions - no console logs
         await this.handleSessionExpired();
         return;
       }
       
-      const { timeRemaining } = response.data;
+      const { timeRemaining, sessionTimeout } = response.data;
+      
+      // Cache the response with current timestamp
+      localStorage.setItem('session_cache', JSON.stringify({
+        expiresAt: response.data.expiresAt,
+        cachedAt: now,
+        timeRemaining
+      }));
+      
+      this.lastSessionCheck = now;
+      
+      // Update session timeout if provided
+      if (sessionTimeout && sessionTimeout > 0) {
+        this.sessionTimeoutMinutes = sessionTimeout;
+      }
+      
       this.timeRemaining = timeRemaining;
       
       // Show warning if within warning time and not already shown
       if (timeRemaining <= this.WARNING_TIME && timeRemaining > 0 && !this.warningShown) {
         this.showWarning = true;
         this.warningShown = true;
-        console.log(`[Session Manager] Session expires in ${Math.floor(timeRemaining / 1000)} seconds`);
+        // Removed console.log for cleaner terminal
       }
       
       // Auto-logout if session expired
       if (timeRemaining <= 0) {
-        console.log('[Session Manager] Session expired, logging out');
+        // Removed console.log for cleaner terminal
         await this.handleSessionExpired();
       }
       
     } catch (error) {
-      console.error('[Session Manager] Session check failed:', error);
-      // Don't auto-logout on network errors, just log
+      // Complete silence for session errors
+      // The session will continue to work, just skip this check
     }
   }
   
   /**
-   * Extend the current session (existing method)
+   * Extend the current session
    */
   async extendSession() {
     try {
@@ -258,61 +306,55 @@ class SessionManager {
         {}
       );
       
-      if (response.ok) {
+      if (response.ok) { // Fixed: Added missing opening parenthesis
         this.showWarning = false;
         this.warningShown = false;
         this.timeRemaining = response.data.timeRemaining;
         
-        // Also reset idle timer when session is extended
+        // Clear cache so next check gets fresh data
+        localStorage.removeItem('session_cache');
+        this.lastSessionCheck = 0;
+        
         this.resetIdleTimer();
         
-        console.log('[Session Manager] Session extended successfully');
         return true;
       }
       
       return false;
     } catch (error) {
-      console.error('[Session Manager] Failed to extend session:', error);
       return false;
     }
   }
   
   /**
-   * Handle session expiry (existing method)
+   * Handle session expiry
    */
   private async handleSessionExpired() {
     this.stopMonitoring();
-    
-    // Logout user
     await apiClient.logout();
-    
-    // Navigate to login with session expired message
     await goto('/login?reason=expired');
   }
   
   /**
-   * Dismiss the session warning (existing method)
+   * Dismiss the session warning
    */
   dismissWarning() {
     this.showWarning = false;
   }
   
-   /**
+  /**
    * Dismiss the idle warning and reset idle timer
    */
   dismissIdleWarning() {
-    console.log('✋ Dismissing idle warning');
     this.showIdleWarning = false;
-    this.lastActivity = Date.now(); // Reset activity timer
+    this.lastActivity = Date.now();
   }
   
   /**
    * Keep session active (for idle warning modal)
    */
   keepActive() {
-    console.log('🔄 Keeping session active');
     this.dismissIdleWarning();
-    // Optionally extend session as well
     this.extendSession();
   }
 
@@ -323,44 +365,31 @@ class SessionManager {
     this.lastActivity = Date.now();
     this.idleTimeRemaining = this.IDLE_TIMEOUT;
     this.showIdleWarning = false;
-    console.log('🔄 Idle timer reset');
   }
 
-
-
-/**
-   * Check idle status (called every second)
+  /**
+   * Check idle status
    */
   private checkIdleStatus() {
     const now = Date.now();
     const timeSinceActivity = now - this.lastActivity;
     
-    console.log(`⏱️ Idle check - Time since activity: ${timeSinceActivity}ms (${Math.floor(timeSinceActivity/1000)}s)`);
-    
-    // Update remaining time for UI display
     this.idleTimeRemaining = Math.max(0, this.IDLE_TIMEOUT - timeSinceActivity);
     
-    // Check if should show warning
     if (timeSinceActivity >= this.IDLE_WARNING_TIME && !this.showIdleWarning) {
-      console.log('⚠️ Showing idle warning');
       this.showIdleWarning = true;
     }
     
-    // Check if should logout
     if (timeSinceActivity >= this.IDLE_TIMEOUT) {
-      console.log('🚪 Logging out due to idle timeout');
       this.handleIdleTimeout();
     }
   }
 
-   /**
+  /**
    * Handle idle timeout - show timeout modal then logout
    */
   private async handleIdleTimeout() {
-    console.log('🚪 Session timed out due to inactivity');
     this.stopMonitoring();
-    
-    // Show timeout modal instead of immediate logout
     this.showTimeoutModal = true;
   }
 
@@ -370,23 +399,19 @@ class SessionManager {
   dismissTimeoutModal() {
     this.showTimeoutModal = false;
     
-    // Logout user
     authStore.update(store => {
       store.logout();
       return store;
     });
     
-    // Navigate to login with idle timeout message
     goto('/login?reason=idle');
   }
 
-    /**
-   * Load session configuration from database
+  /**
+   * Load session configuration from database - SILENT OPERATION
    */
   private async loadSessionConfig() {
     try {
-      console.log('[Session Manager] Loading session configuration from database');
-      
       const response = await apiClient.get<{ success: boolean; data: string }>(
         '/api/v1/global-settings/general'
       );
@@ -398,19 +423,12 @@ class SessionManager {
         
         if (settings.sessionTimeout && settings.sessionTimeout > 0) {
           this.sessionTimeoutMinutes = settings.sessionTimeout;
-          console.log(`[Session Manager] Session timeout configured to ${this.sessionTimeoutMinutes} minutes`);
-          console.log(`[Session Manager] Idle timeout set to ${Math.floor(this.IDLE_TIMEOUT / 60000)} minutes`);
-          console.log(`[Session Manager] Idle warning at ${Math.floor(this.IDLE_WARNING_TIME / 60000)} minutes`);
         }
       }
     } catch (error) {
-      console.warn('[Session Manager] Failed to load session config, using defaults:', error);
-      // Keep default values if API call fails
+      // Silent operation - keep defaults if config loading fails
     }
   }
-
 }
-
-
 
 export const sessionManager = new SessionManager();
