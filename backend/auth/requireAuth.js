@@ -1,19 +1,38 @@
 const jwt = require('jsonwebtoken');
 const { env } = require('../config');
 const { UnauthorizedError } = require('../utils/errors');
+const { getPool } = require('../config/db');
+const SessionModel = require('../model/session.model');
 
-function requireAuth(req, _res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return next(new UnauthorizedError('Missing bearer token'));
+const sessionModel = new SessionModel(getPool());
+
+/**
+ * Middleware to require authentication
+ */
+async function requireAuth(req, res, next) {
   try {
+    // Check for token in cookies or Authorization header
+    const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      throw new UnauthorizedError('Authentication required');
+    }
+    
+    // Verify token
     const decoded = jwt.verify(token, env.JWT_SECRET);
-    req.user = { id: decoded.id, username: decoded.username };
-    return next();
-  } catch (_err) {
-    return next(new UnauthorizedError('Invalid token'));
+    
+    // Attach user info to request
+    req.user = decoded;
+    
+    // Only call next() AFTER verification is complete
+    next();
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      next(new UnauthorizedError('Invalid or expired token'));
+    } else {
+      next(err);
+    }
   }
 }
 
 module.exports = { requireAuth };
-

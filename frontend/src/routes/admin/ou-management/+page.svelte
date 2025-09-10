@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+  import { onMount } from 'svelte';
+  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, reactivateOUs as reactivateOUsAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -14,6 +16,7 @@
     modifiedAt: Date;
     status: 'active' | 'inactive';
     rules: OURules;
+    _originalJsSettings?: any; // Store original jsSettings for tab determination
   }
 
   interface OURules {
@@ -38,7 +41,7 @@
       allowEmojis: boolean;
       messageRetentionDays: number;
       maxFileSize: number;
-      allowedFileTypes: string[];
+      allowedFileTypes: boolean;
       maxGroupSize: number;
       messageEditWindow: number;
       pinnedMessages: {
@@ -64,125 +67,10 @@
     };
   }
 
-  // Mock OU data - simplified for demo
-  let organizationUnits = $state<OrganizationUnit[]>([
-    {
-      id: '1',
-      name: 'Engineering',
-      description: 'Software development and technical teams',
-      parentId: null,
-      memberCount: 15,
-      location: 'New York, NY',
-      createdAt: new Date(Date.now() - 86400000 * 180),
-      modifiedAt: new Date(Date.now() - 86400000 * 30),
-      status: 'active',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: true,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: true,
-          frontlineCanShareFiles: false,
-          frontlineCanForwardMessages: false,
-          supportCanInitiate1v1: true,
-          supportCanCreateGroups: false,
-          supportCanJoinGroups: true,
-          supportCanShareFiles: true,
-          supportCanForwardMessages: true,
-          supervisorCanCreateGroups: true,
-          supervisorCanShareFiles: true,
-          supervisorCanForwardMessages: true,
-          managerCanAccessAllGroups: true,
-          managerCanShareFiles: true,
-          managerCanForwardMessages: true,
-          allowFileSharing: true,
-          allowEmojis: true,
-          messageRetentionDays: 365,
-          maxFileSize: 10,
-          allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
-          maxGroupSize: 50,
-          messageEditWindow: 15,
-          pinnedMessages: {
-            enabled: true,
-            maxPinnedPerConversation: 10
-          }
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: true,
-          supportCanCreateBroadcast: false,
-          supportCanReplyToBroadcast: true,
-          supervisorCanCreateBroadcast: true,
-          managerCanCreateBroadcast: true,
-          requireApprovalForBroadcast: false,
-          allowScheduledBroadcasts: true,
-          allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 365,
-          requireAcknowledgment: true,
-          acknowledgmentReminders: true,
-          reminderInterval: 1440,
-          maxBroadcastTargets: 1000
-        }
-      }
-    },
-    {
-      id: '2',
-      name: 'Human Resources',
-      description: 'HR operations and people management',
-      parentId: null,
-      memberCount: 5,
-      location: 'Chicago, IL',
-      createdAt: new Date(Date.now() - 86400000 * 200),
-      modifiedAt: new Date(Date.now() - 86400000 * 7),
-      status: 'active',
-      rules: {
-        chat: {
-          frontlineCanInitiate1v1: false,
-          frontlineCanCreateGroups: false,
-          frontlineCanJoinGroups: false,
-          frontlineCanShareFiles: false,
-          frontlineCanForwardMessages: false,
-          supportCanInitiate1v1: true,
-          supportCanCreateGroups: false,
-          supportCanJoinGroups: true,
-          supportCanShareFiles: false,
-          supportCanForwardMessages: false,
-          supervisorCanCreateGroups: true,
-          supervisorCanShareFiles: true,
-          supervisorCanForwardMessages: true,
-          managerCanAccessAllGroups: true,
-          managerCanShareFiles: true,
-          managerCanForwardMessages: true,
-          allowFileSharing: false,
-          allowEmojis: false,
-          messageRetentionDays: 90,
-          maxFileSize: 5,
-          allowedFileTypes: ['pdf', 'doc', 'docx'],
-          maxGroupSize: 20,
-          messageEditWindow: 5,
-          pinnedMessages: {
-            enabled: false,
-            maxPinnedPerConversation: 5
-          }
-        },
-        broadcast: {
-          frontlineCanCreateBroadcast: false,
-          frontlineCanReplyToBroadcast: false,
-          supportCanCreateBroadcast: false,
-          supportCanReplyToBroadcast: true,
-          supervisorCanCreateBroadcast: false,
-          managerCanCreateBroadcast: true,
-          requireApprovalForBroadcast: true,
-          allowScheduledBroadcasts: true,
-          allowPriorityBroadcasts: true,
-          broadcastRetentionDays: 90,
-          requireAcknowledgment: true,
-          acknowledgmentReminders: true,
-          reminderInterval: 720,
-          maxBroadcastTargets: 500
-        }
-      }
-    }
-  ]);
+  // Data state
+  let organizationUnits = $state<OrganizationUnit[]>([]);
+  let activeList = $state<OrganizationUnit[]>([]);
+  let inactiveList = $state<OrganizationUnit[]>([]);
 
   let searchQuery = $state<string>('');
   let currentTab = $state<string>('active');
@@ -202,6 +90,224 @@
     confirmText: string;
     action: () => void;
   } | null>(null);
+
+  // API state management
+  let isCreatingOU = $state<boolean>(false);
+  let apiError = $state<string>('');
+  let apiSuccess = $state<string>('');
+  let isLoading = $state<boolean>(false);
+  let loadError = $state<string>('');
+
+  const defaultRules: OURules = {
+    chat: {
+      frontlineCanInitiate1v1: true,
+      frontlineCanCreateGroups: false,
+      frontlineCanJoinGroups: true,
+      frontlineCanShareFiles: false,
+      frontlineCanForwardMessages: false,
+      supportCanInitiate1v1: true,
+      supportCanCreateGroups: false,
+      supportCanJoinGroups: true,
+      supportCanShareFiles: true,
+      supportCanForwardMessages: true,
+      supervisorCanCreateGroups: true,
+      supervisorCanShareFiles: true,
+      supervisorCanForwardMessages: true,
+      managerCanAccessAllGroups: true,
+      managerCanShareFiles: true,
+      managerCanForwardMessages: true,
+      allowFileSharing: true,
+      allowEmojis: true,
+      messageRetentionDays: 365,
+      maxFileSize: 10,
+      allowedFileTypes: false,
+      maxGroupSize: 50,
+      messageEditWindow: 15,
+      pinnedMessages: { enabled: true, maxPinnedPerConversation: 10 }
+    },
+    broadcast: {
+      frontlineCanCreateBroadcast: false,
+      frontlineCanReplyToBroadcast: true,
+      supportCanCreateBroadcast: false,
+      supportCanReplyToBroadcast: true,
+      supervisorCanCreateBroadcast: true,
+      managerCanCreateBroadcast: true,
+      requireApprovalForBroadcast: false,
+      allowScheduledBroadcasts: true,
+      allowPriorityBroadcasts: true,
+      broadcastRetentionDays: 365,
+      requireAcknowledgment: true,
+      acknowledgmentReminders: true,
+      reminderInterval: 1440,
+      maxBroadcastTargets: 1000
+    }
+  };
+
+  const parseJsSettingsToRules = (jsSettings: any): OURules => {
+    const base: OURules = JSON.parse(JSON.stringify(defaultRules));
+    
+    console.log('Parsing jsSettings:', jsSettings);
+    
+    if (!jsSettings) return base;
+    const arr = Array.isArray(jsSettings) ? jsSettings : [jsSettings];
+
+    for (const item of arr) {
+      // Handle Chat settings
+      if (item && item.Chat) {
+        const chat = item.Chat;
+        console.log('Processing Chat settings:', chat);
+        
+        if (chat.General) {
+          base.chat.allowFileSharing = !!chat.General.FileSharing;
+          base.chat.allowEmojis = !!chat.General.Emoji;
+          if (chat.General.Retention != null) base.chat.messageRetentionDays = Number(chat.General.Retention) || base.chat.messageRetentionDays;
+        }
+        if (chat.Frontline) {
+          base.chat.frontlineCanInitiate1v1 = !!chat.Frontline.Init1v1;
+          base.chat.frontlineCanCreateGroups = !!chat.Frontline.CreateGroup;
+          base.chat.frontlineCanJoinGroups = !!chat.Frontline.JoinGroupChats;
+          base.chat.frontlineCanShareFiles = !!chat.Frontline.ShareFiles;
+          base.chat.frontlineCanForwardMessages = !!chat.Frontline.ForwardMessage;
+        }
+        if (chat.support) {
+          base.chat.supportCanInitiate1v1 = !!chat.support.Init1v1;
+          base.chat.supportCanCreateGroups = !!chat.support.CreateGroup;
+          base.chat.supportCanJoinGroups = !!chat.support.JoinGroupChats;
+          base.chat.supportCanShareFiles = !!chat.support.ShareFiles;
+          base.chat.supportCanForwardMessages = !!chat.support.ForwardMessage;
+        }
+        if (chat.supervisor) {
+          base.chat.supervisorCanCreateGroups = !!chat.supervisor.CreateGroup;
+          base.chat.supervisorCanShareFiles = !!chat.supervisor.ShareFiles;
+          base.chat.supervisorCanForwardMessages = !!chat.supervisor.ForwardMessage;
+        }
+      }
+      
+      // Handle lowercase chat for backward compatibility
+      if (item && item.chat) {
+        const chat = item.chat;
+        if (chat.general) {
+          base.chat.allowFileSharing = !!chat.general.fileSharing;
+          base.chat.allowEmojis = !!chat.general.emoji;
+          if (chat.general.retention != null) base.chat.messageRetentionDays = Number(chat.general.retention) || base.chat.messageRetentionDays;
+        }
+        if (chat.frontline) {
+          base.chat.frontlineCanInitiate1v1 = !!chat.frontline.init1v1;
+          base.chat.frontlineCanCreateGroups = !!chat.frontline.createGroup;
+          base.chat.frontlineCanJoinGroups = !!chat.frontline.joinGroupChats;
+          base.chat.frontlineCanShareFiles = !!chat.frontline.shareFiles;
+          base.chat.frontlineCanForwardMessages = !!chat.frontline.forwardMessage;
+        }
+        if (chat.support) {
+          base.chat.supportCanInitiate1v1 = !!chat.support.init1v1;
+          base.chat.supportCanCreateGroups = !!chat.support.createGroup;
+          base.chat.supportCanJoinGroups = !!chat.support.joinGroupChats;
+          base.chat.supportCanShareFiles = !!chat.support.shareFiles;
+          base.chat.supportCanForwardMessages = !!chat.support.forwardMessage;
+        }
+        if (chat.supervisor) {
+          base.chat.supervisorCanCreateGroups = !!chat.supervisor.createGroup;
+          base.chat.supervisorCanShareFiles = !!chat.supervisor.shareFiles;
+          base.chat.supervisorCanForwardMessages = !!chat.supervisor.forwardMessage;
+        }
+      }
+      
+      // Handle Broadcast settings
+      if (item && item.broadcast) {
+        const b = item.broadcast;
+        console.log('Processing broadcast settings:', b);
+        
+        if (b.General) {
+          base.broadcast.requireApprovalForBroadcast = !!b.General.ApprovalforBroadcast;
+          base.broadcast.allowScheduledBroadcasts = !!b.General.ScheduleBroadcast;
+          base.broadcast.allowPriorityBroadcasts = !!b.General.PriorityBroadcast;
+          if (b.General.Retention != null) base.broadcast.broadcastRetentionDays = Number(b.General.Retention) || base.broadcast.broadcastRetentionDays;
+        }
+        if (b.general) {
+          base.broadcast.requireApprovalForBroadcast = !!b.general.approvalforBroadcast;
+          base.broadcast.allowScheduledBroadcasts = !!b.general.scheduleBroadcast;
+          base.broadcast.allowPriorityBroadcasts = !!b.general.priorityBroadcast;
+          if (b.general.retention != null) base.broadcast.broadcastRetentionDays = Number(b.general.retention) || base.broadcast.broadcastRetentionDays;
+        }
+        if (b.Frontline) {
+          base.broadcast.frontlineCanCreateBroadcast = !!b.Frontline.CreateBroadcasts;
+          base.broadcast.frontlineCanReplyToBroadcast = !!b.Frontline.ReplyToBroadcasts;
+        }
+        if (b.frontline) {
+          base.broadcast.frontlineCanCreateBroadcast = !!b.frontline.createBroadcasts;
+          base.broadcast.frontlineCanReplyToBroadcast = !!b.frontline.replyToBroadcasts;
+        }
+        if (b.support) {
+          base.broadcast.supportCanCreateBroadcast = !!b.support.CreateBroadcasts || !!b.support.createBroadcasts;
+          base.broadcast.supportCanReplyToBroadcast = !!b.support.ReplyToBroadcasts || !!b.support.replyToBroadcasts;
+        }
+        if (b.supervisor) {
+          base.broadcast.supervisorCanCreateBroadcast = !!b.supervisor.CreateBroadcasts || !!b.supervisor.createBroadcasts;
+        }
+      }
+    }
+
+    console.log('Parsed rules result:', base);
+    return base;
+  };
+
+  const mapBackendToOU = (row: any): OrganizationUnit => {
+    const created = row?.tcreatedat ? new Date(row.tcreatedat) : new Date();
+    const isActive = !!row?.bisActive;
+    
+    console.log('Mapping backend OU:', {
+      id: row?.ouid || row?.did,
+      name: row?.dname,
+      jsSettings: row?.jsSettings
+    });
+    
+    const rules = parseJsSettingsToRules(row?.jsSettings);
+    
+    const mappedOU: OrganizationUnit = {
+      id: row?.ouid || row?.did || String(Date.now()),
+      name: row?.dname || 'Unknown',
+      description: row?.ddescription || '',
+      parentId: row?.dparentouid || null,
+      memberCount: Number(row?.membercount) || 0,
+      location: row?.dLocation || row?.dlocation || '',
+      createdAt: created,
+      modifiedAt: created,
+      status: isActive ? 'active' : 'inactive',
+      rules,
+      // Store original jsSettings for tab determination
+      _originalJsSettings: row?.jsSettings
+    };
+    
+    console.log('Mapped OU result:', mappedOU);
+    return mappedOU;
+  };
+
+  const loadLists = async () => {
+    isLoading = true;
+    loadError = '';
+    try {
+      const [activeRes, inactiveRes] = await Promise.all([
+        getActiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' }),
+        getInactiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' })
+      ]);
+
+      const activeRows = (activeRes.data as any)?.data || [];
+      const inactiveRows = (inactiveRes.data as any)?.data || [];
+
+      activeList = activeRows.map(mapBackendToOU);
+      inactiveList = inactiveRows.map(mapBackendToOU);
+      organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+    } catch (e) {
+      console.error(e);
+      loadError = 'Failed to load organization units';
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  onMount(() => {
+    loadLists();
+  });
 
   let newOU = $state({
     name: '',
@@ -229,7 +335,7 @@
         allowEmojis: true,
         messageRetentionDays: 365,
         maxFileSize: 10,
-        allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
+        allowedFileTypes: false,
         maxGroupSize: 50,
         messageEditWindow: 15,
         pinnedMessages: {
@@ -257,9 +363,20 @@
   });
 
   // Computed values
-  const tabCounts = $derived({
-    active: organizationUnits.filter(ou => ou.status === 'active').length,
-    inactive: organizationUnits.filter(ou => ou.status === 'inactive').length
+  const tabCounts = $derived.by(() => {
+    const matches = (list: OrganizationUnit[]) => {
+      if (!searchQuery) return list.length;
+      const q = searchQuery.toLowerCase();
+      return list.filter(ou =>
+        ou.name.toLowerCase().includes(q) ||
+        ou.description.toLowerCase().includes(q) ||
+        ou.location.toLowerCase().includes(q)
+      ).length;
+    };
+    return {
+      active: matches(activeList),
+      inactive: matches(inactiveList)
+    };
   });
 
   let filteredOUs = $derived.by(() => {
@@ -285,101 +402,275 @@
   });
 
   // Functions
-  const createOU = () => {
+  const createOU = async () => {
     if (newOU.name.trim() && newOU.description.trim()) {
-      const ou: OrganizationUnit = {
-        id: Date.now().toString(),
-        name: newOU.name.trim(),
-        description: newOU.description.trim(),
-        parentId: null,
-        memberCount: 0,
-        location: newOU.location.trim(),
-        createdAt: new Date(),
-        modifiedAt: new Date(),
-        status: 'active',
-        rules: newOU.rules
-      };
+      // Clear previous messages
+      apiError = '';
+      apiSuccess = '';
+      isCreatingOU = true;
 
-      organizationUnits = [ou, ...organizationUnits];
-      
-      // Reset form
-      newOU = {
-        name: '',
-        description: '',
-        location: '',
-        rules: {
-          chat: {
-            frontlineCanInitiate1v1: true,
-            frontlineCanCreateGroups: false,
-            frontlineCanJoinGroups: true,
-            frontlineCanShareFiles: false,
-            frontlineCanForwardMessages: false,
-            supportCanInitiate1v1: true,
-            supportCanCreateGroups: false,
-            supportCanJoinGroups: true,
-            supportCanShareFiles: true,
-            supportCanForwardMessages: true,
-            supervisorCanCreateGroups: true,
-            supervisorCanShareFiles: true,
-            supervisorCanForwardMessages: true,
-            managerCanAccessAllGroups: true,
-            managerCanShareFiles: true,
-            managerCanForwardMessages: true,
-            allowFileSharing: true,
-            allowEmojis: true,
-            messageRetentionDays: 365,
-            maxFileSize: 10,
-            allowedFileTypes: ['jpg', 'png', 'pdf', 'doc', 'docx'],
-            maxGroupSize: 50,
-            messageEditWindow: 15,
-            pinnedMessages: {
-              enabled: true,
-              maxPinnedPerConversation: 10
-            }
-          },
-          broadcast: {
-            frontlineCanCreateBroadcast: false,
-            frontlineCanReplyToBroadcast: true,
-            supportCanCreateBroadcast: false,
-            supportCanReplyToBroadcast: true,
-            supervisorCanCreateBroadcast: true,
-            managerCanCreateBroadcast: true,
-            requireApprovalForBroadcast: false,
-            allowScheduledBroadcasts: true,
-            allowPriorityBroadcasts: true,
-            broadcastRetentionDays: 365,
-            requireAcknowledgment: true,
-            acknowledgmentReminders: true,
-            reminderInterval: 1440,
-            maxBroadcastTargets: 1000
-          }
+      try {
+        // Transform frontend data to backend API format
+        // Only send settings for the currently active tab
+        const apiData = transformOUDataForAPI(newOU, activeRulesTab);
+        
+        // Call the API
+        const result = await createOUAPI(apiData);
+        
+        if (result.success) {
+          // Create local OU object for immediate UI update
+          const ou: OrganizationUnit = {
+            id: result.data?.id || Date.now().toString(),
+            name: newOU.name.trim(),
+            description: newOU.description.trim(),
+            parentId: null,
+            memberCount: 0,
+            location: newOU.location.trim(),
+            createdAt: new Date(),
+            modifiedAt: new Date(),
+            status: 'active',
+            rules: newOU.rules
+          };
+
+          // Update the local state
+          activeList = [ou, ...activeList];
+          organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+          
+          // Show success message
+          apiSuccess = result.message || 'Organization Unit created successfully!';
+          
+          // Reset form
+          resetNewOUForm();
+          
+          // Close modal after a short delay to show success message
+          setTimeout(() => {
+            showCreateModal = false;
+            apiSuccess = '';
+          }, 2000);
+          
+        } else {
+          // Handle API error
+          apiError = result.error || 'Failed to create Organization Unit';
         }
-      };
-      showCreateModal = false;
-      
-      alert('Organization Unit created successfully!');
+      } catch (error) {
+        console.error('Error creating OU:', error);
+        apiError = 'Network error: Failed to create Organization Unit';
+      } finally {
+        isCreatingOU = false;
+      }
     }
+  };
+
+  // Helper function to reset the form
+  const resetNewOUForm = () => {
+    newOU = {
+      name: '',
+      description: '',
+      location: '',
+      rules: {
+        chat: {
+          frontlineCanInitiate1v1: true,
+          frontlineCanCreateGroups: false,
+          frontlineCanJoinGroups: true,
+          frontlineCanShareFiles: false,
+          frontlineCanForwardMessages: false,
+          supportCanInitiate1v1: true,
+          supportCanCreateGroups: false,
+          supportCanJoinGroups: true,
+          supportCanShareFiles: true,
+          supportCanForwardMessages: true,
+          supervisorCanCreateGroups: true,
+          supervisorCanShareFiles: true,
+          supervisorCanForwardMessages: true,
+          managerCanAccessAllGroups: true,
+          managerCanShareFiles: true,
+          managerCanForwardMessages: true,
+          allowFileSharing: true,
+          allowEmojis: true,
+          messageRetentionDays: 365,
+          maxFileSize: 10,
+          allowedFileTypes: false,
+          maxGroupSize: 50,
+          messageEditWindow: 15,
+          pinnedMessages: {
+            enabled: true,
+            maxPinnedPerConversation: 10
+          }
+        },
+        broadcast: {
+          frontlineCanCreateBroadcast: false,
+          frontlineCanReplyToBroadcast: true,
+          supportCanCreateBroadcast: false,
+          supportCanReplyToBroadcast: true,
+          supervisorCanCreateBroadcast: true,
+          managerCanCreateBroadcast: true,
+          requireApprovalForBroadcast: false,
+          allowScheduledBroadcasts: true,
+          allowPriorityBroadcasts: true,
+          broadcastRetentionDays: 365,
+          requireAcknowledgment: true,
+          acknowledgmentReminders: true,
+          reminderInterval: 1440,
+          maxBroadcastTargets: 1000
+        }
+      }
+    };
+  };
+
+  // Helper function to determine which tab should be active based on jsSettings
+  const determinePrimarySettingsTab = (jsSettings: any): 'chat' | 'broadcast' => {
+    if (!jsSettings) return 'chat'; // default to chat
+    
+    const arr = Array.isArray(jsSettings) ? jsSettings : [jsSettings];
+    
+    // Check if any item has broadcast settings
+    const hasBroadcast = arr.some(item => item && item.broadcast);
+    const hasChat = arr.some(item => item && (item.Chat || item.chat));
+    
+    console.log('Settings analysis:', { hasBroadcast, hasChat, jsSettings });
+    
+    // If only broadcast settings exist, show broadcast tab
+    if (hasBroadcast && !hasChat) {
+      return 'broadcast';
+    }
+    
+    // If both exist, check which has more substantial settings
+    if (hasBroadcast && hasChat) {
+      // Count non-default broadcast settings
+      let broadcastSettingsCount = 0;
+      let chatSettingsCount = 0;
+      
+      arr.forEach(item => {
+        if (item.broadcast) {
+          if (item.broadcast.general) broadcastSettingsCount += Object.keys(item.broadcast.general).length;
+          if (item.broadcast.frontline) broadcastSettingsCount += Object.keys(item.broadcast.frontline).length;
+          if (item.broadcast.support) broadcastSettingsCount += Object.keys(item.broadcast.support).length;
+          if (item.broadcast.supervisor) broadcastSettingsCount += Object.keys(item.broadcast.supervisor).length;
+        }
+        
+        if (item.Chat || item.chat) {
+          const chatSettings = item.Chat || item.chat;
+          if (chatSettings.General || chatSettings.general) chatSettingsCount += Object.keys(chatSettings.General || chatSettings.general).length;
+          if (chatSettings.Frontline || chatSettings.frontline) chatSettingsCount += Object.keys(chatSettings.Frontline || chatSettings.frontline).length;
+          if (chatSettings.support) chatSettingsCount += Object.keys(chatSettings.support).length;
+          if (chatSettings.supervisor) chatSettingsCount += Object.keys(chatSettings.supervisor).length;
+        }
+      });
+      
+      console.log('Settings count:', { broadcastSettingsCount, chatSettingsCount });
+      
+      // If broadcast has more settings, show broadcast tab
+      if (broadcastSettingsCount > chatSettingsCount) {
+        return 'broadcast';
+      }
+    }
+    
+    // Default to chat
+    return 'chat';
   };
 
   const editOUFunction = (ou: OrganizationUnit) => {
     selectedOU = ou;
+    
+    // Determine which tab should be active based on original jsSettings
+    const primaryTab = determinePrimarySettingsTab(ou._originalJsSettings);
+    activeRulesTab = primaryTab;
+    
+    console.log('Setting active tab to:', primaryTab, 'based on jsSettings:', ou._originalJsSettings);
+    
+    // Deep copy the rules to ensure all nested properties are properly copied
     editOU = {
       name: ou.name,
       description: ou.description,
       location: ou.location,
       status: ou.status,
       rules: {
-        chat: { ...ou.rules.chat },
-        broadcast: { ...ou.rules.broadcast }
+        chat: {
+          frontlineCanInitiate1v1: ou.rules.chat.frontlineCanInitiate1v1,
+          frontlineCanCreateGroups: ou.rules.chat.frontlineCanCreateGroups,
+          frontlineCanJoinGroups: ou.rules.chat.frontlineCanJoinGroups,
+          frontlineCanShareFiles: ou.rules.chat.frontlineCanShareFiles,
+          frontlineCanForwardMessages: ou.rules.chat.frontlineCanForwardMessages,
+          supportCanInitiate1v1: ou.rules.chat.supportCanInitiate1v1,
+          supportCanCreateGroups: ou.rules.chat.supportCanCreateGroups,
+          supportCanJoinGroups: ou.rules.chat.supportCanJoinGroups,
+          supportCanShareFiles: ou.rules.chat.supportCanShareFiles,
+          supportCanForwardMessages: ou.rules.chat.supportCanForwardMessages,
+          supervisorCanCreateGroups: ou.rules.chat.supervisorCanCreateGroups,
+          supervisorCanShareFiles: ou.rules.chat.supervisorCanShareFiles,
+          supervisorCanForwardMessages: ou.rules.chat.supervisorCanForwardMessages,
+          managerCanAccessAllGroups: ou.rules.chat.managerCanAccessAllGroups,
+          managerCanShareFiles: ou.rules.chat.managerCanShareFiles,
+          managerCanForwardMessages: ou.rules.chat.managerCanForwardMessages,
+          allowFileSharing: ou.rules.chat.allowFileSharing,
+          allowEmojis: ou.rules.chat.allowEmojis,
+          messageRetentionDays: ou.rules.chat.messageRetentionDays,
+          maxFileSize: ou.rules.chat.maxFileSize,
+          allowedFileTypes: ou.rules.chat.allowedFileTypes,
+          maxGroupSize: ou.rules.chat.maxGroupSize,
+          messageEditWindow: ou.rules.chat.messageEditWindow,
+          pinnedMessages: {
+            enabled: ou.rules.chat.pinnedMessages.enabled,
+            maxPinnedPerConversation: ou.rules.chat.pinnedMessages.maxPinnedPerConversation
+          }
+        },
+        broadcast: {
+          frontlineCanCreateBroadcast: ou.rules.broadcast.frontlineCanCreateBroadcast,
+          frontlineCanReplyToBroadcast: ou.rules.broadcast.frontlineCanReplyToBroadcast,
+          supportCanCreateBroadcast: ou.rules.broadcast.supportCanCreateBroadcast,
+          supportCanReplyToBroadcast: ou.rules.broadcast.supportCanReplyToBroadcast,
+          supervisorCanCreateBroadcast: ou.rules.broadcast.supervisorCanCreateBroadcast,
+          managerCanCreateBroadcast: ou.rules.broadcast.managerCanCreateBroadcast,
+          requireApprovalForBroadcast: ou.rules.broadcast.requireApprovalForBroadcast,
+          allowScheduledBroadcasts: ou.rules.broadcast.allowScheduledBroadcasts,
+          allowPriorityBroadcasts: ou.rules.broadcast.allowPriorityBroadcasts,
+          broadcastRetentionDays: ou.rules.broadcast.broadcastRetentionDays,
+          requireAcknowledgment: ou.rules.broadcast.requireAcknowledgment,
+          acknowledgmentReminders: ou.rules.broadcast.acknowledgmentReminders,
+          reminderInterval: ou.rules.broadcast.reminderInterval,
+          maxBroadcastTargets: ou.rules.broadcast.maxBroadcastTargets
+        }
       }
     };
+    
+    console.log('Edit OU - Original OU rules:', ou.rules);
+    console.log('Edit OU - Copied editOU rules:', editOU.rules);
+    
     showEditModal = true;
   };
 
-  const saveEditOU = () => {
+  const saveEditOU = async () => {
     if (!selectedOU || !editOU) return;
     
     if (editOU.name?.trim() && editOU.description?.trim()) {
+      // Build backend changes payload
+      const apiData = transformOUDataForAPI(
+        {
+          name: editOU.name!.trim(),
+          description: editOU.description!.trim(),
+          location: editOU.location?.trim() || '',
+          rules: editOU.rules
+        } as any,
+        activeRulesTab
+      );
+
+      const changes: any = {
+        OrgName: apiData.OrgName,
+        Description: apiData.Description,
+        Location: apiData.Location,
+        Settings: apiData.Settings
+      };
+
+      if (editOU.status) {
+        changes.isactive = editOU.status === 'active';
+      }
+
+      const res = await updateOUAPI({ id: selectedOU.id, changes });
+      if (!res.success) {
+        alert(res.error || 'Failed to update Organization Unit');
+        return;
+      }
+
       organizationUnits = organizationUnits.map(ou =>
         ou.id === selectedOU!.id
           ? {
@@ -445,28 +736,58 @@
     showConfirmationModal = true;
   };
 
-  const bulkDeactivateOUs = () => {
-    const selectedCount = selectedRows.size;
-    organizationUnits = organizationUnits.map(ou =>
-      selectedRows.has(ou.id) ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
-    );
-    showConfirmationModal = false;
-    selectedRows = new Set();
-    selectAll = false;
-    actionConfirm = null;
-    alert(`${selectedCount} organization units have been deactivated successfully!`);
+  const bulkDeactivateOUs = async () => {
+    const ids = Array.from(selectedRows);
+    if (ids.length === 0) return;
+    try {
+      const res = await deactivateOUsAPI(ids);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      const selectedCount = ids.length;
+      if (currentTab === 'active') {
+        const toMove = new Set(ids);
+        const moved = activeList.filter(ou => toMove.has(ou.id)).map(ou => ({ ...ou, status: 'inactive' as const, modifiedAt: new Date() }));
+        activeList = activeList.filter(ou => !toMove.has(ou.id));
+        inactiveList = [...moved, ...inactiveList];
+        organizationUnits = activeList;
+      }
+      alert(`${selectedCount} organization units have been deactivated successfully!`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to deactivate selected organization units.');
+    } finally {
+      showConfirmationModal = false;
+      selectedRows = new Set();
+      selectAll = false;
+      actionConfirm = null;
+    }
   };
 
-  const bulkReactivateOUs = () => {
-    const selectedCount = selectedRows.size;
-    organizationUnits = organizationUnits.map(ou =>
-      selectedRows.has(ou.id) ? { ...ou, status: 'active' as const, modifiedAt: new Date() } : ou
-    );
-    showConfirmationModal = false;
-    selectedRows = new Set();
-    selectAll = false;
-    actionConfirm = null;
-    alert(`${selectedCount} organization units have been reactivated successfully!`);
+  const bulkReactivateOUs = async () => {
+    const ids = Array.from(selectedRows);
+    if (ids.length === 0) return;
+    
+    try {
+      const res = await reactivateOUsAPI(ids);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      
+      const selectedCount = ids.length;
+      if (currentTab === 'inactive') {
+        const toMove = new Set(ids);
+        const moved = inactiveList.filter(ou => toMove.has(ou.id)).map(ou => ({ ...ou, status: 'active' as const, modifiedAt: new Date() }));
+        inactiveList = inactiveList.filter(ou => !toMove.has(ou.id));
+        activeList = [...moved, ...activeList];
+        organizationUnits = inactiveList;
+      }
+      alert(`${selectedCount} organization units have been reactivated successfully!`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to reactivate selected organization units.');
+    } finally {
+      showConfirmationModal = false;
+      selectedRows = new Set();
+      selectAll = false;
+      actionConfirm = null;
+    }
   };
 
   const deleteOU = (ouId: string) => {
@@ -511,6 +832,7 @@
     // Clear selections when switching tabs
     selectedRows = new Set();
     selectAll = false;
+    organizationUnits = currentTab === 'active' ? activeList : inactiveList;
   };
 
   // Row selection functions
@@ -544,19 +866,46 @@
     showConfirmationModal = true;
   };
 
-  const deactivateOU = (ouId: string) => {
-    organizationUnits = organizationUnits.map(ou =>
-      ou.id === ouId ? { ...ou, status: 'inactive' as const, modifiedAt: new Date() } : ou
-    );
-    showConfirmationModal = false;
-    selectedRows = new Set();
+  const deactivateOU = async (ouId: string) => {
+    try {
+      const res = await deactivateOUAPI(ouId);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      const found = activeList.find(ou => ou.id === ouId);
+      if (found) {
+        const updated = { ...found, status: 'inactive' as const, modifiedAt: new Date() };
+        activeList = activeList.filter(ou => ou.id !== ouId);
+        inactiveList = [updated, ...inactiveList];
+        organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+      }
+      alert('Organization Unit deactivated successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to deactivate Organization Unit.');
+    } finally {
+      showConfirmationModal = false;
+      selectedRows = new Set();
+    }
   };
 
   // Reactivate function
-  const reactivateOU = (ouId: string) => {
-    organizationUnits = organizationUnits.map(ou =>
-      ou.id === ouId ? { ...ou, status: 'active' as const, modifiedAt: new Date() } : ou
-    );
+  const reactivateOU = async (ouId: string) => {
+    try {
+      const res = await reactivateOUAPI(ouId);
+      if (!res.success) throw new Error(res.error || 'Failed');
+      
+      // Move from inactive to active list
+      const found = inactiveList.find(ou => ou.id === ouId);
+      if (found) {
+        const updated = { ...found, status: 'active' as const, modifiedAt: new Date() };
+        inactiveList = inactiveList.filter(ou => ou.id !== ouId);
+        activeList = [updated, ...activeList];
+        organizationUnits = currentTab === 'inactive' ? inactiveList : activeList;
+      }
+      alert('Organization Unit reactivated successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to reactivate Organization Unit.');
+    }
   };
 </script>
 
@@ -814,6 +1163,37 @@
             </button>
           </div>
 
+          <!-- Error/Success Messages -->
+          {#if apiError}
+            <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-red-800">{apiError}</p>
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          {#if apiSuccess}
+            <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-green-800">{apiSuccess}</p>
+                </div>
+              </div>
+            </div>
+          {/if}
+
           <form onsubmit={(e) => { e.preventDefault(); createOU(); }} class="space-y-6">
             <div>
               <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">Organization Unit Name</label>
@@ -822,7 +1202,8 @@
                 bind:value={newOU.name}
                 placeholder="Enter unit name"
                 required
-                class="input-field"
+                disabled={isCreatingOU}
+                class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -834,7 +1215,8 @@
                 placeholder="Describe the purpose and responsibilities of this unit"
                 required
                 rows="3"
-                class="input-field resize-none"
+                disabled={isCreatingOU}
+                class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed"
               ></textarea>
             </div>
 
@@ -845,19 +1227,37 @@
                   id="location"
                   bind:value={newOU.location}
                   placeholder="Enter location"
-                  class="input-field"
+                  disabled={isCreatingOU}
+                  class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
             <div class="flex space-x-3 pt-6">
-              <button type="submit" class="primary-button flex-1">
-                Create Organization Unit
+              <button 
+                type="submit" 
+                disabled={isCreatingOU}
+                class="primary-button flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {#if isCreatingOU}
+                  <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating...
+                {:else}
+                  Create Organization Unit
+                {/if}
               </button>
               <button
                 type="button"
-                onclick={() => showCreateModal = false}
-                class="secondary-button flex-1"
+                onclick={() => {
+                  showCreateModal = false;
+                  apiError = '';
+                  apiSuccess = '';
+                }}
+                disabled={isCreatingOU}
+                class="secondary-button flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>

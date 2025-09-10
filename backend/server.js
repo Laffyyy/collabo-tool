@@ -3,13 +3,14 @@ const http = require('http');
 const app = require('./app');
 const { env } = require('./config');
 
-const port = Number(env.PORT || 4000);
+const port = Number(env.PORT || 5000);
 app.set('port', port);
 
 const server = http.createServer(app);
 
 server.listen(port, () => {
   console.log(`[backend] listening on http://localhost:${port}`);
+  console.log(`[backend] CORS origins:`, env.CORS_ORIGIN);
 });
 
 server.on('error', (error) => {
