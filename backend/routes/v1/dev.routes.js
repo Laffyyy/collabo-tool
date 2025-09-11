@@ -93,6 +93,117 @@ router.post('/users', devOnly, async (req, res, next) => {
 });
 
 /**
+ * Test admin chat endpoints without authentication (dev only)
+ */
+router.get('/admin-chat/messages', devOnly, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Dev: Messages retrieved successfully',
+      data: [
+        {
+          id: 'test-msg-1',
+          conversationId: 'test-conv-1',
+          conversationName: 'Test Group Chat',
+          sender: 'test@example.com',
+          senderName: 'Test User',
+          content: 'This is a test message from the backend API',
+          timestamp: new Date().toISOString(),
+          type: 'group',
+          flagged: false,
+          status: 'active'
+        }
+      ],
+      pagination: { page: 1, limit: 100, total: 1, hasMore: false }
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get messages',
+      error: error.message
+    });
+  }
+});
+
+router.get('/admin-chat/statistics', devOnly, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        conversations: { active: 5, archived: 2, direct: 3, group: 2 },
+        messages: { total: 156, flagged: 1, deleted: 2 }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get statistics',
+      error: error.message
+    });
+  }
+});
+
+router.get('/admin-chat/conversations', devOnly, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Dev: Conversations retrieved successfully',
+      data: [
+        {
+          id: 'test-conv-1',
+          name: 'Test Group Chat',
+          type: 'group',
+          participants: ['user1@example.com', 'user2@example.com'],
+          participantNames: ['User One', 'User Two'],
+          messageCount: 15,
+          lastActivity: new Date().toISOString(),
+          archived: false
+        }
+      ],
+      pagination: { page: 1, limit: 50, total: 1, hasMore: false }
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get conversations',
+      error: error.message
+    });
+  }
+});
+
+router.get('/admin-chat/messages/flagged', devOnly, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Dev: Flagged messages retrieved successfully',
+      data: [
+        {
+          id: 'test-flagged-1',
+          conversationId: 'test-conv-1',
+          conversationName: 'Test Group Chat',
+          sender: 'problem@example.com',
+          senderName: 'Problem User',
+          content: 'This is a flagged message for testing',
+          timestamp: new Date().toISOString(),
+          type: 'group',
+          flagged: true,
+          flagReason: 'Inappropriate content',
+          flagType: 'inappropriate',
+          status: 'active'
+        }
+      ],
+      pagination: { page: 1, limit: 100, total: 1, hasMore: false }
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: 'Failed to get flagged messages',
+      error: error.message
+    });
+  }
+});
+
+/**
  * Development-only admin user creation endpoint
  */
 router.post('/create-admin', async (req, res) => {
