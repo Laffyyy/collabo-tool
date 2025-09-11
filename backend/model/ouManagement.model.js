@@ -168,11 +168,10 @@ class OUmodel {
 
             // Use window function COUNT(*) OVER() to compute total across filtered set
             const query = `
-                WITH RECURSIVE ou_hierarchy AS (
-                    -- Base case: start with OUs that match our filter
+                WITH RECURSIVE full_hierarchy AS (
+                    -- Get all OUs to build complete hierarchy
                     SELECT 
                         did,
-                        did as root_ou,
                         ARRAY[did] as path,
                         1 as depth,
                         dname,
@@ -181,19 +180,14 @@ class OUmodel {
                         tcreatedat,
                         "jsSettings",
                         "dLocation",
-                        "bisActive",
-                        dname as root_name,
-                        ddescription as root_description
+                        "bisActive"
                     FROM tblorganizationalunits
                     WHERE "bisActive" = ${activeStatus}
-                    ${searchParam ? `AND (dname ILIKE $1 OR ddescription ILIKE $1)` : ''}
                     
                     UNION ALL
                     
-                    -- Recursive case: add child OUs
                     SELECT 
                         o.did,
-                        h.root_ou,
                         h.path || o.did,
                         h.depth + 1,
                         o.dname,
@@ -202,18 +196,10 @@ class OUmodel {
                         o.tcreatedat,
                         o."jsSettings",
                         o."dLocation",
-                        o."bisActive",
-                        h.root_name,
-                        h.root_description
+                        o."bisActive"
                     FROM tblorganizationalunits o
-                    INNER JOIN ou_hierarchy h ON o.dparentouid = h.did
+                    INNER JOIN full_hierarchy h ON o.dparentouid = h.did
                     WHERE o."bisActive" = ${activeStatus}
-                    ${searchParam ? `AND (
-                        o.dname ILIKE $1 OR 
-                        o.ddescription ILIKE $1 OR 
-                        h.root_name ILIKE $1 OR 
-                        h.root_description ILIKE $1
-                    )` : ''}
                     AND h.depth < 10
                 ),
                 member_counts AS (
@@ -225,18 +211,58 @@ class OUmodel {
                     LEFT JOIN tbluserroles ur ON ur.douid = ou.did
                     GROUP BY ou.did
                 ),
+                relevant_ous AS (
+                    -- Get all OUs that should be included in the results
+                    SELECT DISTINCT h.did
+                    FROM full_hierarchy h
+                    WHERE ${searchParam ? `
+                        -- Include if:
+                        -- 1. The OU matches the search
+                        (h.dname ILIKE $1 OR h.ddescription ILIKE $1)
+                        OR
+                        -- 2. Any parent matches
+                        EXISTS (
+                            SELECT 1 FROM full_hierarchy p
+                            WHERE p.did = ANY(h.path)
+                            AND (p.dname ILIKE $1 OR p.ddescription ILIKE $1)
+                        )
+                        OR
+                        -- 3. Any child matches
+                        EXISTS (
+                            SELECT 1 FROM full_hierarchy c
+                            WHERE c.path[1] = h.path[1]
+                            AND (c.dname ILIKE $1 OR c.ddescription ILIKE $1)
+                        )
+                    ` : 'true'}
+                ),
+                filtered_hierarchy AS (
+                    -- Get the complete data for relevant OUs
+                    SELECT DISTINCT ON (h.did)
+                        h.did,
+                        h.dname,
+                        h.ddescription,
+                        h.dparentouid,
+                        h.tcreatedat,
+                        h."jsSettings",
+                        h."dLocation",
+                        h."bisActive",
+                        h.path,
+                        h.depth
+                    FROM full_hierarchy h
+                    INNER JOIN relevant_ous ro ON h.did = ro.did
+                ),
                 ou_tree AS (
-                    -- First, get the root information
-                    SELECT DISTINCT ON (h.root_ou)
-                        h.root_ou as ouid,
-                        FIRST_VALUE(h.dname) OVER w as dname,
-                        FIRST_VALUE(h.ddescription) OVER w as ddescription,
-                        FIRST_VALUE(h.dparentouid) OVER w as dparentouid,
-                        FIRST_VALUE(h.tcreatedat) OVER w as tcreatedat,
-                        FIRST_VALUE(h."jsSettings") OVER w as "jsSettings",
-                        FIRST_VALUE(h."dLocation") OVER w as "dLocation",
-                        FIRST_VALUE(h."bisActive") OVER w as "bisActive",
-                        FIRST_VALUE(mc.membercount) OVER w as membercount,
+                    -- Build the final tree structure
+                    SELECT 
+                        h.did as ouid,
+                        h.dname,
+                        h.ddescription,
+                        h.dparentouid,
+                        h.tcreatedat,
+                        h."jsSettings",
+                        h."dLocation",
+                        h."bisActive",
+                        COALESCE(mc.membercount, 0) as membercount,
                         (
                             SELECT jsonb_agg(
                                 jsonb_build_object(
@@ -251,13 +277,13 @@ class OUmodel {
                                     'membercount', COALESCE(mc_child.membercount, 0)
                                 )
                             )
-                            FROM ou_hierarchy c
+                            FROM filtered_hierarchy c
                             LEFT JOIN member_counts mc_child ON mc_child.did = c.did
-                            WHERE c.root_ou = h.root_ou AND c.did != h.root_ou
+                            WHERE c.dparentouid = h.did
                         ) as children
-                    FROM ou_hierarchy h
-                    LEFT JOIN member_counts mc ON mc.did = h.root_ou
-                    WINDOW w AS (PARTITION BY h.root_ou ORDER BY h.depth)
+                    FROM filtered_hierarchy h
+                    LEFT JOIN member_counts mc ON mc.did = h.did
+                    WHERE h.dparentouid IS NULL
                 )
                 SELECT *, COUNT(*) OVER() AS total_count
                 FROM ou_tree
