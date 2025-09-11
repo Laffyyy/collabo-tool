@@ -21,15 +21,21 @@
 
 	// Load user data when userName changes
 	$effect(() => {
+		console.log('🔍 UserProfileModal: Effect triggered - userName:', userName, 'show:', show);
 		if (userName && show) {
 			loading = true;
 			const loadUserData = async () => {
 				try {
+					console.log('🔍 UserProfileModal: Attempting to load user data for userName:', userName);
+					console.log('🔍 UserProfileModal: userName type:', typeof userName);
+					console.log('🔍 UserProfileModal: userName length:', userName.length);
+					
 					const user = await getUserByUsername(userName);
+					console.log('🔍 UserProfileModal: API response:', user);
 					userData = user;
-					console.log('🔍 UserProfileModal loaded data:', user);
+					console.log('🔍 UserProfileModal: Final userData state:', userData);
 				} catch (error) {
-					console.error('Error loading user data:', error);
+					console.error('❌ UserProfileModal: Error loading user data:', error);
 					userData = null;
 				} finally {
 					loading = false;

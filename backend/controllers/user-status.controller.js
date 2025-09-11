@@ -50,6 +50,34 @@ class UserStatusController {
   }
 
   /**
+   * Get user by username with status
+   */
+  static async getUserByUsername(req, res, next) {
+    try {
+      const { username } = req.params;
+      
+      if (!username) {
+        return res.status(400).json({
+          message: 'Username is required'
+        });
+      }
+
+      const user = await UserStatusService.getUserByUsername(username);
+      
+      if (!user) {
+        return res.status(404).json({
+          message: 'User not found'
+        });
+      }
+
+      return res.json(user);
+    } catch (error) {
+      console.error('Error getting user by username:', error);
+      return next(error);
+    }
+  }
+
+  /**
    * Get all users with status
    */
   static async getAllUsersWithStatus(req, res, next) {

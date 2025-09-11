@@ -155,6 +155,12 @@
 	let showUserProfileModal = $state(false);
 	let selectedUserName = $state<string>('');
 	
+	// Debug effect for modal state
+	$effect(() => {
+		console.log('🎯 Modal state changed - showUserProfileModal:', showUserProfileModal, 'selectedUserName:', `"${selectedUserName}"`);
+		console.log('🎯 Modal condition result:', showUserProfileModal && selectedUserName);
+	});
+	
 	// Chat state
 	let messageInput = $state('');
 	let replyingTo = $state<Message | null>(null);
@@ -331,30 +337,40 @@ function loadUserIdFromAuth() {
       // Get users with real status information
       const usersWithRealStatus = await getAllUsersWithStatus();
       console.log('Users with status:', usersWithRealStatus);
+      console.log('Users with status count:', usersWithRealStatus.length);
       
-      // Update availableUsers with real status data
-      availableUsers = usersWithRealStatus
-        .filter(user => user.id !== currentUserId)
-        .map(user => ({
-          id: user.id,
-          name: user.username,
-          firstName: user.firstName || user.username,
-          lastName: user.lastName || '',
-          username: user.username,
-          email: user.email,
-          department: user.organizationalUnit || 'Unknown',
-          role: user.role || 'user',
-          organizationalUnit: user.organizationalUnit,
-          avatar: user.avatar || '/placeholder.svg',
-          status: user.status,
-          isOnline: user.isOnline,
-          onlineStatus: user.status
-        }));
+      // Only update availableUsers if we got real data
+      if (usersWithRealStatus && usersWithRealStatus.length > 0) {
+        // Update availableUsers with real status data
+        availableUsers = usersWithRealStatus
+          .filter(user => user.id !== currentUserId)
+          .map(user => ({
+            id: user.id,
+            name: `${user.firstName} ${user.lastName}`.trim() || user.username,
+            firstName: user.firstName || user.username,
+            lastName: user.lastName || '',
+            username: user.username,
+            email: user.email,
+            department: user.organizationalUnit || 'Unknown',
+            role: user.role || 'user',
+            organizationalUnit: user.organizationalUnit,
+            avatar: user.avatar || '/placeholder.svg',
+            status: user.status,
+            isOnline: user.isOnline,
+            onlineStatus: user.status
+          }));
+        
+        console.log('✅ Updated availableUsers with status data:', availableUsers);
+      } else {
+        console.warn('⚠️ getAllUsersWithStatus returned empty/no data, keeping original availableUsers');
+        console.log('Current availableUsers count:', availableUsers.length);
+      }
       
-      console.log('Updated availableUsers with status:', availableUsers);
       console.log('User status tracking initialized');
     } catch (error) {
       console.error('Failed to initialize user status:', error);
+      console.warn('⚠️ Keeping original availableUsers due to status initialization failure');
+      console.log('Current availableUsers count:', availableUsers.length);
     }
   } catch (e) {
     console.error('Failed to fetch conversations or users:', e);
@@ -1631,13 +1647,22 @@ const createGroup = async () => {
 
 	// Filter users function for group creation
 	const filteredUsersForGroup = $derived.by(() => {
-		if (!userSearchQuery.trim()) return availableUsers;
+		console.log('🔍 filteredUsersForGroup: availableUsers count:', availableUsers.length);
+		console.log('🔍 filteredUsersForGroup: userSearchQuery:', userSearchQuery);
 		
-		return availableUsers.filter(user =>
+		if (!userSearchQuery.trim()) {
+			console.log('🔍 filteredUsersForGroup: No search query, returning all availableUsers');
+			return availableUsers;
+		}
+		
+		const filtered = availableUsers.filter(user =>
 			user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
 			user.department.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
 			user.role.toLowerCase().includes(userSearchQuery.toLowerCase())
 		);
+		
+		console.log('🔍 filteredUsersForGroup: Filtered count:', filtered.length);
+		return filtered;
 	});
 
 	// Filter conversations for forwarding
@@ -1786,10 +1811,40 @@ const createGroup = async () => {
 
 	function showUserProfile(user: User) {
 		console.log('🎯 Chat showUserProfile called with:', user);
-		selectedUserName = user.name || '';
-		console.log('🎯 selectedUserName set to:', `"${selectedUserName}"`);
-		showUserProfileModal = true;
-		console.log('🎯 showUserProfileModal set to:', showUserProfileModal);
+		console.log('🎯 user.username:', `"${user.username}"`);
+		console.log('🎯 user.name:', `"${user.name}"`);
+		console.log('🎯 user.id:', `"${user.id}"`);
+		
+		try {
+			// Use username if available, otherwise fall back to name
+			selectedUserName = user.username || user.name || '';
+			console.log('🎯 selectedUserName set to:', `"${selectedUserName}"`);
+			
+			// If we used the name as fallback, try to find the actual username by ID
+			if (!user.username && user.id) {
+				console.log('🎯 Username missing, trying to find by ID:', user.id);
+				console.log('🎯 availableUsers count:', availableUsers.length);
+				const actualUser = availableUsers.find(u => u.id === user.id);
+				if (actualUser && actualUser.username) {
+					console.log('🎯 Found actual username:', actualUser.username);
+					selectedUserName = actualUser.username;
+				}
+			}
+			
+			console.log('🎯 Final selectedUserName:', `"${selectedUserName}"`);
+			console.log('🎯 Current showUserProfileModal before setting:', showUserProfileModal);
+			
+			showUserProfileModal = true;
+			console.log('🎯 showUserProfileModal set to:', showUserProfileModal);
+			
+			// Additional check for modal condition
+			console.log('🎯 Modal should show:', showUserProfileModal && selectedUserName);
+			console.log('🎯 selectedUserName truthy:', !!selectedUserName);
+			console.log('🎯 selectedUserName length:', selectedUserName.length);
+			
+		} catch (error) {
+			console.error('❌ Error in showUserProfile:', error);
+		}
 	}
 
 	function closeUserProfile() {
@@ -3549,7 +3604,22 @@ const groupedMessages = $derived(() => {
 
 					<!-- Available Users -->
 					<div>
-						<p class="text-sm font-medium text-gray-700 mb-3">Add Members</p>
+						<div class="flex items-center justify-between mb-3">
+							<p class="text-sm font-medium text-gray-700">Add Members</p>
+							<!-- Debug button (remove in production) -->
+							<button 
+								onclick={() => {
+									console.log('🔍 DEBUG - Available Users:', availableUsers);
+									console.log('🔍 DEBUG - Filtered Users:', filteredUsersForGroup);
+									console.log('🔍 DEBUG - Search Query:', userSearchQuery);
+									alert(`Available: ${availableUsers.length}, Filtered: ${filteredUsersForGroup.length}`);
+								}}
+								class="px-2 py-1 text-xs bg-blue-500 text-white rounded"
+								type="button"
+							>
+								Debug
+							</button>
+						</div>
 						<div class="max-h-80 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
 							{#each filteredUsersForGroup as user}
 								<div class="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors {selectedUsers.some(u => u.id === user.id) ? 'bg-[#01c0a4]/5 border border-[#01c0a4]/20' : ''}">

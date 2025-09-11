@@ -16,6 +16,9 @@ router.get('/status', UserStatusController.getStatus);
 // Get all users with status
 router.get('/users/status', UserStatusController.getAllUsersWithStatus);
 
+// Get user by username
+router.get('/users/:username', UserStatusController.getUserByUsername);
+
 // Heartbeat endpoint
 router.post('/heartbeat', UserStatusController.heartbeat);
 

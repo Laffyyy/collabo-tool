@@ -38,6 +38,18 @@ class UserStatusService {
   }
 
   /**
+   * Get user by username with status
+   */
+  static async getUserByUsername(username) {
+    try {
+      return await UserStatusModel.getUserByUsername(username);
+    } catch (error) {
+      console.error('Error in getUserByUsername service:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update user's last activity (heartbeat)
    */
   static async updateLastActivity(userId) {

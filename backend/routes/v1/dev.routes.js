@@ -187,4 +187,138 @@ router.post('/create-admin', async (req, res) => {
   }
 });
 
+// Test database connection and table structure
+router.get('/test-db', devOnly, async (req, res) => {
+  try {
+    const pool = getPool();
+    
+    // Test basic connection
+    const client = await pool.connect();
+    console.log('✅ Database connection successful');
+    
+    // Check if tblusers table exists
+    const tableCheck = await client.query(`
+      SELECT table_name, column_name, data_type, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'tblusers'
+      ORDER BY ordinal_position;
+    `);
+    
+    // Check for user status columns specifically
+    const statusColumns = await client.query(`
+      SELECT column_name, data_type, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'tblusers' 
+      AND column_name IN ('dlastactivity', 'donlinestatus');
+    `);
+    
+    // Get sample user data
+    const sampleUsers = await client.query('SELECT vusername, vrole, vorganizationalunit FROM tblusers LIMIT 3');
+    
+    client.release();
+    
+    res.json({
+      ok: true,
+      message: 'Database test completed',
+      tableExists: tableCheck.rows.length > 0,
+      tableColumns: tableCheck.rows,
+      statusColumnsExist: statusColumns.rows.length === 2,
+      statusColumns: statusColumns.rows,
+      sampleUsers: sampleUsers.rows
+    });
+  } catch (error) {
+    console.error('❌ Database test failed:', error);
+    res.status(500).json({
+      ok: false,
+      message: 'Database test failed',
+      error: error.message
+    });
+  }
+});
+
+// Test user routes
+router.get('/test-users', devOnly, async (req, res) => {
+  try {
+    const UserController = require('../../controllers/user.controller');
+    
+    // Create a mock request/response to test the controller
+    const mockReq = {};
+    const mockRes = {
+      json: (data) => data,
+      status: (code) => ({ json: (data) => ({ status: code, data }) })
+    };
+    const mockNext = (error) => ({ error });
+    
+    const result = await UserController.getAllUsers(mockReq, mockRes, mockNext);
+    
+    res.json({
+      ok: true,
+      message: 'User controller test completed',
+      result: result
+    });
+  } catch (error) {
+    console.error('❌ User controller test failed:', error);
+    res.status(500).json({
+      ok: false,
+      message: 'User controller test failed',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Test user status endpoints without authentication
+ */
+router.get('/test-users', devOnly, async (req, res) => {
+  try {
+    console.log('🧪 Test endpoint called - no auth required');
+    const UserStatusModel = require('../../model/user-status.model');
+    const users = await UserStatusModel.getAllUsersWithStatus();
+    console.log(`🧪 Found ${users.length} users`);
+    
+    res.json({
+      success: true,
+      count: users.length,
+      users: users.map(user => ({
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        organizationalUnit: user.organizationalUnit,
+        status: user.status
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Test endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+router.get('/test-user/:username', devOnly, async (req, res) => {
+  try {
+    const { username } = req.params;
+    console.log(`🧪 Test user endpoint called for: ${username}`);
+    
+    const UserStatusModel = require('../../model/user-status.model');
+    const user = await UserStatusModel.getUserByUsername(username);
+    console.log(`🧪 User result:`, user);
+    
+    res.json({
+      success: true,
+      username,
+      found: !!user,
+      user
+    });
+  } catch (error) {
+    console.error('❌ Test user endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

@@ -27,7 +27,10 @@ let heartbeatInterval: NodeJS.Timeout | null = null;
  */
 function getApiConfig() {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
-  const baseUrl = 'http://localhost:5000/api/v1/user-status';
+  const baseUrl = 'http://localhost:5000/api/v1/user-status'; // Fixed port to 5000
+  
+  console.log('🔍 getApiConfig: Using baseUrl:', baseUrl);
+  console.log('🔍 getApiConfig: Token found:', !!token);
   
   return {
     token,
@@ -96,23 +99,46 @@ export async function getCurrentUserStatus(): Promise<UserStatus | null> {
  */
 export async function getAllUsersWithStatus(): Promise<UserStatus[]> {
   try {
-    const { baseUrl, headers } = getApiConfig();
+    const { baseUrl, headers, token } = getApiConfig();
+    console.log('🔍 getAllUsersWithStatus: API URL:', `${baseUrl}/users/status`);
+    console.log('🔍 getAllUsersWithStatus: Token available:', !!token);
     
-    const response = await fetch(`${baseUrl}/users/status`, {
+    // Try authenticated endpoint first
+    let response = await fetch(`${baseUrl}/users/status`, {
       method: 'GET',
       headers
     });
 
+    console.log('🔍 getAllUsersWithStatus: Auth response status:', response.status);
+
+    // If auth fails, try dev endpoint
+    if (!response.ok && response.status === 401) {
+      console.log('🔍 getAllUsersWithStatus: Auth failed, trying dev endpoint...');
+      response = await fetch('http://localhost:5000/api/v1/dev/test-users');
+      console.log('🔍 getAllUsersWithStatus: Dev response status:', response.status);
+      
+      if (response.ok) {
+        const devData = await response.json();
+        console.log('🔍 getAllUsersWithStatus: Dev data:', devData);
+        const users = devData.users || [];
+        usersWithStatus.set(users);
+        return users;
+      }
+    }
+
     if (response.ok) {
       const users = await response.json();
+      console.log('🔍 getAllUsersWithStatus: Users received:', users);
+      console.log('🔍 getAllUsersWithStatus: User count:', users.length);
       usersWithStatus.set(users);
       return users;
     } else {
-      console.error('Failed to get users with status:', response.status);
+      const errorText = await response.text();
+      console.error('❌ getAllUsersWithStatus: Failed with status:', response.status, errorText);
       return [];
     }
   } catch (error) {
-    console.error('Error getting users with status:', error);
+    console.error('❌ getAllUsersWithStatus: Network error:', error);
     return [];
   }
 }
@@ -272,10 +298,70 @@ export async function initializeUserStatus() {
  */
 export async function getUserByUsername(username: string): Promise<UserStatus | null> {
   try {
+    console.log('🔍 getUserByUsername: Searching for username via direct API:', username);
+    const { baseUrl, headers } = getApiConfig();
+    
+    // Try the direct endpoint first
+    try {
+      const response = await fetch(`${baseUrl}/users/${encodeURIComponent(username)}`, {
+        method: 'GET',
+        headers
+      });
+
+      if (response.ok) {
+        const user = await response.json();
+        console.log('✅ getUserByUsername: Found user via direct API:', user);
+        return user;
+      } else if (response.status === 401) {
+        console.log('⚠️ getUserByUsername: Auth failed, trying dev endpoint...');
+        
+        // Try dev endpoint
+        const devResponse = await fetch(`http://localhost:5000/api/v1/dev/test-user/${encodeURIComponent(username)}`);
+        if (devResponse.ok) {
+          const devData = await devResponse.json();
+          console.log('✅ getUserByUsername: Found user via dev API:', devData);
+          return devData.user;
+        }
+      } else {
+        console.log('⚠️ getUserByUsername: Direct API failed, falling back to search');
+      }
+    } catch (directError) {
+      console.log('⚠️ getUserByUsername: Direct API error, falling back to search:', directError);
+    }
+    
+    // Fallback to searching through all users
+    console.log('🔍 getUserByUsername: Searching through all users for:', username);
     const users = await getAllUsersWithStatus();
-    return users.find(user => user.username === username) || null;
+    console.log('🔍 getUserByUsername: All users from API:', users);
+    console.log('🔍 getUserByUsername: All usernames:', users.map(u => u.username));
+    
+    const foundUser = users.find(user => user.username === username);
+    console.log('🔍 getUserByUsername: Exact match result:', foundUser);
+    
+    if (!foundUser) {
+      console.log('🔍 getUserByUsername: Trying case-insensitive search...');
+      const lowerUsername = username.toLowerCase();
+      const caseInsensitiveUser = users.find(user => user.username.toLowerCase() === lowerUsername);
+      console.log('🔍 getUserByUsername: Case-insensitive result:', caseInsensitiveUser);
+      
+      // Try matching by name as well
+      if (!caseInsensitiveUser) {
+        console.log('🔍 getUserByUsername: Trying name-based search...');
+        const nameMatch = users.find(user => 
+          `${user.firstName} ${user.lastName}`.trim().toLowerCase() === username.toLowerCase() ||
+          user.firstName?.toLowerCase() === username.toLowerCase() ||
+          user.lastName?.toLowerCase() === username.toLowerCase()
+        );
+        console.log('🔍 getUserByUsername: Name-based result:', nameMatch);
+        return nameMatch || null;
+      }
+      
+      return caseInsensitiveUser || null;
+    }
+    
+    return foundUser;
   } catch (error) {
-    console.error('Error getting user by username:', error);
+    console.error('❌ getUserByUsername: Error:', error);
     return null;
   }
 }

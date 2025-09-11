@@ -71,49 +71,155 @@ class UserStatusModel {
    */
   static async getAllUsersWithStatus() {
     try {
-      const result = await query(
-        `SELECT did, dusername, dfirstname, dlastname, demail, dou, drole, 
-                dprofilephotourl, dlastactivity, donlinestatus,
-                EXTRACT(EPOCH FROM (NOW() - dlastactivity)) as seconds_since_activity
-         FROM tblusers 
-         WHERE daccountstatus = 'active'
-         ORDER BY dusername`,
+      // First get all active users
+      const usersResult = await query(
+        `SELECT 
+          u.did, u.dusername, u.dfirstname, u.dlastname, u.demail, 
+          u.dprofilephotourl, u.dlastactivity, u.donlinestatus,
+          EXTRACT(EPOCH FROM (NOW() - COALESCE(u.dlastactivity, NOW()))) as seconds_since_activity
+         FROM tblusers u
+         WHERE u.daccountstatus = 'active'
+         ORDER BY u.dusername`,
         []
       );
-      
-      return result.rows.map(user => {
-        const secondsSinceActivity = parseInt(user.seconds_since_activity || 0);
-        let actualStatus = user.donlinestatus || 'offline';
-        
-        // Auto-update status based on activity
-        if (secondsSinceActivity > 300) { // 5 minutes
-          actualStatus = 'offline';
-        } else if (secondsSinceActivity > 180) { // 3 minutes
-          actualStatus = 'away';
-        } else if (secondsSinceActivity > 60) { // 1 minute
-          actualStatus = 'idle';
-        } else if (user.donlinestatus === 'online') {
-          actualStatus = 'online';
-        }
 
-        return {
-          id: user.did,
-          username: user.dusername,
-          firstName: user.dfirstname || '',
-          lastName: user.dlastname || '',
-          email: user.demail,
-          organizationalUnit: user.dou,
-          role: user.drole,
-          avatar: user.dprofilephotourl,
-          lastActivity: user.dlastactivity,
-          onlineStatus: user.donlinestatus,
-          actualStatus,
-          secondsSinceActivity,
-          isOnline: actualStatus === 'online'
-        };
-      });
+      console.log(`🔍 Found ${usersResult.rows.length} active users in database`);
+
+      // Then get role/OU info for each user (taking first role if multiple)
+      const usersWithRoles = [];
+      
+      for (const user of usersResult.rows) {
+        try {
+          const roleResult = await query(
+            `SELECT 
+              COALESCE(r.dname, 'Unknown') as drole,
+              COALESCE(ou.dname, 'Unknown') as dou
+             FROM tbluserroles ur
+             LEFT JOIN tblroles r ON ur.droleid = r.did
+             LEFT JOIN tblorganizationalunits ou ON ur.douid = ou.did
+             WHERE ur.duserid = $1
+             LIMIT 1`,
+            [user.did]
+          );
+
+          const roleInfo = roleResult.rows[0] || { drole: 'Unknown', dou: 'Unknown' };
+          
+          const secondsSinceActivity = parseInt(user.seconds_since_activity || 0);
+          let actualStatus = user.donlinestatus || 'offline';
+          
+          // Auto-update status based on activity
+          if (secondsSinceActivity > 300) { // 5 minutes
+            actualStatus = 'offline';
+          } else if (secondsSinceActivity > 180) { // 3 minutes
+            actualStatus = 'away';
+          } else if (secondsSinceActivity > 60) { // 1 minute
+            actualStatus = 'idle';
+          } else if (user.donlinestatus === 'online') {
+            actualStatus = 'online';
+          }
+
+          const userWithRole = {
+            id: user.did,
+            username: user.dusername,
+            firstName: user.dfirstname || '',
+            lastName: user.dlastname || '',
+            email: user.demail,
+            organizationalUnit: roleInfo.dou,
+            role: roleInfo.drole,
+            avatar: user.dprofilephotourl,
+            lastActivity: user.dlastactivity,
+            onlineStatus: user.donlinestatus,
+            status: actualStatus,
+            isOnline: actualStatus === 'online'
+          };
+          
+          console.log(`✅ Processed user: ${user.dusername} -> Role: ${roleInfo.drole}, OU: ${roleInfo.dou}`);
+          usersWithRoles.push(userWithRole);
+          
+        } catch (roleError) {
+          console.error(`❌ Error processing user ${user.dusername}:`, roleError);
+          // Still add the user with default role info
+          const userWithRole = {
+            id: user.did,
+            username: user.dusername,
+            firstName: user.dfirstname || '',
+            lastName: user.dlastname || '',
+            email: user.demail,
+            organizationalUnit: 'Unknown',
+            role: 'Unknown',
+            avatar: user.dprofilephotourl,
+            lastActivity: user.dlastactivity,
+            onlineStatus: user.donlinestatus,
+            status: 'offline',
+            isOnline: false
+          };
+          usersWithRoles.push(userWithRole);
+        }
+      }
+
+      console.log(`🔍 Final result: ${usersWithRoles.length} users with role info`);
+      return usersWithRoles;
     } catch (error) {
       console.error('Error getting all users with status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user by username with status
+   */
+  static async getUserByUsername(username) {
+    try {
+      const result = await query(
+        `SELECT 
+          u.did, u.dusername, u.dfirstname, u.dlastname, u.demail, 
+          COALESCE(ou.dname, 'Unknown') as dou, 
+          COALESCE(r.dname, 'Unknown') as drole,
+          u.dprofilephotourl, u.dlastactivity, u.donlinestatus,
+          EXTRACT(EPOCH FROM (NOW() - COALESCE(u.dlastactivity, NOW()))) as seconds_since_activity
+         FROM tblusers u
+         LEFT JOIN tbluserroles ur ON u.did = ur.duserid
+         LEFT JOIN tblroles r ON ur.droleid = r.did
+         LEFT JOIN tblorganizationalunits ou ON ur.douid = ou.did
+         WHERE LOWER(u.dusername) = LOWER($1) AND u.daccountstatus = 'active'`,
+        [username]
+      );
+      
+      if (result.rows.length === 0) {
+        return null;
+      }
+      
+      const user = result.rows[0];
+      const secondsSinceActivity = parseInt(user.seconds_since_activity || 0);
+      let actualStatus = user.donlinestatus || 'offline';
+      
+      // Auto-update status based on activity
+      if (secondsSinceActivity > 300) { // 5 minutes
+        actualStatus = 'offline';
+      } else if (secondsSinceActivity > 180) { // 3 minutes
+        actualStatus = 'away';
+      } else if (secondsSinceActivity > 60) { // 1 minute
+        actualStatus = 'idle';
+      } else if (user.donlinestatus === 'online') {
+        actualStatus = 'online';
+      }
+
+      return {
+        id: user.did,
+        username: user.dusername,
+        firstName: user.dfirstname || '',
+        lastName: user.dlastname || '',
+        email: user.demail,
+        organizationalUnit: user.dou,
+        role: user.drole,
+        avatar: user.dprofilephotourl,
+        lastActivity: user.dlastactivity,
+        onlineStatus: user.donlinestatus,
+        status: actualStatus,
+        isOnline: actualStatus === 'online'
+      };
+    } catch (error) {
+      console.error('Error getting user by username:', error);
       throw error;
     }
   }
