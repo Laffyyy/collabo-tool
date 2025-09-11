@@ -61,22 +61,22 @@
     });
 	
 	const changePasswordValidateInput = (value: string): string => {
-		// Only allow alphanumeric characters and specified symbols: ! @ - _ .
-		const filteredValue = value.replace(/[^a-zA-Z0-9!@_.-]/g, '');
-		// Strictly limit to 20 characters max
-		return filteredValue.slice(0, 20);
+		// Allow alphanumeric and backend-specified special characters: @$!%*?&
+		const filteredValue = value.replace(/[^a-zA-Z0-9@$!%*?&]/g, '');
+		// Backend allows up to 128 characters
+		return filteredValue.slice(0, 128);
 	};
 
-	// Update validation to match backend requirements
+	// Simplified validation - only check password requirements, not common passwords
     const changePasswordValidatePassword = () => {
         const errors: string[] = [];
         
         if (changePasswordNew.length > 0) {
-            if (changePasswordNew.length < 8) { // Backend expects 8-128
+            if (changePasswordNew.length < 8) {
                 errors.push("Password must be at least 8 characters long");
             }
             
-            if (changePasswordNew.length > 128) { // Match backend validation
+            if (changePasswordNew.length > 128) {
                 errors.push("Password must not exceed 128 characters");
             }
             
@@ -92,7 +92,7 @@
                 errors.push("Password must contain at least 1 number");
             }
             
-            if (!/[@$!%*?&]/.test(changePasswordNew)) { // Match backend special chars
+            if (!/[@$!%*?&]/.test(changePasswordNew)) {
                 errors.push("Password must contain at least 1 special character (@$!%*?&)");
             }
         }
@@ -103,7 +103,12 @@
 	
 	const changePasswordHandleNewInput = (event: Event) => {
         const target = event.target as HTMLInputElement;
-        changePasswordNew = target.value;
+        const filteredValue = changePasswordValidateInput(target.value);
+        // Update the input value if it was filtered
+        if (target.value !== filteredValue) {
+            target.value = filteredValue;
+        }
+        changePasswordNew = filteredValue;
     };
 	
 	const changePasswordHandleConfirmInput = (event: Event) => {
@@ -119,7 +124,6 @@
 	// Disable pasting for password fields
     const changePasswordHandlePaste = (event: ClipboardEvent) => {
         event.preventDefault();
-        // Don't allow any pasted content for password fields
     };
 	
 	$effect(() => {
@@ -200,33 +204,29 @@
 				} else {
 					throw new Error(securityResponse.message || 'Failed to save security questions');
 				}
-			} else {
-				throw new Error(passwordResponse.message || 'Failed to change password');
-			}
-		} else {
-			// Handle other flows (existing demo behavior)
-			await new Promise(resolve => setTimeout(resolve, 2000));
-			
-			if (changePasswordFromForgotPassword) {
+            } else {
+                throw new Error(passwordResponse.message || 'Failed to change password');
+            }
+        } else {
+            // Handle other flows (existing demo behavior)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            if (changePasswordFromForgotPassword) {
 				goto('/login');
 			} else {
 				goto('/chat');
 			}
-		}
-	} catch (error: any) {
-		console.error('Setup error:', error);
-		changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
-	} finally {
-		changePasswordIsLoading = false;
-	}
+        }
+    } catch (error: any) {
+        console.error('Setup error:', error);
+        changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
+    } finally {
+        changePasswordIsLoading = false;
+    }
 };
 	
 	const changePasswordHandleCancel = () => {
-        if (changePasswordFromFirstTime) {
-            changePasswordShowCancelModal = true;
-        } else {
-            changePasswordShowCancelModal = true;
-        }
+        changePasswordShowCancelModal = true;
     };
 	
 	const changePasswordConfirmCancel = () => {
@@ -262,8 +262,20 @@
 	<div class="changepassword-card">
 		<div class="changepassword-header">
 			<h1 class="changepassword-title">Change Password</h1>
-			<p class="changepassword-subtitle">Update your account password for enhanced security</p>
+			<p class="changepassword-subtitle">
+				{#if changePasswordFromFirstTime}
+					Create a secure password for your account
+				{:else}
+					Update your account password for enhanced security
+				{/if}
+			</p>
 		</div>
+		
+		{#if changePasswordError}
+			<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+				{changePasswordError}
+			</div>
+		{/if}
 		
 		<div class="changepassword-form">
 			<div class="changepassword-field">
@@ -278,7 +290,7 @@
 						class="changepassword-input"
 						id="new-password"
 						placeholder="Create a strong password"
-						maxlength="20"
+						maxlength="128"
 						disabled={changePasswordIsLoading}
 					/>
 					<button
@@ -307,7 +319,7 @@
 						class="changepassword-input"
 						id="confirm-password"
 						placeholder="Re-type your password"
-						maxlength="20"
+						maxlength="128"
 						disabled={changePasswordIsLoading}
 					/>
 					<button
@@ -328,11 +340,11 @@
 			<div class="changepassword-password-hint">
 				<p class="changepassword-hint-title">Password requirements:</p>
 				<ul class="changepassword-hint-list">
-					<li class={changePasswordNew.length >= 15 && changePasswordNew.length <= 20 ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+					<li class={changePasswordNew.length >= 8 && changePasswordNew.length <= 128 ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
-							{#if changePasswordNew.length >= 15 && changePasswordNew.length <= 20}✓{:else}✗{/if}
+							{#if changePasswordNew.length >= 8 && changePasswordNew.length <= 128}✓{:else}✗{/if}
 						</span>
-						15-20 characters long
+						8-128 characters long
 					</li>
 					<li class={/[A-Z]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
@@ -352,11 +364,11 @@
 						</span>
 						At least 1 number
 					</li>
-					<li class={/[!@_.-]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+					<li class={/[@$!%*?&]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
-							{#if /[!@_.-]/.test(changePasswordNew)}✓{:else}✗{/if}
+							{#if /[@$!%*?&]/.test(changePasswordNew)}✓{:else}✗{/if}
 						</span>
-						At least 1 symbol (!, @, -, _, .)
+						At least 1 special character (@$!%*?&)
 					</li>
 					<li class={changePasswordsMatch ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">

@@ -100,6 +100,35 @@ class PasswordChangeService {
   }
 
   /**
+   * Validate new password against current password and common defaults
+   * @param {string} userId - User UUID
+   * @param {string} newPassword - New plain text password
+   * @returns {Promise<void>} Throws error if validation fails
+   */
+  static async validateNewPassword(userId, newPassword) {
+    // Get current password hash and user data
+    const userResult = await sql`
+      SELECT dpasswordhash, daccountstatus, demployeeid, dusername
+      FROM tblusers 
+      WHERE did = ${userId}
+    `;
+
+    if (userResult.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const { dpasswordhash } = userResult[0];
+
+    // Check if new password is same as current password
+    const isSameAsCurrentPassword = await bcrypt.compare(newPassword, dpasswordhash);
+    if (isSameAsCurrentPassword) {
+      throw new Error('New password cannot be the same as your current password');
+    }
+
+    // No other validation needed - just check against current password
+  }
+
+  /**
    * Hash password with secure salt rounds
    * @param {string} password - Plain text password
    * @returns {Promise<string>} Hashed password
@@ -151,7 +180,10 @@ class PasswordChangeService {
     // 1. Validate user
     const user = await this.validateUserForPasswordChange(userId);
 
-    // 2. Verify security answers only if provided and user has existing answers
+    // 2. Validate new password against current password and defaults
+    await this.validateNewPassword(userId, newPassword);
+
+    // 3. Verify security answers only if provided and user has existing answers
     if (securityAnswers.length > 0) {
       // Check if user has existing security answers
       const hasExistingAnswers = await this.hasExistingSecurityAnswers(userId);
@@ -166,10 +198,10 @@ class PasswordChangeService {
       // If user has no existing answers, skip verification (first-time setup)
     }
 
-    // 3. Hash password
+    // 4. Hash password
     const hashedPassword = await this.hashPassword(newPassword);
 
-    // 4. Update database
+    // 5. Update database
     const updatedUser = await this.updateUserPassword(userId, hashedPassword);
 
     return {
