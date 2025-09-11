@@ -6,6 +6,9 @@
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { authStore } from '$lib/stores/auth.svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
+
+  let isDarkMode = $derived(themeStore.isDarkMode);
   
 
   interface Broadcast {
@@ -534,29 +537,29 @@ const paginatedBroadcasts = $derived(() => {
   <title>Broadcast Management - Admin Controls</title>
 </svelte:head>
 
-<div class="p-6 bg-gray-50 min-h-screen space-y-6">
+<div class="{isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} min-h-screen space-y-6 p-6 transition-colors duration-300">
       <!-- Header -->
       <div class="flex items-center justify-between fade-in">
         <div>
-          <h1 class="text-3xl font-bold text-gray-800 mb-2">Broadcast Management</h1>
-          <p class="text-gray-600">Monitor and manage broadcast messages and announcements</p>
+          <h1 class="{isDarkMode ? 'text-white' : 'text-gray-800'} text-3xl font-bold mb-2 transition-colors duration-300">Broadcast Management</h1>
+          <p class="{isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Monitor and manage broadcast messages and announcements</p>
         </div>
       </div>
 
       <!-- Main Panel -->
-      <div class="collaboration-card fade-in">
+      <div class="{isDarkMode ? 'bg-gray-800 border-gray-400' : 'bg-white border-gray-400'} rounded-2xl shadow-lg border fade-in transition-colors duration-300">
         <!-- Search and Filters -->
-        <div class="p-6 border-b border-gray-200">
+        <div class="{isDarkMode ? 'border-gray-700' : 'border-gray-400'} p-6 border-b transition-colors duration-300">
           <div class="flex flex-col lg:flex-row gap-4">
             <!-- Search -->
             <div class="flex-1">
               <div class="relative">
-                <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" />
                 <input
                   bind:value={searchQuery}
                   type="text"
                   placeholder="Search broadcasts by title, content, or creator..."
-                  class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+                  class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300"
                 />
               </div>
             </div>
@@ -565,7 +568,7 @@ const paginatedBroadcasts = $derived(() => {
             <div class="w-full lg:w-48">
               <select
                 bind:value={selectedPriority}
-                class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+                class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300"
               >
                 <option value="all">All Priorities</option>
                 <option value="high">High Priority</option>
@@ -578,7 +581,7 @@ const paginatedBroadcasts = $derived(() => {
             <div class="w-full lg:w-48">
               <select
                 bind:value={selectedStatus}
-                class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+                class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300"
               >
                 <option value="all">All Statuses</option>
                 <option value="sent">Sent</option>
@@ -591,49 +594,49 @@ const paginatedBroadcasts = $derived(() => {
         </div>
 
         <!-- Tabs -->
-        <div class="border-b border-gray-200">
+        <div class="{isDarkMode ? 'border-gray-700' : 'border-gray-400'} border-b transition-colors duration-300">
           <nav class="flex space-x-6 px-6">
             <button
               onclick={() => activeTab = 'sent'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'sent' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'sent' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
                 <Send class="w-4 h-4" />
                 <span>Sent</span>
-                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().sent}</span>
+                <span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts().sent}</span>
               </div>
             </button>
 
             <button
               onclick={() => activeTab = 'scheduled'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'scheduled' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'scheduled' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
                 <Clock class="w-4 h-4" />
                 <span>Scheduled</span>
-                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().scheduled}</span>
+                <span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts().scheduled}</span>
               </div>
             </button>
 
             <button
               onclick={() => activeTab = 'archived'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'archived' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'archived' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
                 <Archive class="w-4 h-4" />
                 <span>Archived</span>
-                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().archived}</span>
+                <span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts().archived}</span>
               </div>
             </button>
 
             <button
               onclick={() => activeTab = 'reported'}
-              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+              class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
                 <Flag class="w-4 h-4" />
                 <span>Reported</span>
-                <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().reported}</span>
+                <span class="{isDarkMode ? 'bg-red-900 text-red-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts().reported}</span>
               </div>
             </button>
           </nav>
@@ -642,30 +645,31 @@ const paginatedBroadcasts = $derived(() => {
         <!-- Content -->
         {#if activeTab === 'sent'}
           <!-- Sent Tab -->
-          <div class="overflow-x-auto">
-            <table class="w-full table-fixed">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
+          <div class="overflow-hidden rounded-b-2xl">
+            <div class="overflow-x-auto">
+              <table class="w-full table-fixed">
+              <thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
+                <tr>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-48 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Title</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-40 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Who Sent It</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Priority</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Status</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Recipients</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Answered</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-36 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Sent Date</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-32 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'} divide-y transition-colors duration-300">
                 {#each paginatedBroadcasts() as broadcast (broadcast.id)}
-                  <tr class="hover:bg-gray-50">
+                  <tr class="{isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors duration-300">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
-                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                        <div class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm font-medium transition-colors duration-300">{broadcast.title}</div>
+                        <div class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm truncate max-w-xs transition-colors duration-300">{broadcast.content}</div>
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
@@ -678,27 +682,27 @@ const paginatedBroadcasts = $derived(() => {
                         {broadcast.status}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.totalRecipients}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {getAnsweredCount(broadcast)}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div class="flex items-center space-x-2">
                         <button
                           onclick={() => viewBroadcast(broadcast)}
-                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Eye class="w-4 h-4" />
                           <span>View</span>
                         </button>
                         <button
                           onclick={() => confirmArchiveBroadcast(broadcast)}
-                          class="text-orange-600 hover:text-orange-500 flex items-center space-x-1"
+                          class="{isDarkMode ? 'text-orange-400 hover:text-orange-300' : 'text-orange-600 hover:text-orange-500'} flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Archive class="w-4 h-4" />
                           <span>Archive</span>
@@ -712,12 +716,12 @@ const paginatedBroadcasts = $derived(() => {
 
           {#if totalPages() > 1}
   <div class="flex items-center justify-between mt-4 mb-6 px-6">
-    <div class="text-xs text-gray-600">
+    <div class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-xs transition-colors duration-300">
       Page {pageByTab[activeTab]} of {totalPages()}
     </div>
     <div class="flex space-x-1">
       <button
-        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        class="{isDarkMode ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600 disabled:bg-gray-800' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 disabled:bg-gray-50'} border px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
         onclick={() => goToPage(pageByTab[activeTab] - 1)}
         disabled={pageByTab[activeTab] === 1}
         aria-label="Previous page"
@@ -726,10 +730,10 @@ const paginatedBroadcasts = $derived(() => {
       </button>
       {#each Array(totalPages()) as _, i}
         <button
-          class="secondary-button px-2 py-1 text-xs rounded
+          class="{isDarkMode ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'} border px-2 py-1 text-xs rounded
             {pageByTab[activeTab] === i + 1
               ? 'bg-[#01c0a4] text-white ring-2 ring-[#01c0a4]'
-              : 'hover:bg-gray-100'}"
+              : ''} transition-colors duration-300"
           onclick={() => goToPage(i + 1)}
           aria-current={pageByTab[activeTab] === i + 1 ? 'page' : undefined}
         >
@@ -737,7 +741,7 @@ const paginatedBroadcasts = $derived(() => {
         </button>
       {/each}
       <button
-        class="secondary-button px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        class="{isDarkMode ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600 disabled:bg-gray-800' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 disabled:bg-gray-50'} border px-2 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
         onclick={() => goToPage(pageByTab[activeTab] + 1)}
         disabled={pageByTab[activeTab] === totalPages()}
         aria-label="Next page"
@@ -747,33 +751,35 @@ const paginatedBroadcasts = $derived(() => {
     </div>
   </div>
 {/if}
+            </div>
           </div>
         {:else if activeTab === 'scheduled'}
           <!-- Scheduled Tab -->
-          <div class="overflow-x-auto">
-            <table class="w-full table-fixed">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
+          <div class="overflow-hidden rounded-b-2xl">
+            <div class="overflow-x-auto">
+              <table class="w-full table-fixed">
+              <thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
+                <tr>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-48 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Title</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-40 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Who Sent It</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Priority</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Status</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Recipients</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Answered</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-36 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Sent Date</th>
+                  <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-32 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'} divide-y transition-colors duration-300">
                 {#each paginatedBroadcasts() as broadcast (broadcast.id)}
-                  <tr class="hover:bg-gray-50">
+                  <tr class="{isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors duration-300">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
-                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                        <div class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm font-medium transition-colors duration-300">{broadcast.title}</div>
+                        <div class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm truncate max-w-xs transition-colors duration-300">{broadcast.content}</div>
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
@@ -786,34 +792,34 @@ const paginatedBroadcasts = $derived(() => {
                         {broadcast.status}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.totalRecipients}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {getAnsweredCount(broadcast)}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.scheduledFor ? formatTimestamp(broadcast.scheduledFor) : formatTimestamp(broadcast.createdAt)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div class="flex justify-center items-center space-x-2">
                         <button
                           onclick={() => viewBroadcast(broadcast)}
-                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Eye class="w-4 h-4" />
                           <span>View</span>
                         </button>
                         <button
                           onclick={() => confirmArchiveBroadcast(broadcast)}
-                          class="text-orange-600 hover:text-orange-500 flex items-center space-x-1"
+                          class="{isDarkMode ? 'text-orange-400 hover:text-orange-300' : 'text-orange-600 hover:text-orange-500'} flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Archive class="w-4 h-4" />
                           <span>Archive</span>
                         </button>
                         <button
                           onclick={() => confirmDeleteBroadcast(broadcast)}
-                          class="text-red-600 hover:text-red-500 flex items-center space-x-1"
+                          class="{isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-500'} flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Trash2 class="w-4 h-4" />
                           <span>Delete</span>
@@ -861,33 +867,35 @@ const paginatedBroadcasts = $derived(() => {
     </div>
   </div>
 {/if}
+            </div>
           </div>
+
         {:else if activeTab === 'archived'}
           <!-- Archived Tab -->
           <div class="overflow-x-auto">
             <table class="w-full table-fixed">
-            <thead class="bg-gray-50">
+            <thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
               <tr>
-                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-48 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Title</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-40 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Who Sent It</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Priority</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Status</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Recipients</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Answered</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-36 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Sent Date</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-32 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Actions</th>
                 </tr>
               </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
+              <tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'} divide-y transition-colors duration-300">
                 {#each paginatedBroadcasts() as broadcast (broadcast.id)}
-                  <tr class="hover:bg-gray-50 bg-gray-50">
+                  <tr class="{isDarkMode ? 'hover:bg-gray-700 bg-gray-800' : 'hover:bg-gray-50 bg-gray-50'} transition-colors duration-300">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div class="text-sm font-medium text-gray-700">{broadcast.title}</div>
-                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                        <div class="{isDarkMode ? 'text-gray-200' : 'text-gray-700'} text-sm font-medium transition-colors duration-300">{broadcast.title}</div>
+                        <div class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm truncate max-w-xs transition-colors duration-300">{broadcast.content}</div>
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-700'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
@@ -900,34 +908,34 @@ const paginatedBroadcasts = $derived(() => {
                         {broadcast.status}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-700'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.totalRecipients}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-700'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {getAnsweredCount(broadcast)}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div class="flex justify-center items-center space-x-2">
                         <button
                           onclick={() => viewBroadcast(broadcast)}
-                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Eye class="w-4 h-4" />
                           <span>View</span>
                         </button>
                         <button
                           onclick={() => confirmRestoreBroadcast(broadcast)}
-                          class="text-blue-600 hover:text-blue-500 flex items-center space-x-1"
+                          class="{isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'} flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Undo2 class="w-4 h-4" />
                           <span>Restore</span>
                         </button>
                         <button
                         onclick={() => confirmDeleteBroadcast(broadcast)}
-                        class="text-red-600 hover:text-red-500 flex items-center space-x-1"
+                        class="{isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-500'} flex items-center space-x-1 transition-colors duration-300"
                       >
                         <Trash2 class="w-4 h-4" />
                         <span>Delete</span>
@@ -980,28 +988,28 @@ const paginatedBroadcasts = $derived(() => {
           <!-- Reported Tab -->
           <div class="overflow-x-auto">
             <table class="w-full table-fixed">
-            <thead class="bg-gray-50">
+            <thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
               <tr>
-                <th class="px-6 py-3 w-48 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                <th class="px-6 py-3 w-40 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Who Sent It</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipients</th>
-                <th class="px-6 py-3 w-28 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Answered</th>
-                <th class="px-6 py-3 w-36 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Date</th>
-                <th class="px-6 py-3 w-32 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-48 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Title</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-40 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Who Sent It</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Priority</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Status</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Recipients</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-28 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Answered</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-36 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Report Reason</th>
+                <th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 w-32 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Actions</th>
                 </tr>
               </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
+              <tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'} divide-y transition-colors duration-300">
                 {#each paginatedBroadcasts() as broadcast (broadcast.id)}
-                  <tr class="hover:bg-gray-50 bg-red-50">
+                  <tr class="{isDarkMode ? 'hover:bg-gray-700 bg-red-900/20' : 'hover:bg-gray-50 bg-red-50'} transition-colors duration-300">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div class="text-sm font-medium text-gray-900">{broadcast.title}</div>
-                        <div class="text-sm text-gray-500 truncate max-w-xs">{broadcast.content}</div>
+                        <div class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm font-medium transition-colors duration-300">{broadcast.title}</div>
+                        <div class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm truncate max-w-xs transition-colors duration-300">{broadcast.content}</div>
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.createdByEmail}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
@@ -1014,33 +1022,30 @@ const paginatedBroadcasts = $derived(() => {
                         {broadcast.status}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {broadcast.totalRecipients}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
                       {getAnsweredCount(broadcast)}
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                    <td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 text-sm max-w-xs truncate transition-colors duration-300">
                       <div class="flex items-center">
-                        <Flag class="w-4 h-4 text-red-500 mr-2" />
+                        <Flag class="{isDarkMode ? 'text-red-400' : 'text-red-500'} w-4 h-4 mr-2 transition-colors duration-300" />
                         {broadcast.reportReason || 'No reason provided'}
                       </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {broadcast.sentAt ? formatTimestamp(broadcast.sentAt) : formatTimestamp(broadcast.createdAt)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div class="flex items-center space-x-2">
                         <button
                           onclick={() => viewBroadcast(broadcast)}
-                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+                          class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Eye class="w-4 h-4" />
                           <span>View</span>
                         </button>
                         <button
                           onclick={() => confirmRestoreBroadcast(broadcast)}
-                          class="text-blue-600 hover:text-blue-500 flex items-center space-x-1"
+                          class="{isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'} flex items-center space-x-1 transition-colors duration-300"
                         >
                           <Undo2 class="w-4 h-4" />
                           <span>Restore</span>
@@ -1094,9 +1099,9 @@ const paginatedBroadcasts = $derived(() => {
         <!-- Empty State -->
         {#if paginatedBroadcasts().length === 0}
           <div class="text-center py-12">
-            <Radio class="mx-auto h-12 w-12 text-gray-400" />
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No broadcasts found</h3>
-            <p class="mt-1 text-sm text-gray-500">Try adjusting your search criteria or filters.</p>
+            <Radio class="{isDarkMode ? 'text-gray-600' : 'text-gray-400'} mx-auto h-12 w-12 transition-colors duration-300" />
+            <h3 class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} mt-2 text-sm font-medium transition-colors duration-300">No broadcasts found</h3>
+            <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} mt-1 text-sm transition-colors duration-300">Try adjusting your search criteria or filters.</p>
           </div>
         {/if}
       </div>
@@ -1113,18 +1118,18 @@ const paginatedBroadcasts = $derived(() => {
     onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { closeBroadcastDetails(); } }}
   >
     <div 
-      class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transition-colors duration-300"
       role="document"
     >
       <!-- Modal Header -->
-      <div class="flex items-center justify-between p-6 border-b border-gray-200">
+      <div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
         <div class="flex items-center space-x-3">
           <Radio class="w-5 h-5 text-[#01c0a4]" />
-          <h2 class="text-lg font-semibold text-gray-900">Broadcast Details</h2>
+          <h2 class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} text-lg font-semibold transition-colors duration-300">Broadcast Details</h2>
         </div>
         <button
           onclick={closeBroadcastDetails}
-          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          class="{isDarkMode ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'} p-2 rounded-lg transition-colors duration-300"
         >
           <X class="w-5 h-5" />
         </button>
@@ -1135,11 +1140,11 @@ const paginatedBroadcasts = $derived(() => {
         <!-- Title and Basic Info -->
         <div class="space-y-4">
           <div>
-            <label for="broadcast-title" class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <label for="broadcast-title" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Title</label>
             <input
               id="broadcast-title"
               type="text"
-              class="text-lg font-semibold text-gray-900 bg-transparent border-none p-0 m-0 focus:ring-0 focus:outline-none"
+              class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} text-lg font-semibold bg-transparent border-none p-0 m-0 focus:ring-0 focus:outline-none transition-colors duration-300"
               value={selectedBroadcast.title}
               readonly
               tabindex="-1"
@@ -1147,8 +1152,8 @@ const paginatedBroadcasts = $derived(() => {
             />
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-2">Content</span>
-            <div class="bg-gray-50 rounded-lg p-4 text-gray-900 leading-relaxed">
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Content</span>
+            <div class="{isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-50 text-gray-900'} rounded-lg p-4 leading-relaxed transition-colors duration-300">
               {selectedBroadcast.content}
             </div>
           </div>
@@ -1157,43 +1162,43 @@ const paginatedBroadcasts = $derived(() => {
         <!-- Broadcast Info Grid -->
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Created By</span>
-            <div class="text-gray-900">{selectedBroadcast.createdByEmail}</div>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Created By</span>
+            <div class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} transition-colors duration-300">{selectedBroadcast.createdByEmail}</div>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Priority</span>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Priority</span>
             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full border {getPriorityColor(selectedBroadcast.priority)}">
               {selectedBroadcast.priority}
             </span>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Status</span>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Status</span>
             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getBroadcastStatusColor(selectedBroadcast.broadcastStatus || 'active')}">
               {selectedBroadcast.broadcastStatus || 'Active'}
             </span>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Recipients</span>
-            <div class="text-gray-900">{selectedBroadcast.totalRecipients}</div>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Recipients</span>
+            <div class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} transition-colors duration-300">{selectedBroadcast.totalRecipients}</div>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Acknowledgment Required</span>
-            <div class="text-gray-900">{selectedBroadcast.acknowledgmentRequired ? 'Yes' : 'No'}</div>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Acknowledgment Required</span>
+            <div class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} transition-colors duration-300">{selectedBroadcast.acknowledgmentRequired ? 'Yes' : 'No'}</div>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Responses</span>
-            <div class="text-gray-900">{getAnsweredCount(selectedBroadcast)}</div>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Responses</span>
+            <div class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} transition-colors duration-300">{getAnsweredCount(selectedBroadcast)}</div>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">Created Date</span>
-            <div class="text-gray-900">{formatTimestamp(selectedBroadcast.createdAt)}</div>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">Created Date</span>
+            <div class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} transition-colors duration-300">{formatTimestamp(selectedBroadcast.createdAt)}</div>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-1">
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-1 transition-colors duration-300">
               {selectedBroadcast.status === 'sent' ? 'Sent Date' : 
                selectedBroadcast.status === 'scheduled' ? 'Scheduled Date' : 'Status Date'}
             </span>
-            <div class="text-gray-900">
+            <div class="{isDarkMode ? 'text-gray-100' : 'text-gray-900'} transition-colors duration-300">
               {selectedBroadcast.sentAt ? formatTimestamp(selectedBroadcast.sentAt) :
                selectedBroadcast.scheduledFor ? formatTimestamp(selectedBroadcast.scheduledFor) :
                formatTimestamp(selectedBroadcast.createdAt)}
@@ -1204,20 +1209,20 @@ const paginatedBroadcasts = $derived(() => {
         <!-- Target Information -->
         <div class="space-y-4">
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-2">Target Roles</span>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Target Roles</span>
             <div class="flex flex-wrap gap-2">
               {#each selectedBroadcast.targetRoles as role}
-                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                <span class="{isDarkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'} inline-flex px-2 py-1 text-xs font-medium rounded-full transition-colors duration-300">
                   {role}
                 </span>
               {/each}
             </div>
           </div>
           <div>
-            <span class="block text-sm font-medium text-gray-700 mb-2">Target Organization Units</span>
+            <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Target Organization Units</span>
             <div class="flex flex-wrap gap-2">
               {#each selectedBroadcast.targetOUs as ou}
-                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                <span class="{isDarkMode ? 'bg-green-900 text-green-200' : 'bg-green-100 text-green-800'} inline-flex px-2 py-1 text-xs font-medium rounded-full transition-colors duration-300">
                   {ou}
                 </span>
               {/each}
@@ -1227,25 +1232,25 @@ const paginatedBroadcasts = $derived(() => {
 
         <!-- Report Information (for reported broadcasts) -->
         {#if selectedBroadcast.isReported && activeTab === 'reported'}
-          <div class="space-y-4 border-t pt-6">
-            <h3 class="text-lg font-semibold text-red-600 flex items-center">
+          <div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} space-y-4 border-t pt-6 transition-colors duration-300">
+            <h3 class="{isDarkMode ? 'text-red-400' : 'text-red-600'} text-lg font-semibold flex items-center transition-colors duration-300">
               <Flag class="w-5 h-5 mr-2" />
               Report Information
             </h3>
             
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div class="{isDarkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'} border rounded-lg p-4 transition-colors duration-300">
               <div class="grid grid-cols-1 gap-3">
                 <div>
-                  <span class="block text-sm font-medium text-red-700 mb-1">Reported By</span>
-                  <div class="text-red-900">{selectedBroadcast.reportedBy}</div>
+                  <span class="{isDarkMode ? 'text-red-300' : 'text-red-700'} block text-sm font-medium mb-1 transition-colors duration-300">Reported By</span>
+                  <div class="{isDarkMode ? 'text-red-200' : 'text-red-900'} transition-colors duration-300">{selectedBroadcast.reportedBy}</div>
                 </div>
                 <div>
-                  <span class="block text-sm font-medium text-red-700 mb-1">Report Date</span>
-                  <div class="text-red-900">{selectedBroadcast.reportedAt ? formatTimestamp(selectedBroadcast.reportedAt) : 'N/A'}</div>
+                  <span class="{isDarkMode ? 'text-red-300' : 'text-red-700'} block text-sm font-medium mb-1 transition-colors duration-300">Report Date</span>
+                  <div class="{isDarkMode ? 'text-red-200' : 'text-red-900'} transition-colors duration-300">{selectedBroadcast.reportedAt ? formatTimestamp(selectedBroadcast.reportedAt) : 'N/A'}</div>
                 </div>
                 <div>
-                  <span class="block text-sm font-medium text-red-700 mb-1">Report Reason</span>
-                  <div class="text-red-900 bg-red-100 rounded-lg p-3 leading-relaxed">
+                  <span class="{isDarkMode ? 'text-red-300' : 'text-red-700'} block text-sm font-medium mb-1 transition-colors duration-300">Report Reason</span>
+                  <div class="{isDarkMode ? 'text-red-200 bg-red-900/40' : 'text-red-900 bg-red-100'} rounded-lg p-3 leading-relaxed transition-colors duration-300">
                     {selectedBroadcast.reportReason || 'No reason provided'}
                   </div>
                 </div>

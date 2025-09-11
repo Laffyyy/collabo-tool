@@ -1934,6 +1934,15 @@
 									</td>
 									<td class="w-48 px-3 py-3 whitespace-nowrap text-sm font-medium" onclick={(e) => e.stopPropagation()}>
 										<div class="flex items-center space-x-2">
+											<button
+												onclick={() => editUser(user)}
+												class="{isDarkMode ? 'bg-blue-800 text-blue-200 hover:bg-blue-700 hover:text-blue-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700'} flex items-center space-x-1 px-2 py-1 rounded-md transition-colors text-xs font-medium"
+												title="Edit user"
+											>
+												<Edit class="w-3 h-3" />
+												<span>Edit</span>
+											</button>
+											
 											{#if user.role === 'Manager' || user.role === 'Supervisor'}
 												<button
 													onclick={() => showTeamInfo(user)}
@@ -1944,15 +1953,6 @@
 													<span>Team</span>
 												</button>
 											{/if}
-											
-											<button
-												onclick={() => editUser(user)}
-												class="{isDarkMode ? 'bg-blue-800 text-blue-200 hover:bg-blue-700 hover:text-blue-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700'} flex items-center space-x-1 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-												title="Edit user"
-											>
-												<Edit class="w-3 h-3" />
-												<span>Edit</span>
-											</button>
 										</div>
 									</td>
 								</tr>
@@ -2542,7 +2542,7 @@
 						<!-- Vertical Connection Line -->
 						{#if supervisorTeam.length > 0}
 							<div class="flex justify-center">
-								<div class="w-0.5 h-8 bg-gray-300"></div>
+								<div class="w-0.5 h-8 {isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} transition-colors duration-300"></div>
 							</div>
 						{/if}
 					</div>
@@ -2550,11 +2550,11 @@
 					<!-- Team Members -->
 					{#if supervisorTeam.length > 0}
 						<div class="space-y-6">
-							<h3 class="text-lg font-medium text-gray-900 text-center">Team Members ({supervisorTeam.length})</h3>
+							<h3 class="text-lg font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} text-center transition-colors duration-300">Team Members ({supervisorTeam.length})</h3>
 							
 							<!-- Single horizontal line -->
 							<div class="flex justify-center">
-								<div class="w-full max-w-6xl h-0.5 bg-gray-300"></div>
+								<div class="w-full max-w-6xl h-0.5 {isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} transition-colors duration-300"></div>
 							</div>
 
 							<!-- Team Member Cards -->
@@ -2562,19 +2562,19 @@
 								<div class="grid gap-4 max-w-7xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); justify-content: center;">
 									{#each supervisorTeam as member}
 										<div class="{
-											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
-											member.role === 'Support' ? 'bg-teal-100 border-teal-300' :
-											'bg-green-100 border-green-200'
-										} border rounded-lg p-3 text-center min-w-[160px]">
+											member.role === 'Frontline' ? (isDarkMode ? 'bg-cyan-900/30 border-cyan-600' : 'bg-cyan-100 border-cyan-300') :
+											member.role === 'Support' ? (isDarkMode ? 'bg-teal-900/30 border-teal-600' : 'bg-teal-100 border-teal-300') :
+											(isDarkMode ? 'bg-green-900/30 border-green-600' : 'bg-green-100 border-green-200')
+										} border rounded-lg p-3 text-center min-w-[160px] transition-colors duration-300">
 											<div class="mx-auto mb-2"><ProfileAvatar user={{ name: member.name }} size="md" showOnlineStatus={false} /></div>
-											<div class="font-medium text-gray-900 text-sm truncate" title="{member.name}">{member.name}</div>
+											<div class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} text-sm truncate transition-colors duration-300" title="{member.name}">{member.name}</div>
 											<div class="text-xs {
-												member.role === 'Frontline' ? 'text-cyan-700' :
-												member.role === 'Support' ? 'text-teal-700' :
-												'text-gray-600'
-											} font-semibold">{member.role}</div>
-											<div class="text-xs text-gray-500 truncate" title="{member.ou}">{member.ou}</div>
-											<div class="text-xs text-gray-500 mt-1 truncate" title="{member.email}">{member.email}</div>
+												member.role === 'Frontline' ? (isDarkMode ? 'text-cyan-400' : 'text-cyan-700') :
+												member.role === 'Support' ? (isDarkMode ? 'text-teal-400' : 'text-teal-700') :
+												(isDarkMode ? 'text-gray-300' : 'text-gray-600')
+											} font-semibold transition-colors duration-300">{member.role}</div>
+											<div class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} truncate transition-colors duration-300" title="{member.ou}">{member.ou}</div>
+											<div class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mt-1 truncate transition-colors duration-300" title="{member.email}">{member.email}</div>
 										</div>
 									{/each}
 								</div>
@@ -2626,7 +2626,7 @@
 						<!-- Vertical Connection Line -->
 						{#if supervisorTeam.length > 0}
 							<div class="flex justify-center">
-								<div class="w-0.5 h-12 bg-gray-300"></div>
+								<div class="w-0.5 h-12 {isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} transition-colors duration-300"></div>
 							</div>
 						{/if}
 					</div>
@@ -2634,11 +2634,11 @@
 					<!-- Team Members -->
 					{#if supervisorTeam.length > 0}
 						<div class="space-y-6">
-							<h3 class="text-lg font-medium text-gray-900 text-center">Team Members ({supervisorTeam.length})</h3>
+							<h3 class="text-lg font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} text-center transition-colors duration-300">Team Members ({supervisorTeam.length})</h3>
 							
 							<!-- Single horizontal line -->
 							<div class="flex justify-center">
-								<div class="w-full max-w-6xl h-0.5 bg-gray-300"></div>
+								<div class="w-full max-w-6xl h-0.5 {isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} transition-colors duration-300"></div>
 							</div>
 
 							<!-- Team Member Cards -->
@@ -2666,9 +2666,9 @@
 						</div>
 					{:else}
 						<div class="text-center py-8">
-							<Users class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-							<h3 class="text-lg font-medium text-gray-900 mb-2">No Team Members</h3>
-							<p class="text-gray-500">This supervisor doesn't have any direct reports yet.</p>
+							<Users class="w-12 h-12 {isDarkMode ? 'text-gray-500' : 'text-gray-400'} mx-auto mb-4 transition-colors duration-300" />
+							<h3 class="text-lg font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-900'} mb-2 transition-colors duration-300">No Team Members</h3>
+							<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">This supervisor doesn't have any direct reports yet.</p>
 						</div>
 					{/if}
 				{:else}
@@ -2676,24 +2676,24 @@
 					{@const directSupervisors = getDirectSupervisors()}
 					
 					<!-- Manager Team Summary moved to top -->
-					<div class="mb-8 bg-gray-50 rounded-lg p-4">
-						<h4 class="font-medium text-gray-900 mb-3 text-center">Manager Team Summary</h4>
+					<div class="mb-8 {isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} rounded-lg p-4 transition-colors duration-300">
+						<h4 class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} mb-3 text-center transition-colors duration-300">Manager Team Summary</h4>
 						<div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
-							<div class="bg-white rounded p-3">
+							<div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded p-3 transition-colors duration-300">
 								<div class="text-2xl font-bold text-blue-600">{directSupervisors.length}</div>
-								<div class="text-xs text-gray-600">Supervisors</div>
+								<div class="text-xs {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Supervisors</div>
 							</div>
-							<div class="bg-white rounded p-3">
+							<div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded p-3 transition-colors duration-300">
 								<div class="text-2xl font-bold text-green-600">
 									{teamData?.teamMembers ? teamData.teamMembers.filter((m: any) => m.role === 'Frontline' || m.role === 'Support').length : 0}
 								</div>
-								<div class="text-xs text-gray-600">Team Members</div>
+								<div class="text-xs {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Team Members</div>
 							</div>
-							<div class="bg-white rounded p-3">
+							<div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded p-3 transition-colors duration-300">
 								<div class="text-2xl font-bold text-purple-600">
 									{teamData?.teamMembers ? teamData.teamMembers.length + 1 : 1}
 								</div>
-								<div class="text-xs text-gray-600">Total People</div>
+								<div class="text-xs {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Total People</div>
 							</div>
 						</div>
 					</div>
@@ -2757,9 +2757,9 @@
 					</div>
 					{:else}
 						<div class="text-center py-8">
-							<Users class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-							<h3 class="text-lg font-medium text-gray-900 mb-2">No Team Structure</h3>
-							<p class="text-gray-500">This manager doesn't have any supervisors or direct reports yet.</p>
+							<Users class="w-12 h-12 {isDarkMode ? 'text-gray-500' : 'text-gray-400'} mx-auto mb-4 transition-colors duration-300" />
+							<h3 class="text-lg font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-900'} mb-2 transition-colors duration-300">No Team Structure</h3>
+							<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">This manager doesn't have any supervisors or direct reports yet.</p>
 						</div>
 					{/if}
 				{/if}
