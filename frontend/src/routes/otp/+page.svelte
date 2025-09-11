@@ -155,6 +155,7 @@ onMount(() => {
                         lastName: string;
                         role: string;
                         mustChangePassword?: boolean;
+                        accountStatus?: string;
                         profilePhotoUrl?: string;
                         organizationUnit?: string;
                         onlineStatus?: 'online' | 'away' | 'idle' | 'offline';

@@ -10,7 +10,9 @@ export const API_CONFIG = {
       resendOtp: '/api/v1/auth/resend-otp', 
       logout: '/api/v1/auth/logout',      
       forgotPassword: '/api/v1/auth/forgot-password',
-      resetPassword: '/api/v1/auth/reset-password'
+      resetPassword: '/api/v1/auth/reset-password',
+      sessionInfo: '/api/v1/auth/session-info', // Fixed: added v1
+      refreshSession: '/api/v1/auth/refresh-session'
     },
     securityQuestions: {
       getAll: '/api/v1/security-questions/questions',
