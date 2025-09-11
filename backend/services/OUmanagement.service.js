@@ -82,18 +82,24 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
             isactive
         );
 
-        // Ensure jsSettings is deserialized for all rows
-        for (const row of rows) {
-            if (Object.prototype.hasOwnProperty.call(row, 'jsSettings')) {
-                row.jsSettings = deserializeJsSettings(row.jsSettings);
+        // Recursively deserialize jsSettings for all rows and their children
+        function deserializeOUSettings(ou) {
+            if (Object.prototype.hasOwnProperty.call(ou, 'jsSettings')) {
+                ou.jsSettings = deserializeJsSettings(ou.jsSettings);
             }
+            if (ou.children && Array.isArray(ou.children)) {
+                ou.children = ou.children.map(child => deserializeOUSettings({...child}));
+            }
+            return ou;
         }
+
+        const processedRows = rows.map(row => deserializeOUSettings({...row}));
 
         const totalPages = limitInt > 0 ? Math.ceil(total / limitInt) : 0;
         const page = limitInt > 0 ? Math.floor(startInt / limitInt) + 1 : 1;
 
         return {
-            data: rows,
+            data: processedRows,
             total,
             start: startInt,
             limit: limitInt,

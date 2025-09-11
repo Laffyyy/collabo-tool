@@ -152,10 +152,12 @@ class OUmodel {
             let params = [];
             let paramIndex = 1;
 
-            if (search && search !== 'false' && searchvalue && searchvalue.trim() !== '') {
-                const searchCondition = ` AND (ou.dname ILIKE $${paramIndex} OR ou.ddescription ILIKE $${paramIndex})`;
-                whereClause += searchCondition;
-                params.push(`%${searchvalue}%`);
+            const searchParam = search && search !== 'false' && searchvalue && searchvalue.trim() !== '' 
+                ? `%${searchvalue}%` 
+                : null;
+
+            if (searchParam) {
+                params.push(searchParam);
                 paramIndex++;
             }
 
@@ -167,54 +169,98 @@ class OUmodel {
             // Use window function COUNT(*) OVER() to compute total across filtered set
             const query = `
                 WITH RECURSIVE ou_hierarchy AS (
-                    -- Base case: start with root OUs (no parent) that match our filter
+                    -- Base case: start with OUs that match our filter
                     SELECT 
-                        did as base_ou,
-                        did as descendant_ou,
+                        did,
+                        did as root_ou,
                         ARRAY[did] as path,
-                        1 as depth
+                        1 as depth,
+                        dname,
+                        ddescription,
+                        dparentouid,
+                        tcreatedat,
+                        "jsSettings",
+                        "dLocation",
+                        "bisActive",
+                        dname as root_name,
+                        ddescription as root_description
                     FROM tblorganizationalunits
-                    WHERE "bisActive" = ${activeStatus} AND dparentouid IS NULL
+                    WHERE "bisActive" = ${activeStatus}
+                    ${searchParam ? `AND (dname ILIKE $1 OR ddescription ILIKE $1)` : ''}
                     
                     UNION ALL
                     
-                    -- Recursive case: add child OUs, limiting depth to prevent runaway recursion
+                    -- Recursive case: add child OUs
                     SELECT 
-                        h.base_ou,
                         o.did,
+                        h.root_ou,
                         h.path || o.did,
-                        h.depth + 1
+                        h.depth + 1,
+                        o.dname,
+                        o.ddescription,
+                        o.dparentouid,
+                        o.tcreatedat,
+                        o."jsSettings",
+                        o."dLocation",
+                        o."bisActive",
+                        h.root_name,
+                        h.root_description
                     FROM tblorganizationalunits o
-                    INNER JOIN ou_hierarchy h ON o.dparentouid = h.descendant_ou
-                    WHERE o."bisActive" = ${activeStatus} AND h.depth < 10
+                    INNER JOIN ou_hierarchy h ON o.dparentouid = h.did
+                    WHERE o."bisActive" = ${activeStatus}
+                    ${searchParam ? `AND (
+                        o.dname ILIKE $1 OR 
+                        o.ddescription ILIKE $1 OR 
+                        h.root_name ILIKE $1 OR 
+                        h.root_description ILIKE $1
+                    )` : ''}
+                    AND h.depth < 10
                 ),
                 member_counts AS (
-                    -- Calculate member counts more efficiently using window functions
+                    -- Calculate member counts
                     SELECT 
-                        oh.base_ou,
+                        ou.did,
                         COUNT(DISTINCT ur.duserid) as membercount
-                    FROM ou_hierarchy oh
-                    LEFT JOIN tbluserroles ur ON ur.douid = oh.descendant_ou
-                    GROUP BY oh.base_ou
-                ),
-                filtered_ous AS (
-                    -- Get base OU information with member counts
-                    SELECT
-                        ou.did as ouid,
-                        ou.dname,
-                        ou.ddescription,
-                        ou.dparentouid,
-                        ou.tcreatedat,
-                        ou."jsSettings",
-                        ou."dLocation",
-                        ou."bisActive",
-                        COALESCE(mc.membercount, 0) as membercount
                     FROM tblorganizationalunits ou
-                    LEFT JOIN member_counts mc ON mc.base_ou = ou.did
-                    WHERE ou."bisActive" = ${activeStatus}
+                    LEFT JOIN tbluserroles ur ON ur.douid = ou.did
+                    GROUP BY ou.did
+                ),
+                ou_tree AS (
+                    -- First, get the root information
+                    SELECT DISTINCT ON (h.root_ou)
+                        h.root_ou as ouid,
+                        FIRST_VALUE(h.dname) OVER w as dname,
+                        FIRST_VALUE(h.ddescription) OVER w as ddescription,
+                        FIRST_VALUE(h.dparentouid) OVER w as dparentouid,
+                        FIRST_VALUE(h.tcreatedat) OVER w as tcreatedat,
+                        FIRST_VALUE(h."jsSettings") OVER w as "jsSettings",
+                        FIRST_VALUE(h."dLocation") OVER w as "dLocation",
+                        FIRST_VALUE(h."bisActive") OVER w as "bisActive",
+                        FIRST_VALUE(mc.membercount) OVER w as membercount,
+                        (
+                            SELECT jsonb_agg(
+                                jsonb_build_object(
+                                    'ouid', c.did,
+                                    'dname', c.dname,
+                                    'ddescription', c.ddescription,
+                                    'dparentouid', c.dparentouid,
+                                    'tcreatedat', c.tcreatedat,
+                                    'jsSettings', c."jsSettings",
+                                    'dLocation', c."dLocation",
+                                    'bisActive', c."bisActive",
+                                    'membercount', COALESCE(mc_child.membercount, 0)
+                                )
+                            )
+                            FROM ou_hierarchy c
+                            LEFT JOIN member_counts mc_child ON mc_child.did = c.did
+                            WHERE c.root_ou = h.root_ou AND c.did != h.root_ou
+                        ) as children
+                    FROM ou_hierarchy h
+                    LEFT JOIN member_counts mc ON mc.did = h.root_ou
+                    WINDOW w AS (PARTITION BY h.root_ou ORDER BY h.depth)
                 )
                 SELECT *, COUNT(*) OVER() AS total_count
-                FROM filtered_ous
+                FROM ou_tree
                 ORDER BY ${validSortBy} ${validSort}
                 LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
             `;
@@ -230,7 +276,8 @@ class OUmodel {
                 jsSettings: r.jsSettings,
                 dLocation: r.dLocation,
                 bisActive: r.bisActive,
-                membercount: r.membercount
+                membercount: r.membercount,
+                children: r.children || []
             }));
             const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
             return { rows, total };
