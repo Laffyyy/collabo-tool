@@ -23,50 +23,70 @@
 	let forgotPasswordError = $state('');
 	let forgotPasswordSuccess = $state(false);
 	let forgotPasswordEmailInput: HTMLInputElement | undefined;
-	
+
+	// Add debounce tracking
+	let lastSubmissionTime = $state(0);
+	const SUBMISSION_DEBOUNCE_MS = 1000; // 1 second minimum between attempts
+		
 	const handleLoginSubmit = async (event: Event) => {
-		event.preventDefault();
-		loginIsLoading = true;
-		loginError = '';
-		
-		try {
-		// Use the API client instead of direct fetch
-		const data = await apiClient.post<LoginResponse>(
-			API_CONFIG.endpoints.auth.login,
-			{
-			username: loginUsername,
-			password: loginPassword
-			}
-		);
-		
-		if (data.step === 'FAILED') {
-			// Show error toast for invalid credentials
-			$toastStore.error(data.message || 'Invalid Email/Password');
-			loginError = data.message || 'Invalid Email/Password';
-			loginIsLoading = false;
-			return;
-		}
-		
-		// Store info needed for OTP verification
-		localStorage.setItem('auth_userId', data.userId);
-		localStorage.setItem('auth_userEmail', data.email);
-		localStorage.setItem('auth_username', data.username || loginUsername);
-		localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
-	
-		
-		// Set OTP expiry time (5 minutes from now)
-		const expiryTime = Date.now() + (5 * 60 * 1000);
-		localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
-		
-		// Navigate to OTP verification page
-		goto('/otp');
-		} catch (error: any) {
-		$toastStore.error(error.message || 'Invalid credentials');
-		loginError = error.message || 'Invalid credentials';
-		} finally {
-		loginIsLoading = false;
-		}
-	};
+    event.preventDefault();
+    
+    // Multiple layers of protection against spam clicking
+    const now = Date.now();
+    
+    // 1. Check if already loading
+    if (loginIsLoading) return;
+    
+    // 2. Debounce protection
+    if (now - lastSubmissionTime < SUBMISSION_DEBOUNCE_MS) {
+        return;
+    }
+    
+    // 3. Basic form validation
+    if (!loginUsername.trim() || !loginPassword.trim()) {
+        loginError = 'Please enter both username and password';
+        return;
+    }
+    
+    // Record this attempt and set loading state immediately
+    lastSubmissionTime = now;
+    loginIsLoading = true;
+    loginError = '';
+    
+    try {
+        const data = await apiClient.post<LoginResponse>(
+            API_CONFIG.endpoints.auth.login,
+            {
+                username: loginUsername,
+                password: loginPassword
+            }
+        );
+        
+        if (data.step === 'FAILED') {
+            $toastStore.error(data.message || 'Invalid Email/Password');
+            loginError = data.message || 'Invalid Email/Password';
+            return;
+        }
+        
+        // Store info needed for OTP verification
+        localStorage.setItem('auth_userId', data.userId);
+        localStorage.setItem('auth_userEmail', data.email);
+        localStorage.setItem('auth_username', data.username || loginUsername);
+        localStorage.setItem('auth_tempPassword', loginPassword);
+
+        // Set OTP expiry time (5 minutes from now)
+        const expiryTime = Date.now() + (5 * 60 * 1000);
+        localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+        
+        // Navigate to OTP verification page
+        goto('/otp');
+    } catch (error: any) {
+        $toastStore.error(error.message || 'Invalid credentials');
+        loginError = error.message || 'Invalid credentials';
+    } finally {
+        loginIsLoading = false;
+    }
+};
 	
 	const toggleLoginPasswordVisibility = () => {
 		loginShowPassword = !loginShowPassword;
