@@ -4,27 +4,25 @@ const bcrypt = require('bcryptjs');
 class UserSecurityAnswersModel {
   static async saveUserAnswers(userId, questionAnswers) {
     try {
-      // Start transaction
-      await sql.begin(async sql => {
-        // First, delete any existing answers for this user
-        await sql`
-          DELETE FROM tblusersecurityanswers 
-          WHERE duserid = ${userId}
-        `;
+      // First, delete any existing answers for this user
+      await sql`
+        DELETE FROM tblusersecurityanswers 
+        WHERE duserid = ${userId}
+      `;
 
-        // Insert new answers
-        for (const qa of questionAnswers) {
-          const answerHash = await bcrypt.hash(qa.answer.toLowerCase().trim(), 10);
-          
-          await sql`
-            INSERT INTO tblusersecurityanswers (duserid, dsecurityquestionid, danswerhash)
-            VALUES (${userId}, ${qa.questionId}, ${answerHash})
-          `;
-        }
-      });
+      // Insert new answers one by one
+      for (const qa of questionAnswers) {
+        const answerHash = await bcrypt.hash(qa.answer.toLowerCase().trim(), 10);
+        
+        await sql`
+          INSERT INTO tblusersecurityanswers (duserid, dsecurityquestionid, danswerhash)
+          VALUES (${userId}, ${qa.questionId}, ${answerHash})
+        `;
+      }
 
       return { success: true, message: 'Security answers saved successfully' };
     } catch (error) {
+      console.error('Error saving security answers:', error);
       throw new Error(`Failed to save security answers: ${error.message}`);
     }
   }

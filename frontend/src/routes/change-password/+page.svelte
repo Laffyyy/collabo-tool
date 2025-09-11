@@ -188,31 +188,37 @@
                     localStorage.removeItem('passwordChange_name');
                     localStorage.removeItem('passwordChange_securityAnswers');
 
-                    // Show success message and redirect to login
-                    alert('Account setup completed successfully! Please log in with your new password.');
-                    goto('/login');
-                } else {
-                    throw new Error(securityResponse.message || 'Failed to save security questions');
-                }
-            } else {
-                throw new Error(passwordResponse.message || 'Failed to change password');
-            }
-        } else {
-            // Handle other flows (existing demo behavior)
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            if (changePasswordFromForgotPassword) {
-                goto('/login');
-            } else {
-                goto('/chat');
-            }
-        }
-    } catch (error: any) {
-        console.error('Setup error:', error);
-        changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
-    } finally {
-        changePasswordIsLoading = false;
-    }
+                     // Redirect based on user role - same logic as OTP verification for active users
+					const storedUserRole = localStorage.getItem('passwordChange_role') || '';
+					console.log('Redirecting first-time user with role:', storedUserRole);
+					if (storedUserRole.toLowerCase() === 'admin') {
+						goto('/admin/user-management');
+					} else {
+						goto('/chat');
+					}
+					// Success: redirect handled above
+				} else {
+					throw new Error(securityResponse.message || 'Failed to save security questions');
+				}
+			} else {
+				throw new Error(passwordResponse.message || 'Failed to change password');
+			}
+		} else {
+			// Handle other flows (existing demo behavior)
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			
+			if (changePasswordFromForgotPassword) {
+				goto('/login');
+			} else {
+				goto('/chat');
+			}
+		}
+	} catch (error: any) {
+		console.error('Setup error:', error);
+		changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
+	} finally {
+		changePasswordIsLoading = false;
+	}
 };
 	
 	const changePasswordHandleCancel = () => {
