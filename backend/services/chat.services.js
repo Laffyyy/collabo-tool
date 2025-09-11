@@ -78,9 +78,23 @@ exports.checkExistingDirectConversation = async ({ userId1, userId2 }) => {
   }
 };
 
-exports.addMessage = async ({ dconversationId, dsenderId, dcontent, dmessageType }) => {
-  if (!dconversationId || !dsenderId || !dcontent) throw new BadRequestError('Missing fields');
-  return await ChatModel.addMessage({ dconversationId, dsenderId, dcontent, dmessageType });
+exports.addMessage = async ({ dconversationId, dsenderId, dcontent, dreplyToId, dreplyToSenderId, dreplyToContent, dattachment, dmessageType }) => {
+  if (!dconversationId || !dsenderId) throw new BadRequestError('Missing conversation ID or sender ID');
+  
+  // Allow empty content only if attachment is present
+  if (!dcontent && !dattachment) throw new BadRequestError('Missing content or attachment');
+  
+  // TEMPORARILY IGNORE ATTACHMENTS - pass through without attachment for now
+  return await ChatModel.addMessage({ 
+    dconversationId, 
+    dsenderId, 
+    dcontent, 
+    dreplyToId, 
+    dreplyToSenderId, 
+    dreplyToContent, 
+    // dattachment,  // Temporarily commented out
+    dmessageType 
+  });
 };
 
 exports.getMessagesByConversation = async (conversationId) => {

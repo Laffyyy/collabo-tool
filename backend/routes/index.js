@@ -9,14 +9,15 @@ const responseBroadcastRoutes = require('./v1/response-broadcast.routes'); // Ad
 const broadcastManagementRoutes = require('./v1/broadcast-management.routes'); // Add this line
 const globalSettingsRoutes = require('./v1/global-settings.routes');
 const profileRoutes = require('./v1/profile.routes');
-//const chatRoutes = require('./v1/chat.routes');
+const chatRoutes = require('./v1/chat.routes');
+const userStatusRoutes = require('./v1/user-status.routes');
 const userRoutes = require('./v1/user.routes');
 
 
 const router = Router();
 
 router.use('/v1/auth', authRoutes);
-//router.use('/chat', chatRoutes);
+router.use('/chat', chatRoutes);
 router.use('/v1/admin', adminRoutes);
 router.use('/v1/users', userManagementRoutes);
 
@@ -37,6 +38,8 @@ router.use('/v1/admin/broadcasts', broadcastManagementRoutes);
 router.use('/v1/global-settings', globalSettingsRoutes);
 //Profile
 router.use('/v1/profile', profileRoutes);
+//User Status
+router.use('/v1/user-status', userStatusRoutes);
 //router.use('/users', require('./v1/user.routes'));
 router.use('/users', userRoutes);
 

@@ -36,18 +36,30 @@ class ChatModel {
     }
   }
 
-static async addMessage({ dconversationId, dsenderId, dcontent, dmessageType }) {
+static async addMessage({ dconversationId, dsenderId, dcontent, dreplyToId, dreplyToSenderId, dreplyToContent, dmessageType }) {
   try {
     console.log('Adding message to database:', { 
-      dconversationId, dsenderId, dcontent, dmessageType 
+      dconversationId, dsenderId, dcontent, dmessageType
     });
+    
+    // Create SQL query parts
+    const fields = ['dconversationid', 'dsenderid', 'dcontent', 'dmessagetype'];
+    const values = [dconversationId, dsenderId, dcontent, dmessageType || 'text'];
+    const placeholders = ['$1', '$2', '$3', '$4'];
+    
+    // Add reply fields if provided
+    if (dreplyToId) {
+      fields.push('dreplytoid', 'dreplytosenderid', 'dreplytocontent');
+      values.push(dreplyToId, dreplyToSenderId, dreplyToContent);
+      placeholders.push(`$${placeholders.length + 1}`, `$${placeholders.length + 2}`, `$${placeholders.length + 3}`);
+    }
     
     const result = await query(
       `INSERT INTO tblmessages 
-        (dconversationid, dsenderid, dcontent, dmessagetype, tcreatedat)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+        (${fields.join(', ')}, tcreatedat)
+       VALUES (${placeholders.join(', ')}, CURRENT_TIMESTAMP)
        RETURNING *`,
-      [dconversationId, dsenderId, dcontent, dmessageType || 'text']
+      values
     );
     
     console.log('Message added:', result.rows[0]);

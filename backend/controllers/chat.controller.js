@@ -66,7 +66,9 @@ exports.checkExistingDirectConversation = async (req, res, next) => {
 
 exports.addMessage = async (req, res, next) => {
   try {
-    const { dconversationId, dsenderId, dcontent, dmessageType } = req.body;
+    const { dconversationId, dsenderId, dcontent, dreplyToId, dreplyToSenderId, dreplyToContent, dattachment, dmessageType } = req.body;
+    
+    console.log('Request body:', req.body);
     
     // First, verify the sender ID matches the authenticated user
     const authenticatedUserId = req.user.id;
@@ -77,23 +79,50 @@ exports.addMessage = async (req, res, next) => {
       });
     }
     
-    if (!dconversationId || !dsenderId || !dcontent) {
+    if (!dconversationId || !dsenderId) {
       return res.status(400).json({ 
         message: 'Missing required fields',
         errors: [
-          { type: 'field', msg: 'Invalid value', path: 'dconversationId', location: 'body' },
-          { type: 'field', msg: 'Invalid value', path: 'dsenderId', location: 'body' },
-          { type: 'field', msg: 'Invalid value', path: 'dcontent', location: 'body' }
+          { type: 'field', msg: 'Missing conversationId', path: 'dconversationId', location: 'body' },
+          { type: 'field', msg: 'Missing senderId', path: 'dsenderId', location: 'body' }
         ]
       });
     }
     
-    const message = await chatService.addMessage({
+    // Allow empty content only if attachment is present
+    if (!dcontent && !dattachment) {
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        errors: [
+          { type: 'field', msg: 'Missing content', path: 'dcontent', location: 'body' }
+        ]
+      });
+    }
+    
+    // Create message data - TEMPORARILY IGNORE ATTACHMENTS
+    const messageData = {
       dconversationId,
       dsenderId,
-      dcontent,
+      dcontent: dcontent || ' ', // Use space if content is empty but attachment exists
       dmessageType: dmessageType || 'text'
-    });
+    };
+    
+    // Add reply fields if provided
+    if (dreplyToId) {
+      messageData.dreplyToId = dreplyToId;
+      messageData.dreplyToSenderId = dreplyToSenderId;
+      messageData.dreplyToContent = dreplyToContent;
+    }
+    
+    // TEMPORARILY SKIP ATTACHMENT HANDLING
+    // if (dattachment) {
+    //   messageData.dattachment = dattachment;
+    // }
+    if (dattachment) {
+      console.log('Attachment received but temporarily ignored due to database schema');
+    }
+    
+    const message = await chatService.addMessage(messageData);
     
     return res.status(201).json(message);
   } catch (err) {
@@ -150,94 +179,6 @@ exports.addMember = async (req, res, next) => {
     return res.json(result);
   } catch (err) {
     return next(err);
-  }
-};
-
-exports.getMessagesByConversation = async (req, res, next) => {
-  try {
-    const { conversationId } = req.params;
-    
-    if (!conversationId) {
-      return res.status(400).json({ message: 'Conversation ID is required' });
-    }
-    
-    const messages = await chatService.getMessagesByConversation(conversationId);
-    return res.json(messages);
-  } catch (err) {
-    return next(err);
-  }
-};
-
-// In chat.controller.js
-exports.addMessage = async (req, res, next) => {
-  try {
-    console.log('Request body:', req.body);
-    console.log('User from token:', req.user);
-    
-    const { dconversationId, dsenderId, dcontent, dmessageType } = req.body;
-    
-    console.log('Extracted fields:', { dconversationId, dsenderId, dcontent, dmessageType });
-    
-    if (!dconversationId || !dsenderId || !dcontent) {
-      console.log('Missing fields detected');
-      
-      // Create detailed error for debugging
-      const errors = [];
-      if (!dconversationId) errors.push({ type: 'field', msg: 'Missing conversationId', path: 'dconversationId', location: 'body' });
-      if (!dsenderId) errors.push({ type: 'field', msg: 'Missing senderId', path: 'dsenderId', location: 'body' });
-      if (!dcontent) errors.push({ type: 'field', msg: 'Missing content', path: 'dcontent', location: 'body' });
-      
-      return res.status(400).json({ 
-        message: 'Missing required fields',
-        errors
-      });
-    }
-    
-    const message = await chatService.addMessage({
-      dconversationId,
-      dsenderId,
-      dcontent,
-      dmessageType: dmessageType || 'text'
-    });
-    
-    return res.status(201).json(message);
-  } catch (err) {
-    console.error('Error adding message:', err);
-    return next(err);
-  }
-};
-
-  exports.createMessage = async (req, res, next) => {
-  try {
-    const { conversationId, content, replyToId, replyToSenderId, replyToContent } = req.body;
-    const senderId = req.user.id; // Assuming you have user ID in the request
-    
-    // Validate required fields
-    if (!conversationId || !content) {
-      return res.status(400).json({ message: 'Conversation ID and content are required' });
-    }
-    
-    // Create message object with optional reply data
-    const messageData = {
-      dconversationid: conversationId,
-      dsenderid: senderId,
-      dcontent: content
-    };
-    
-    // Add reply fields if provided
-    if (replyToId) {
-      messageData.dreplyToId = replyToId;
-      messageData.dreplyToSenderId = replyToSenderId;
-      messageData.dreplyToContent = replyToContent;
-    }
-    
-    // Save message to database
-    const message = await chatModel.createMessage(messageData);
-    
-    return res.status(201).json(message);
-  } catch (error) {
-    console.error('Error creating message:', error);
-    return next(error);
   }
 };
 

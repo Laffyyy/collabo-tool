@@ -2,6 +2,7 @@
 	//import {goto} from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { getConversations, getAllUsers, createConversation, findOrCreateDirectConversation, checkExistingDirectConversation, addMemberToConversation, getMessagesForConversation, sendMessageToApi } from '$lib/services/chatServices';
+	import { initializeUserStatus, getAllUsersWithStatus, usersWithStatus, currentUserStatus, type UserStatus } from '$lib/services/userStatusService';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
@@ -139,6 +140,7 @@
 	let showForwardModal = $state(false);
 	let currentMembersTab = $state<'members' | 'files' | 'media' | 'links'>('members');
 	let messagePollingInterval: ReturnType<typeof setInterval> | null = null;
+	let fileUploadStatus = $state<Array<{name: string, progress: number, status: string}>>([]);
 	
 	// Reaction modal state
 	let showReactionModal = $state(false);
@@ -183,6 +185,10 @@
 	});
 	let fileInputRef = $state<HTMLInputElement>();
 	let forwardSearchQuery = $state('');
+	
+	// Mobile responsiveness state
+	let showSidebar = $state(false);
+	let isMobile = $state(false);
 	
 	// Undo functionality for forwards
 	let recentForwards = $state<{id: string, messageId: string, conversationIds: string[], timestamp: Date}[]>([]);
@@ -316,6 +322,40 @@ function loadUserIdFromAuth() {
   });
       
     console.log('Transformed users:', availableUsers);
+    
+    // Initialize user status tracking and update available users
+    try {
+      console.log('Initializing user status tracking...');
+      await initializeUserStatus();
+      
+      // Get users with real status information
+      const usersWithRealStatus = await getAllUsersWithStatus();
+      console.log('Users with status:', usersWithRealStatus);
+      
+      // Update availableUsers with real status data
+      availableUsers = usersWithRealStatus
+        .filter(user => user.id !== currentUserId)
+        .map(user => ({
+          id: user.id,
+          name: user.username,
+          firstName: user.firstName || user.username,
+          lastName: user.lastName || '',
+          username: user.username,
+          email: user.email,
+          department: user.organizationalUnit || 'Unknown',
+          role: user.role || 'user',
+          organizationalUnit: user.organizationalUnit,
+          avatar: user.avatar || '/placeholder.svg',
+          status: user.status,
+          isOnline: user.isOnline,
+          onlineStatus: user.status
+        }));
+      
+      console.log('Updated availableUsers with status:', availableUsers);
+      console.log('User status tracking initialized');
+    } catch (error) {
+      console.error('Failed to initialize user status:', error);
+    }
   } catch (e) {
     console.error('Failed to fetch conversations or users:', e);
   }
@@ -405,12 +445,18 @@ onDestroy(() => {
   }
 });
 
-	const sendMessage = async (attachment?: any) => {
-  if ((!messageInput.trim() && !attachment) || !currentConversation) return;
+	const sendMessage = async (content?: string, attachment?: any) => {
+  // If content is provided, use it, otherwise use messageInput
+  // For attachments with no explicit content, we'll use a space to satisfy backend validation
+  const msgContent = content !== undefined ? content : messageInput.trim();
+  
+  if ((!msgContent && !attachment) || !currentConversation) return;
 
   try {
-    // Get the actual message content
-      const msgContent = attachment ? `Shared ${attachment.name}` : messageInput.trim();
+    // Get the actual message content to send
+    console.log(`Sending message with ${attachment ? 'attachment: ' + attachment.name : 'no attachment'}`);
+    console.log(`Message content: "${msgContent}"`);
+    
     
     // Check if this is a temporary conversation that needs to be created first
     if (currentConversation.isTemporary && currentConversation.targetUser) {
@@ -479,6 +525,11 @@ onDestroy(() => {
       pinningEnabled: true
     };
 
+    console.log('Created message with attachment:', {
+      hasAttachment: newMessage.hasAttachment,
+      attachment: newMessage.attachment
+    });
+
     // Update UI and state
     currentConversation.messages.push(newMessage);
     currentConversation.lastMessage = msgContent;
@@ -505,6 +556,12 @@ onDestroy(() => {
     
     // Fetch updated messages to ensure UI is in sync with backend
     const updatedMessages = await getMessagesForConversation(currentConversation.id);
+    console.log('Updated messages from backend:', updatedMessages);
+    
+    // Check if any messages have attachments
+    const messagesWithAttachments = updatedMessages.filter(msg => msg.hasAttachment || msg.attachment);
+    console.log('Messages with attachments:', messagesWithAttachments);
+    
     currentConversation.messages = updatedMessages;
   } catch (error) {
     console.error('Error sending message:', error);
@@ -645,6 +702,29 @@ const markConversationAsSeen = (conversationId?: string) => {
   }
 };
 
+	const formatFileSize = (bytes: number): string => {
+		if (bytes === 0) return '0 Bytes';
+		const k = 1024;
+		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+	};
+
+	const getFileType = (fileName: string): 'file' | 'image' | 'video' | 'link' => {
+		const extension = fileName.toLowerCase().split('.').pop() || '';
+		
+		if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
+			return 'image';
+		} else if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(extension)) {
+			return 'video';
+		} else if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(extension)) {
+			// Still returns 'file' for documents but we now explicitly recognize these extensions
+			return 'file';
+		} else {
+			return 'file';
+		}
+	};
+
 	const confirmUnsendMessage = (messageId: string) => {
 		confirmationData = {
 			title: 'Unsend Message',
@@ -676,8 +756,21 @@ const markConversationAsSeen = (conversationId?: string) => {
 		const target = event.target as HTMLInputElement;
 		if (target.files && target.files.length > 0) {
 			const newFiles = Array.from(target.files);
-			selectedFiles = [...selectedFiles, ...newFiles];
+			
+			// Validate file sizes (max 10MB per file)
+			const maxSize = 10 * 1024 * 1024; // 10MB
+			const validFiles = newFiles.filter(file => {
+				if (file.size > maxSize) {
+					alert(`File "${file.name}" is too large. Maximum size allowed is 10MB.`);
+					return false;
+				}
+				return true;
+			});
+			
+			selectedFiles = [...selectedFiles, ...validFiles];
 		}
+		// Clear the input to allow selecting the same file again
+		target.value = '';
 	};
 
 	const removeFile = (index: number) => {
@@ -689,7 +782,18 @@ const markConversationAsSeen = (conversationId?: string) => {
 		const files = event.dataTransfer?.files;
 		if (files && files.length > 0) {
 			const newFiles = Array.from(files);
-			selectedFiles = [...selectedFiles, ...newFiles];
+			
+			// Validate file sizes (max 10MB per file)
+			const maxSize = 10 * 1024 * 1024; // 10MB
+			const validFiles = newFiles.filter(file => {
+				if (file.size > maxSize) {
+					alert(`File "${file.name}" is too large. Maximum size allowed is 10MB.`);
+					return false;
+				}
+				return true;
+			});
+			
+			selectedFiles = [...selectedFiles, ...validFiles];
 		}
 	};
 
@@ -714,85 +818,108 @@ const markConversationAsSeen = (conversationId?: string) => {
 	};
 
 	const sendMessageWithAttachments = async () => {
-  if (selectedFiles.length > 0) {
-    try {
-      // Array to hold all the uploaded file data
-      const attachments = [];
-      
-      for (const file of selectedFiles) {
-        // Create a unique file path in the bucket
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `attachments/${currentConversation.id}/${fileName}`;
-        
-        // Upload to Supabase
-        const { data, error } = await supabase.storage
-          .from('chat-attachments') // Your bucket name
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-          
-        if (error) {
-          console.error('Error uploading file:', error);
-          throw error;
-        }
-        
-        // Get the public URL
-        const { data: urlData } = supabase.storage
-          .from('chat-attachments')
-          .getPublicUrl(filePath);
-          
-        // Create attachment object
-        const attachment = {
-          id: data.path,
-          name: file.name,
-          type: getFileType(file.name),
-          url: urlData.publicUrl,
-          size: file.size,
-          filePath: filePath,
-          permissions: { ...filePermissionSettings }
-        };
-        
-        attachments.push(attachment);
-      }
-
-      // Send messages with attachments
-      for (const attachment of attachments) {
-        await sendMessage(attachment);
-      }
-
-      // Clear selected files and close modal
-      selectedFiles = [];
-      closeFilePermissionModal();
-      
-    } catch (error) {
-      console.error('Error sending files:', error);
-      alert('Failed to upload one or more files. Please try again.');
-    }
-  } else {
-    // Send regular message if no attachments
-    sendMessage();
-  }
-};
-	const getFileType = (fileName: string): 'file' | 'image' | 'video' | 'link' => {
-		const extension = fileName.toLowerCase().split('.').pop() || '';
-		
-		if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
-			return 'image';
-		} else if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(extension)) {
-			return 'video';
+		if (selectedFiles.length > 0) {
+			try {
+				// Show uploading state
+				const uploadingFiles = selectedFiles.map(file => ({
+					name: file.name,
+					progress: 0,
+					status: 'uploading'
+				}));
+				fileUploadStatus = uploadingFiles;
+				
+				// Array to hold all the uploaded file data
+				const attachments = [];
+				
+				for (let i = 0; i < selectedFiles.length; i++) {
+					const file = selectedFiles[i];
+					
+					try {
+						// Create a unique file path in the bucket
+						const fileExt = file.name.split('.').pop();
+						const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+						const filePath = `attachments/${currentConversation.id}/${fileName}`;
+						
+						// Update progress
+						fileUploadStatus[i].progress = 30;
+						fileUploadStatus = [...fileUploadStatus];
+						
+						// Upload to Supabase
+						const { data, error } = await supabase.storage
+							.from('chat-attachments')
+							.upload(filePath, file, {
+								cacheControl: '3600',
+								upsert: false
+							});
+							
+						if (error) {
+							console.error('Error uploading file:', error);
+							fileUploadStatus[i].status = 'error';
+							fileUploadStatus = [...fileUploadStatus];
+							throw new Error(`Failed to upload ${file.name}: ${error.message}`);
+						}
+						
+						// Update progress
+						fileUploadStatus[i].progress = 70;
+						fileUploadStatus = [...fileUploadStatus];
+						
+						// Get the public URL
+						const { data: urlData } = supabase.storage
+							.from('chat-attachments')
+							.getPublicUrl(filePath);
+							
+						// Determine file type
+						const fileType = getFileType(file.name);
+						
+						// Create attachment object
+						const attachment = {
+							id: data.path,
+							name: file.name,
+							type: fileType,
+							url: urlData.publicUrl,
+							size: file.size,
+							filePath: filePath,
+							permissions: { ...filePermissionSettings }
+						};
+						
+						console.log(`Processing attachment: ${file.name}, type: ${fileType}, url: ${urlData.publicUrl}`);
+						console.log('Full attachment object:', attachment);
+						attachments.push(attachment);
+						
+						// Update progress to complete
+						fileUploadStatus[i].progress = 100;
+						fileUploadStatus[i].status = 'complete';
+						fileUploadStatus = [...fileUploadStatus];
+						
+					} catch (fileError) {
+						console.error(`Error processing file ${file.name}:`, fileError);
+						fileUploadStatus[i].status = 'error';
+						fileUploadStatus = [...fileUploadStatus];
+						alert(`Failed to upload ${file.name}. Please try again.`);
+						return;
+					}
+				}
+				
+				// Send messages for each attachment
+				for (const attachment of attachments) {
+					// For attachments, we use a space as content
+					await sendMessage(' ', attachment);
+					console.log(`Sent message with attachment: ${attachment.name}, type: ${attachment.type}`);
+				}
+				
+				// Clear selected files and status
+				selectedFiles = [];
+				fileUploadStatus = [];
+				closeFilePermissionModal();
+				
+			} catch (error) {
+				console.error('Error in sendMessageWithAttachments:', error);
+				alert('Failed to send attachments. Please try again.');
+			}
 		} else {
-			return 'file';
+			// Send regular message if no attachments
+			sendMessage();
 		}
-	};
-
-	const formatFileSize = (bytes: number): string => {
-		if (bytes === 0) return '0 Bytes';
-		const k = 1024;
-		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	};
 
 	const startEditMessage = (message: Message) => {
@@ -2485,19 +2612,105 @@ const groupedMessages = $derived(() => {
 											{/if}
 											
 											<div class="relative">
-												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === currentUserId ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
+												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === currentUserId ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'} {message.hasAttachment && (!message.content || message.content.trim().match(/^\s+$/)) ? 'p-2' : ''} {(message.attachment?.type === 'image' && (!message.content || message.content.trim().match(/^\s+$/))) ? 'p-0 overflow-hidden bg-transparent' : ''}">
+													{#if message.content && message.content.trim() && !message.content.trim().match(/^\s+$/)}
 													<p class="whitespace-pre-wrap {message.isDeleted ? 'italic' : ''}">{message.content}</p>
-												</div>
+													{/if}
+													{#if fileUploadStatus.length > 0}
+													<div class="px-4 pb-3 bg-white">
+														<div class="space-y-2">
+														{#each fileUploadStatus as file}
+															<div class="bg-gray-100 p-2 rounded-lg">
+															<div class="flex items-center justify-between mb-1">
+																<div class="text-sm">{file.name}</div>
+																<div class="text-xs">{file.status === 'complete' ? 'Complete' : `${file.progress}%`}</div>
+															</div>
+															<div class="w-full bg-gray-200 rounded-full h-1.5">
+																<div 
+																class="h-1.5 rounded-full {file.status === 'error' ? 'bg-red-500' : 'bg-[#01c0a4]'}" 
+																style="width: {file.progress}%"
+																></div>
+															</div>
+															</div>
+														{/each}
+														</div>
+													</div>
+													{/if}
+													{#if message.hasAttachment && message.attachment}
+														<!-- Debug: Log attachment info -->
+														{console.log('Rendering attachment for message:', message.id, {
+															type: message.attachment.type,
+															name: message.attachment.name,
+															url: message.attachment.url,
+															hasAttachment: message.hasAttachment,
+															fullAttachment: message.attachment
+														})}
+														
+														<div class="attachment-container mt-2">
+															{#if message.attachment.type === 'image'}
+																<!-- For images: Display the actual image -->
+																<div class="max-w-xs rounded-lg overflow-hidden bg-gray-100">
+																	<img 
+																		src={message.attachment.url} 
+																		alt={message.attachment.name} 
+																		class="w-full max-h-72 object-cover hover:opacity-95 transition-opacity cursor-pointer"
+																		loading="lazy"
+																		onclick={() => window.open(message.attachment.url, '_blank')}
+																		onerror={(e) => {
+																			console.error('Image failed to load:', message.attachment.url);
+																			e.target.style.display = 'none';
+																			e.target.nextElementSibling.style.display = 'block';
+																		}}
+																	/>
+																	<!-- Fallback if image fails to load -->
+																	<div class="hidden p-3 text-center text-gray-600 text-sm">
+																		<FileText class="w-8 h-8 mx-auto mb-2" />
+																		Image failed to load: {message.attachment.name}
+																		<br>
+																		<a href={message.attachment.url} target="_blank" class="text-blue-600 hover:underline">
+																			Open in new tab
+																		</a>
+																	</div>
+																</div>
+															{:else if message.attachment.type === 'video'}
+																<!-- For videos: Show video player -->
+																<div class="max-w-xs">
+																	<video controls class="rounded-lg max-h-48 max-w-full">
+																		<source src={message.attachment.url} type="video/mp4">
+																		Your browser does not support video playback.
+																	</video>
+																</div>
+															{:else}
+																<!-- For documents: Just show the filename -->
+																<div class="flex items-center p-2 bg-gray-100 rounded {message.senderId === currentUserId ? 'text-white bg-white/20' : 'text-gray-900'}">
+																	<FileText class="w-5 h-5 mr-2 {message.senderId === currentUserId ? 'text-white' : 'text-blue-600'}" />
+																	<a 
+																		href={message.attachment.url} 
+																		download={message.attachment.name}
+																		class="{message.senderId === currentUserId ? 'text-white' : 'text-blue-600'} hover:underline font-medium"
+																	>
+																		{message.attachment.name}
+																	</a>
+																</div>
+															{/if}
+														</div>
+													{:else if message.hasAttachment}
+														<!-- Debug: Message claims to have attachment but no attachment object -->
+														{console.log('Message has hasAttachment=true but no attachment object:', message)}
+														<div class="p-2 bg-red-100 text-red-600 text-sm rounded">
+															Missing attachment data for message: {message.id}
+														</div>
+													{/if}
 												
 												<!-- Message actions - hide for deleted messages -->
 												{#if !message.isDeleted}
-											<div class="absolute top-0 {message.senderId === currentUserId ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
-											<button
-												onclick={() => startReply(message)}
-												class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
-												aria-label="Reply to message"
-												title="Reply"
-												>
+													<div class="absolute top-0 {message.senderId === currentUserId ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
+														<button
+															onclick={() => startReply(message)}
+															class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+															aria-label="Reply to message"
+															title="Reply"
+															>
 												<Reply class="w-3 h-3 text-gray-600" />
 												</button>
 											{#if message.forwardingEnabled && currentConversation.settings?.allowForwarding}
@@ -2637,9 +2850,10 @@ const groupedMessages = $derived(() => {
 												{/if}
 											</div>
 										</div>
-									{/each}
-								</div>
-							{/each}					<!-- Typing Indicator -->
+									</div>
+								{/each}
+							</div>
+						{/each}					<!-- Typing Indicator -->
 					{#if othersTyping && currentConversation}
 						{#each currentConversation.members.filter(m => m.id !== '1') as typingMember}
 							<div class="flex justify-start">
@@ -2722,44 +2936,30 @@ const groupedMessages = $derived(() => {
 				<div class="px-4 py-3 border-t border-gray-300 bg-white">
 					<!-- File Preview Section -->
 					{#if selectedFiles.length > 0}
-						<div class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-							<div class="flex items-center justify-between mb-2">
-								<span class="text-sm font-medium text-gray-700">Files to send ({selectedFiles.length})</span>
-								<button 
-									onclick={() => selectedFiles = []}
-									class="text-gray-400 hover:text-gray-600"
-									aria-label="Clear all files"
+						<div class="px-4 pb-3 bg-white">
+							<div class="flex flex-wrap gap-2 mt-2">
+							{#each selectedFiles as file, index}
+								<div class="relative bg-gray-100 rounded p-2 flex items-center">
+								<div class="mr-2">
+									{#if file.type.startsWith('image/')}
+									<Image class="w-5 h-5 text-blue-500" />
+									{:else if file.type.startsWith('video/')}
+									<Video class="w-5 h-5 text-purple-500" />
+									{:else}
+									<FileText class="w-5 h-5 text-gray-500" />
+									{/if}
+								</div>
+								<span class="text-sm truncate max-w-[150px]">{file.name}</span>
+								<button
+									type="button"
+									class="ml-2 text-red-500 hover:text-red-700"
+									onclick={() => removeFile(index)}
+									aria-label="Remove file"
 								>
 									<X class="w-4 h-4" />
 								</button>
-							</div>
-							<div class="space-y-2 max-h-32 overflow-y-auto">
-								{#each selectedFiles as file, index}
-									<div class="flex items-center justify-between p-2 bg-white rounded border">
-										<div class="flex items-center space-x-2 flex-1 min-w-0">
-											<div class="flex-shrink-0">
-												{#if file.type.startsWith('image/')}
-													<Image class="w-4 h-4 text-blue-500" />
-												{:else if file.type.startsWith('video/')}
-													<Camera class="w-4 h-4 text-purple-500" />
-												{:else}
-													<FileText class="w-4 h-4 text-gray-500" />
-												{/if}
-											</div>
-											<div class="flex-1 min-w-0">
-												<p class="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-												<p class="text-xs text-gray-500">{formatFileSize(file.size)}</p>
-											</div>
-										</div>
-										<button 
-											onclick={() => removeFile(index)}
-											class="p-1 text-gray-400 hover:text-red-500 transition-colors"
-											aria-label="Remove file"
-										>
-											<X class="w-3 h-3" />
-										</button>
-									</div>
-								{/each}
+								</div>
+							{/each}
 							</div>
 						</div>
 					{/if}
@@ -2774,22 +2974,23 @@ const groupedMessages = $derived(() => {
 							>
 								<textarea
 									bind:value={messageInput}
-									oninput={handleTyping}
-									onkeypress={handleKeyPress}
-									placeholder={editingMessage ? "Edit your message..." : selectedFiles.length > 0 ? "Add a message with your files..." : "Type a message..."}
+									placeholder="Type a message..."
+									class="flex-1 py-2 px-3 bg-gray-50 rounded-xl resize-none focus:outline-none focus:ring-1 focus:ring-[#01c0a4] max-h-24"
 									rows="1"
-									class="w-full px-1 py-2 pr-16 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent resize-none text-sm min-h-[40px]"
-								></textarea>
+									oninput={handleTyping}
+									onkeydown={handleKeyPress}
+									></textarea>
 								
 								<div class="absolute right-2 bottom-2 flex items-center space-x-1">
 									{#if currentConversation.settings?.allowAttachments !== false}
-										<button 
-											onclick={handleFileSelection}
-											class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors" 
+										<button
+											type="button"
+											class="p-2 text-gray-500 hover:text-gray-700 focus:outline-none"
 											aria-label="Attach file"
-										>
-											<Paperclip class="w-4 h-4" />
-										</button>
+											onclick={() => document.getElementById('fileInput').click()}
+											>
+											<Paperclip class="w-5 h-5" />
+											</button>
 									{/if}
 									
 									{#if currentConversation.settings?.allowEmojis !== false}
@@ -2804,13 +3005,12 @@ const groupedMessages = $derived(() => {
 								</div>
 
 								<!-- Hidden file input -->
-								<input 
-									bind:this={fileInputRef}
-									type="file" 
-									multiple 
+								 <input
+									id="fileInput"
+									type="file"
+									class="hidden"
 									onchange={handleFileChange}
-									class="hidden" 
-									accept="*/*"
+									multiple
 								/>
 
 								<!-- Emoji Picker -->
@@ -2841,30 +3041,24 @@ const groupedMessages = $derived(() => {
 							</div>
 						</div>
 						
-						<button
-							onclick={() => {
+						 <button
+							  onclick={() => {
 								if (editingMessage) {
 								saveEditedMessage();
 								} else if (selectedFiles.length > 0) {
-								openFilePermissionModal();
+								sendMessageWithAttachments();
 								} else {
 								sendMessage();
-								messageInput = ''; // Add this line to clear the input when clicking the button
+								messageInput = ''; // Clear input after sending
 								}
 							}}
 							disabled={!messageInput.trim() && selectedFiles.length === 0}
 							class="p-4 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-							aria-label={editingMessage ? "Save edited message" : selectedFiles.length > 0 ? "Set file permissions and send" : "Send message"}
+							aria-label="Send message"
 							>
-							{#if editingMessage}
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-								</svg>
-							{:else}
-								<Send class="w-4 h-4" />
-							{/if}
-							</button>
-				</div>
+							<Send class="w-4 h-4" />
+						</button>
+						</div>
 			</main>
 		{:else}
 			<main class="flex-1 flex items-center justify-center bg-gray-50">
@@ -3222,7 +3416,7 @@ const groupedMessages = $derived(() => {
       <p class="text-sm text-gray-500">Enable emoji reactions in this group</p>
     </div>
     <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowEmojis ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
-         onclick={toggleEmojis} role="switch" aria-checked={currentConversation?.settings?.allowEmojis}>
+         onclick={toggleEmojis} role="switch" tabindex="0" aria-checked={currentConversation?.settings?.allowEmojis}>
       <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowEmojis ? 'translate-x-6' : ''}`}></div>
     </div>
   </div>
@@ -3234,7 +3428,7 @@ const groupedMessages = $derived(() => {
       <p class="text-sm text-gray-500">Enable file and image sharing</p>
     </div>
     <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowAttachments ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
-         onclick={toggleAttachments} role="switch" aria-checked={currentConversation?.settings?.allowAttachments}>
+         onclick={toggleAttachments} role="switch" tabindex="0" aria-checked={currentConversation?.settings?.allowAttachments}>
       <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowAttachments ? 'translate-x-6' : ''}`}></div>
     </div>
   </div>
@@ -3246,7 +3440,7 @@ const groupedMessages = $derived(() => {
       <p class="text-sm text-gray-500">Enable forwarding messages to other chats</p>
     </div>
     <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowForwarding ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
-         onclick={toggleForwarding} role="switch" aria-checked={currentConversation?.settings?.allowForwarding}>
+         onclick={toggleForwarding} role="switch" tabindex="0" aria-checked={currentConversation?.settings?.allowForwarding}>
       <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowForwarding ? 'translate-x-6' : ''}`}></div>
     </div>
   </div>
@@ -3258,7 +3452,7 @@ const groupedMessages = $derived(() => {
       <p class="text-sm text-gray-500">Enable pinning important messages</p>
     </div>
     <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowPinning ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
-         onclick={togglePinning} role="switch" aria-checked={currentConversation?.settings?.allowPinning}>
+         onclick={togglePinning} role="switch" tabindex="0" aria-checked={currentConversation?.settings?.allowPinning}>
       <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowPinning ? 'translate-x-6' : ''}`}></div>
     </div>
   </div>

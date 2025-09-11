@@ -286,22 +286,66 @@ export async function getMessagesForConversation(conversationId: string) {
     console.log('Raw messages from server:', data);
     
     // Transform the data to match your UI Message format
-    return data.map((msg: any) => ({
-      id: msg.did || msg.id || `temp-${Date.now()}-${Math.random()}`,
-      senderId: msg.dsenderid || "unknown",
-      senderName: msg.dusername || 'Unknown User',
-      senderDepartment: 'Department',
-      senderRole: 'Role',
-      content: msg.dcontent || msg.content || "",
-      timestamp: msg.tcreatedat || msg.timestamp || new Date(),
-      type: msg.dmessagetype || msg.type || 'text',
-      reactions: []
-    }));
+    return data.map((msg: any) => {
+      // Parse attachment data if present
+      let attachment;
+      let hasAttachment = false;
+      
+      if (msg.dattachment) {
+        try {
+          // Handle attachment data whether it's already an object or a JSON string
+          const attachmentData = typeof msg.dattachment === 'string' 
+            ? JSON.parse(msg.dattachment) 
+            : msg.dattachment;
+          
+          attachment = {
+            id: attachmentData.id || `attach-${Date.now()}`,
+            name: attachmentData.name || 'Attachment',
+            type: attachmentData.type || 'file',
+            url: attachmentData.url || '',
+            size: attachmentData.size || 0,
+            filePath: attachmentData.filePath || '',
+            permissions: attachmentData.permissions || { type: 'everyone' }
+          };
+          hasAttachment = true;
+          
+          // If this is an image or document but we don't have a detected type from the server,
+          // try to determine it from the file extension
+          if (attachment.type === 'file') {
+            const fileExt = attachment.name.split('.').pop()?.toLowerCase();
+            if (fileExt) {
+              if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) {
+                attachment.type = 'image';
+              } else if (['mp4', 'webm', 'ogg', 'mov'].includes(fileExt)) {
+                attachment.type = 'video';
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse attachment data:', e);
+        }
+      }
+      
+      return {
+        id: msg.did || msg.id || `temp-${Date.now()}-${Math.random()}`,
+        senderId: msg.dsenderid || "unknown",
+        senderName: msg.dusername || 'Unknown User',
+        senderDepartment: 'Department',
+        senderRole: 'Role',
+        content: msg.dcontent || msg.content || "",
+        timestamp: msg.tcreatedat || msg.timestamp || new Date(),
+        type: msg.dmessagetype || msg.type || 'text',
+        reactions: [],
+        hasAttachment,
+        attachment
+      };
+    });
   } catch (error) {
     console.error('Error getting messages:', error);
     return []; // Return empty array to prevent UI errors
   }
 }
+
 // In chatServices.ts
 export async function sendMessageToApi(conversationId: string, content: string, metadata: any = {}) {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
@@ -334,7 +378,7 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     const requestBody: any = {
       dconversationId: conversationId,
       dsenderId: metadata.senderId || getUserIdFromStorage(),
-      dcontent: content,
+      dcontent: content || " ", // Always provide at least a space to satisfy backend validation
       dmessageType: metadata.messageType || 'text'
     };
     
@@ -349,6 +393,10 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     if (metadata.attachmentData) {
       requestBody.dattachment = JSON.stringify(metadata.attachmentData);
       requestBody.dmessageType = metadata.attachmentData.type;
+      // For attachments, use a space as content if none provided
+      if (!content.trim()) {
+        requestBody.dcontent = " ";
+      }
     }
     
     console.log('Sending message with payload:', requestBody);

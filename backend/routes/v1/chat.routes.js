@@ -48,7 +48,7 @@ const router = express.Router();
 const validateAddMessage = [
   body('dconversationId').exists().isUUID(),
   body('dsenderId').exists().isUUID(),
-  body('dcontent').exists().isString(),
+  body('dcontent').optional().isString(), // Changed from exists() to optional() to allow attachments without content
   body('dmessageType').optional().isString(),
 ];
 
