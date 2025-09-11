@@ -74,14 +74,12 @@
 
   let searchQuery = $state<string>('');
   let currentTab = $state<string>('active');
-  let selectedRows = $state<Set<string>>(new Set());
-  let selectAll = $state<boolean>(false);
+  let selectedOU = $state<OrganizationUnit | null>(null);
+  let expandedNodes = $state<Set<string>>(new Set());
   let showCreateModal = $state<boolean>(false);
   let showEditModal = $state<boolean>(false);
+  let showParentDetailsModal = $state<boolean>(false);
   let showConfirmationModal = $state<boolean>(false);
-  let showDetailsModal = $state<boolean>(false);
-  let selectedOU = $state<OrganizationUnit | null>(null);
-  let showOUDetails = $state<boolean>(false);
   let activeRulesTab = $state<'chat' | 'broadcast'>('chat');
   let confirmationAction = $state<string>('');
   let editOU = $state<Partial<OrganizationUnit> & { rules: OURules } | null>(null);
@@ -97,6 +95,7 @@
   let apiSuccess = $state<string>('');
   let isLoading = $state<boolean>(false);
   let loadError = $state<string>('');
+  let parentOUForNewChild = $state<OrganizationUnit | null>(null);
 
   const defaultRules: OURules = {
     chat: {
@@ -282,10 +281,222 @@
     return mappedOU;
   };
 
+  // Generate sample data for demo purposes
+  const generateSampleData = (): { active: OrganizationUnit[], inactive: OrganizationUnit[] } => {
+    const sampleOUs: OrganizationUnit[] = [];
+    let idCounter = 1;
+
+    // Helper function to create an OU
+    const createOU = (name: string, description: string, location: string, parentId: string | null = null, status: 'active' | 'inactive' = 'active', memberCount: number = 0): OrganizationUnit => ({
+      id: `ou-${idCounter++}`,
+      name,
+      description,
+      parentId,
+      memberCount,
+      location,
+      createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000),
+      modifiedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+      status,
+      rules: JSON.parse(JSON.stringify(defaultRules))
+    });
+
+    // Multiple Root Level Organizations
+    const corporate = createOU('Corporate Headquarters', 'Main corporate office and executive leadership', 'New York, NY', null, 'active', 25);
+    const manufacturing = createOU('Manufacturing Division', 'Global manufacturing operations and production facilities', 'Detroit, MI', null, 'active', 180);
+    const retail = createOU('Retail Operations', 'Customer-facing retail stores and e-commerce', 'Atlanta, GA', null, 'active', 320);
+    const research = createOU('Research & Development', 'Innovation labs and product development centers', 'Palo Alto, CA', null, 'active', 85);
+    const consulting = createOU('Consulting Services', 'Professional consulting and advisory services', 'Boston, MA', null, 'active', 45);
+    const logistics = createOU('Global Logistics', 'Supply chain and distribution network management', 'Memphis, TN', null, 'active', 150);
+    
+    // Root organizations with no children (standalone divisions)
+    const cybersecurity = createOU('Cybersecurity Division', 'Information security and risk management services', 'Austin, TX', null, 'active', 28);
+    const sustainability = createOU('Sustainability Office', 'Environmental initiatives and corporate responsibility', 'Portland, OR', null, 'active', 12);
+    const ventures = createOU('Corporate Ventures', 'Strategic investments and startup partnerships', 'San Francisco, CA', null, 'inactive', 8);
+    
+    // Organizations with no members (newly created or transitioning)
+    const newInitiatives = createOU('New Initiatives Office', 'Exploration of emerging business opportunities', 'Denver, CO', null, 'active', 0);
+    const brandIncubator = createOU('Brand Incubator Lab', 'New brand development and market testing', 'Miami, FL', null, 'active', 0);
+    const emergencyResponse = createOU('Emergency Response Team', 'Crisis management and business continuity', 'Remote', null, 'inactive', 0);
+    
+    sampleOUs.push(corporate, manufacturing, retail, research, consulting, logistics, cybersecurity, sustainability, ventures, newInitiatives, brandIncubator, emergencyResponse);
+
+    // Regional Offices under Corporate
+    const northAmerica = createOU('North America Region', 'Regional operations for North American markets', 'Chicago, IL', corporate.id, 'active', 15);
+    const europe = createOU('Europe Region', 'Regional operations for European markets', 'London, UK', corporate.id, 'active', 18);
+    const asiaPacific = createOU('Asia Pacific Region', 'Regional operations for Asia Pacific markets', 'Singapore', corporate.id, 'active', 12);
+    sampleOUs.push(northAmerica, europe, asiaPacific);
+
+    // Departments under Corporate
+    const humanResources = createOU('Human Resources Department', 'Employee relations, recruitment, and organizational development', 'New York, NY', corporate.id, 'active', 32);
+    const finance = createOU('Finance Department', 'Financial planning, accounting, and budget management', 'New York, NY', corporate.id, 'active', 28);
+    const technology = createOU('Technology Department', 'Information systems, software development, and infrastructure', 'San Francisco, CA', corporate.id, 'active', 45);
+    const marketing = createOU('Marketing Department', 'Brand management, advertising, and market research', 'Los Angeles, CA', corporate.id, 'active', 22);
+    const operations = createOU('Operations Department', 'Supply chain, logistics, and operational efficiency', 'Dallas, TX', corporate.id, 'active', 38);
+    sampleOUs.push(humanResources, finance, technology, marketing, operations);
+
+    // Sub-departments under HR
+    sampleOUs.push(
+      createOU('Recruitment Team', 'Talent acquisition and hiring processes', 'New York, NY', humanResources.id, 'active', 8),
+      createOU('Employee Relations', 'Employee support and conflict resolution', 'New York, NY', humanResources.id, 'active', 6),
+      createOU('Training and Development', 'Employee skill development and career growth', 'New York, NY', humanResources.id, 'active', 12),
+      createOU('Compensation and Benefits', 'Salary administration and employee benefits', 'New York, NY', humanResources.id, 'active', 6)
+    );
+
+    // Sub-departments under Finance
+    sampleOUs.push(
+      createOU('Accounting Team', 'General ledger, accounts payable and receivable', 'New York, NY', finance.id, 'active', 10),
+      createOU('Financial Planning', 'Budget forecasting and strategic financial analysis', 'New York, NY', finance.id, 'active', 8),
+      createOU('Audit and Compliance', 'Internal audit and regulatory compliance', 'New York, NY', finance.id, 'active', 6),
+      createOU('Treasury Services', 'Cash management and investment oversight', 'New York, NY', finance.id, 'active', 4)
+    );
+
+    // Sub-departments under Technology
+    sampleOUs.push(
+      createOU('Software Engineering', 'Application development and maintenance', 'San Francisco, CA', technology.id, 'active', 25),
+      createOU('Infrastructure Team', 'Network, servers, and cloud infrastructure', 'San Francisco, CA', technology.id, 'active', 12),
+      createOU('Data Analytics', 'Business intelligence and data science', 'San Francisco, CA', technology.id, 'active', 8),
+      createOU('Quality Assurance', 'Software testing and quality control', 'San Francisco, CA', technology.id, 'inactive', 6),
+      createOU('DevOps Engineering', 'Deployment automation and system reliability', 'San Francisco, CA', technology.id, 'active', 10)
+    );
+
+    // Teams under Software Engineering
+    const softwareEng = sampleOUs.find(ou => ou.name === 'Software Engineering')!;
+    sampleOUs.push(
+      createOU('Frontend Development Team', 'User interface and user experience development', 'San Francisco, CA', softwareEng.id, 'active', 8),
+      createOU('Backend Development Team', 'Server-side logic and database management', 'San Francisco, CA', softwareEng.id, 'active', 10),
+      createOU('Mobile Development Team', 'iOS and Android application development', 'San Francisco, CA', softwareEng.id, 'active', 7)
+    );
+
+    // Sub-departments under Marketing
+    sampleOUs.push(
+      createOU('Digital Marketing', 'Online advertising and social media campaigns', 'Los Angeles, CA', marketing.id, 'active', 8),
+      createOU('Brand Management', 'Brand strategy and creative development', 'Los Angeles, CA', marketing.id, 'active', 6),
+      createOU('Market Research', 'Consumer insights and competitive analysis', 'Los Angeles, CA', marketing.id, 'active', 5),
+      createOU('Public Relations', 'Media relations and corporate communications', 'Los Angeles, CA', marketing.id, 'inactive', 3)
+    );
+
+    // Sub-departments under Operations
+    sampleOUs.push(
+      createOU('Supply Chain Management', 'Vendor relations and procurement processes', 'Dallas, TX', operations.id, 'active', 12),
+      createOU('Logistics Coordination', 'Shipping, receiving, and warehouse management', 'Dallas, TX', operations.id, 'active', 15),
+      createOU('Quality Control', 'Product quality assurance and testing', 'Dallas, TX', operations.id, 'active', 8),
+      createOU('Facilities Management', 'Building maintenance and office administration', 'Dallas, TX', operations.id, 'active', 3)
+    );
+
+    // Regional sub-offices under North America
+    sampleOUs.push(
+      createOU('US West Coast Office', 'Operations for western United States', 'Seattle, WA', northAmerica.id, 'active', 22),
+      createOU('US East Coast Office', 'Operations for eastern United States', 'Boston, MA', northAmerica.id, 'active', 18),
+      createOU('Canada Office', 'Operations for Canadian markets', 'Toronto, ON', northAmerica.id, 'active', 14),
+      createOU('Mexico Office', 'Operations for Mexican markets', 'Mexico City, MX', northAmerica.id, 'inactive', 8)
+    );
+
+    // Regional sub-offices under Europe
+    sampleOUs.push(
+      createOU('UK and Ireland Office', 'Operations for British Isles', 'London, UK', europe.id, 'active', 20),
+      createOU('Germany Office', 'Operations for German markets', 'Berlin, DE', europe.id, 'active', 16),
+      createOU('France Office', 'Operations for French markets', 'Paris, FR', europe.id, 'active', 12),
+      createOU('Nordic Office', 'Operations for Scandinavian markets', 'Stockholm, SE', europe.id, 'active', 10),
+      createOU('Southern Europe Office', 'Operations for Mediterranean markets', 'Rome, IT', europe.id, 'inactive', 8)
+    );
+
+    // Regional sub-offices under Asia Pacific
+    sampleOUs.push(
+      createOU('Japan Office', 'Operations for Japanese markets', 'Tokyo, JP', asiaPacific.id, 'active', 15),
+      createOU('Australia Office', 'Operations for Australian and New Zealand markets', 'Sydney, AU', asiaPacific.id, 'active', 12),
+      createOU('Southeast Asia Office', 'Operations for ASEAN markets', 'Bangkok, TH', asiaPacific.id, 'active', 10),
+      createOU('China Office', 'Operations for Chinese markets', 'Shanghai, CN', asiaPacific.id, 'inactive', 18)
+    );
+
+    // Manufacturing Division sub-units
+    sampleOUs.push(
+      createOU('Production Planning', 'Manufacturing schedules and capacity management', 'Detroit, MI', manufacturing.id, 'active', 25),
+      createOU('Quality Assurance Manufacturing', 'Product quality control and testing', 'Detroit, MI', manufacturing.id, 'active', 18),
+      createOU('Plant Operations East', 'Eastern manufacturing facilities management', 'Cleveland, OH', manufacturing.id, 'active', 45),
+      createOU('Plant Operations West', 'Western manufacturing facilities management', 'Phoenix, AZ', manufacturing.id, 'active', 38),
+      createOU('Equipment Maintenance', 'Industrial equipment servicing and repairs', 'Detroit, MI', manufacturing.id, 'active', 32),
+      createOU('Safety and Compliance', 'Workplace safety and regulatory compliance', 'Detroit, MI', manufacturing.id, 'active', 22)
+    );
+
+    // Retail Operations sub-units
+    sampleOUs.push(
+      createOU('Store Operations', 'Physical retail store management', 'Atlanta, GA', retail.id, 'active', 85),
+      createOU('E-commerce Platform', 'Online sales and digital customer experience', 'Seattle, WA', retail.id, 'active', 45),
+      createOU('Customer Service Center', 'Customer support and order assistance', 'Nashville, TN', retail.id, 'active', 55),
+      createOU('Merchandising', 'Product placement and inventory management', 'Atlanta, GA', retail.id, 'active', 30),
+      createOU('Regional Managers East', 'Eastern region store oversight', 'Miami, FL', retail.id, 'active', 28),
+      createOU('Regional Managers West', 'Western region store oversight', 'Los Angeles, CA', retail.id, 'active', 25),
+      createOU('Franchise Operations', 'Franchise partner support and management', 'Dallas, TX', retail.id, 'inactive', 18)
+    );
+
+    // Research & Development sub-units
+    sampleOUs.push(
+      createOU('Product Innovation Lab', 'New product research and prototyping', 'Palo Alto, CA', research.id, 'active', 22),
+      createOU('Materials Science Team', 'Advanced materials research and testing', 'Cambridge, MA', research.id, 'active', 15),
+      createOU('User Experience Research', 'Customer behavior and usability studies', 'Palo Alto, CA', research.id, 'active', 12),
+      createOU('Patent Office', 'Intellectual property management and filing', 'Palo Alto, CA', research.id, 'active', 8),
+      createOU('Technology Partnerships', 'External research collaborations', 'Palo Alto, CA', research.id, 'active', 6),
+      createOU('Applied Research Division', 'Practical application development', 'Ann Arbor, MI', research.id, 'inactive', 10)
+    );
+
+    // Consulting Services sub-units
+    sampleOUs.push(
+      createOU('Strategic Consulting', 'Business strategy and transformation', 'Boston, MA', consulting.id, 'active', 18),
+      createOU('Technical Consulting', 'IT and technology implementation', 'Boston, MA', consulting.id, 'active', 15),
+      createOU('Change Management', 'Organizational change and training', 'Boston, MA', consulting.id, 'active', 12)
+    );
+
+    // Global Logistics sub-units
+    sampleOUs.push(
+      createOU('Distribution Centers', 'Warehouse and fulfillment operations', 'Memphis, TN', logistics.id, 'active', 65),
+      createOU('Transportation Management', 'Fleet and shipping coordination', 'Memphis, TN', logistics.id, 'active', 35),
+      createOU('Vendor Relations', 'Supplier partnerships and procurement', 'Chicago, IL', logistics.id, 'active', 28),
+      createOU('Inventory Control', 'Stock management and optimization', 'Memphis, TN', logistics.id, 'active', 22)
+    );
+
+    // Add some specialized teams under Corporate
+    sampleOUs.push(
+      createOU('Innovation Lab', 'Research and development of emerging technologies', 'Austin, TX', corporate.id, 'active', 12),
+      createOU('Customer Success Team', 'Client relationship management and support', 'Remote', corporate.id, 'active', 16),
+      createOU('Legal Department', 'Corporate legal affairs and compliance', 'New York, NY', corporate.id, 'active', 8),
+      createOU('Executive Office', 'CEO, COO, and executive leadership team', 'New York, NY', corporate.id, 'active', 5),
+      createOU('Strategic Planning Unit', 'Long-term business strategy and market analysis', 'New York, NY', corporate.id, 'active', 0),
+      createOU('Merger & Acquisitions Team', 'Corporate development and acquisition evaluation', 'New York, NY', corporate.id, 'inactive', 0)
+    );
+
+    // Add some inactive departments and root organizations
+    sampleOUs.push(
+      createOU('Pilot Program Office', 'Experimental initiatives and pilot projects', 'Various', corporate.id, 'inactive', 4),
+      createOU('Legacy Systems Team', 'Maintenance of deprecated technology systems', 'New York, NY', technology.id, 'inactive', 3),
+      createOU('Special Projects Division', 'Temporary project-based teams', 'Various', corporate.id, 'inactive', 7)
+    );
+
+    // Additional root-level inactive organizations
+    sampleOUs.push(
+      createOU('Aerospace Division', 'Aviation and aerospace technology development', 'Houston, TX', null, 'inactive', 65),
+      createOU('Entertainment Studios', 'Media production and content creation', 'Hollywood, CA', null, 'inactive', 42),
+      createOU('Agriculture Division', 'Farming operations and agricultural technology', 'Des Moines, IA', null, 'inactive', 28)
+    );
+
+    // Some children for inactive Aerospace Division
+    sampleOUs.push(
+      createOU('Flight Testing', 'Aircraft and component testing operations', 'Houston, TX', sampleOUs.find(ou => ou.name === 'Aerospace Division')?.id || '', 'inactive', 25),
+      createOU('Aerospace Engineering', 'Design and development of aerospace systems', 'Houston, TX', sampleOUs.find(ou => ou.name === 'Aerospace Division')?.id || '', 'inactive', 40)
+    );
+
+    const active = sampleOUs.filter(ou => ou.status === 'active');
+    const inactive = sampleOUs.filter(ou => ou.status === 'inactive');
+
+    return { active, inactive };
+  };
+
   const loadLists = async () => {
     isLoading = true;
     loadError = '';
     try {
+      // For demo purposes, use sample data instead of API calls
+      // Uncomment the lines below to use real API data
+      /*
       const [activeRes, inactiveRes] = await Promise.all([
         getActiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' }),
         getInactiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' })
@@ -296,6 +507,13 @@
 
       activeList = activeRows.map(mapBackendToOU);
       inactiveList = inactiveRows.map(mapBackendToOU);
+      */
+      
+      // Use sample data for demo
+      const sampleData = generateSampleData();
+      activeList = sampleData.active;
+      inactiveList = sampleData.inactive;
+      
       organizationUnits = currentTab === 'active' ? activeList : inactiveList;
     } catch (e) {
       console.error(e);
@@ -379,26 +597,41 @@
     };
   });
 
-  let filteredOUs = $derived.by(() => {
-    let filtered = organizationUnits;
-
-    // Filter by tab
-    if (currentTab === 'active') {
-      filtered = filtered.filter(ou => ou.status === 'active');
-    } else if (currentTab === 'inactive') {
-      filtered = filtered.filter(ou => ou.status === 'inactive');
-    }
+  // Build hierarchical structure
+  const hierarchicalOUs = $derived.by(() => {
+    const currentList = currentTab === 'active' ? activeList : inactiveList;
+    let filtered = currentList;
 
     // Filter by search
     if (searchQuery) {
-      filtered = filtered.filter(ou =>
+      filtered = currentList.filter(ou =>
         ou.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ou.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ou.location.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    return filtered;
+    // Build hierarchy
+    const rootNodes: (OrganizationUnit & { children?: OrganizationUnit[] })[] = [];
+    const nodeMap = new Map<string, OrganizationUnit & { children?: OrganizationUnit[] }>();
+
+    // First pass: create nodes
+    filtered.forEach(ou => {
+      nodeMap.set(ou.id, { ...ou, children: [] });
+    });
+
+    // Second pass: build hierarchy
+    filtered.forEach(ou => {
+      const node = nodeMap.get(ou.id)!;
+      if (ou.parentId && nodeMap.has(ou.parentId)) {
+        const parent = nodeMap.get(ou.parentId)!;
+        parent.children!.push(node);
+      } else {
+        rootNodes.push(node);
+      }
+    });
+
+    return rootNodes;
   });
 
   // Functions
@@ -414,6 +647,11 @@
         // Only send settings for the currently active tab
         const apiData = transformOUDataForAPI(newOU, activeRulesTab);
         
+        // Add parent ID if creating a child OU
+        if (parentOUForNewChild) {
+          apiData.parentId = parentOUForNewChild.id;
+        }
+        
         // Call the API
         const result = await createOUAPI(apiData);
         
@@ -423,7 +661,7 @@
             id: result.data?.id || Date.now().toString(),
             name: newOU.name.trim(),
             description: newOU.description.trim(),
-            parentId: null,
+            parentId: parentOUForNewChild?.id || null,
             memberCount: 0,
             location: newOU.location.trim(),
             createdAt: new Date(),
@@ -446,6 +684,7 @@
           setTimeout(() => {
             showCreateModal = false;
             apiSuccess = '';
+            parentOUForNewChild = null;
           }, 2000);
           
         } else {
@@ -714,98 +953,7 @@
     }
   };
 
-  const confirmBulkDeactivateOUs = () => {
-    if (selectedRows.size === 0) return;
-    
-    actionConfirm = {
-      message: `Are you sure you want to deactivate ${selectedRows.size} selected organization units? This will make them inactive but preserve all data.`,
-      confirmText: 'Deactivate All',
-      action: () => bulkDeactivateOUs()
-    };
-    showConfirmationModal = true;
-  };
 
-  const confirmBulkReactivateOUs = () => {
-    if (selectedRows.size === 0) return;
-    
-    actionConfirm = {
-      message: `Are you sure you want to reactivate ${selectedRows.size} selected organization units? This will make them active again.`,
-      confirmText: 'Reactivate All',
-      action: () => bulkReactivateOUs()
-    };
-    showConfirmationModal = true;
-  };
-
-  const bulkDeactivateOUs = async () => {
-    const ids = Array.from(selectedRows);
-    if (ids.length === 0) return;
-    try {
-      const res = await deactivateOUsAPI(ids);
-      if (!res.success) throw new Error(res.error || 'Failed');
-      const selectedCount = ids.length;
-      if (currentTab === 'active') {
-        const toMove = new Set(ids);
-        const moved = activeList.filter(ou => toMove.has(ou.id)).map(ou => ({ ...ou, status: 'inactive' as const, modifiedAt: new Date() }));
-        activeList = activeList.filter(ou => !toMove.has(ou.id));
-        inactiveList = [...moved, ...inactiveList];
-        organizationUnits = activeList;
-      }
-      alert(`${selectedCount} organization units have been deactivated successfully!`);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to deactivate selected organization units.');
-    } finally {
-      showConfirmationModal = false;
-      selectedRows = new Set();
-      selectAll = false;
-      actionConfirm = null;
-    }
-  };
-
-  const bulkReactivateOUs = async () => {
-    const ids = Array.from(selectedRows);
-    if (ids.length === 0) return;
-    
-    try {
-      const res = await reactivateOUsAPI(ids);
-      if (!res.success) throw new Error(res.error || 'Failed');
-      
-      const selectedCount = ids.length;
-      if (currentTab === 'inactive') {
-        const toMove = new Set(ids);
-        const moved = inactiveList.filter(ou => toMove.has(ou.id)).map(ou => ({ ...ou, status: 'active' as const, modifiedAt: new Date() }));
-        inactiveList = inactiveList.filter(ou => !toMove.has(ou.id));
-        activeList = [...moved, ...activeList];
-        organizationUnits = inactiveList;
-      }
-      alert(`${selectedCount} organization units have been reactivated successfully!`);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to reactivate selected organization units.');
-    } finally {
-      showConfirmationModal = false;
-      selectedRows = new Set();
-      selectAll = false;
-      actionConfirm = null;
-    }
-  };
-
-  const deleteOU = (ouId: string) => {
-    if (confirm('Are you sure you want to delete this Organization Unit?')) {
-      organizationUnits = organizationUnits.filter(ou => ou.id !== ouId);
-      alert('Organization Unit deleted successfully!');
-    }
-  };
-
-  const viewOUDetails = (ou: OrganizationUnit) => {
-    selectedOU = ou;
-    showDetailsModal = true;
-  };
-
-  const closeDetailsModal = () => {
-    showDetailsModal = false;
-    selectedOU = null;
-  };
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -829,31 +977,23 @@
   // Tab change function
   const changeTab = (tab: string) => {
     currentTab = tab;
-    // Clear selections when switching tabs
-    selectedRows = new Set();
-    selectAll = false;
+    selectedOU = null; // Clear selection when switching tabs
     organizationUnits = currentTab === 'active' ? activeList : inactiveList;
   };
 
-  // Row selection functions
-  const handleSelectAll = () => {
-    selectAll = !selectAll;
-    if (selectAll) {
-      selectedRows = new Set(filteredOUs.map(ou => ou.id));
+  // Directory navigation functions
+  const toggleExpand = (ouId: string) => {
+    const newExpanded = new Set(expandedNodes);
+    if (newExpanded.has(ouId)) {
+      newExpanded.delete(ouId);
     } else {
-      selectedRows = new Set();
+      newExpanded.add(ouId);
     }
+    expandedNodes = newExpanded;
   };
 
-  const handleRowSelect = (ouId: string) => {
-    const newSelectedRows = new Set(selectedRows);
-    if (newSelectedRows.has(ouId)) {
-      newSelectedRows.delete(ouId);
-    } else {
-      newSelectedRows.add(ouId);
-    }
-    selectedRows = newSelectedRows;
-    selectAll = filteredOUs.length > 0 && filteredOUs.every(ou => selectedRows.has(ou.id));
+  const selectOU = (ou: OrganizationUnit) => {
+    selectedOU = ou;
   };
 
   // Deactivate function (instead of delete)
@@ -909,6 +1049,56 @@
   };
 </script>
 
+<!-- Tree Node Component -->
+{#snippet ouTreeNode(ou: OrganizationUnit & { children?: OrganizationUnit[] }, depth: number)}
+  <div class="w-full">
+    <div 
+      class="flex items-center py-2 px-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors {selectedOU?.id === ou.id ? 'bg-blue-50 border-l-4 border-[#01c0a4]' : ''}"
+      style="margin-left: {depth * 16}px"
+      onclick={() => selectOU(ou)}
+    >
+      <!-- Expand/Collapse Button -->
+      {#if ou.children && ou.children.length > 0}
+        <button
+          onclick={(e) => { e.stopPropagation(); toggleExpand(ou.id); }}
+          class="mr-1 p-1 rounded hover:bg-gray-200 transition-colors"
+        >
+          {#if expandedNodes.has(ou.id)}
+            <ChevronDown class="w-4 h-4 text-gray-500" />
+          {:else}
+            <ChevronRight class="w-4 h-4 text-gray-500" />
+          {/if}
+        </button>
+      {:else}
+        <div class="w-6 h-6 mr-1"></div>
+      {/if}
+
+      <!-- OU Icon and Info -->
+      <div class="flex items-center space-x-2 flex-1 min-w-0">
+        <div class="h-6 w-6 rounded bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center flex-shrink-0">
+          <Building2 class="w-3 h-3 text-white" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-gray-900 truncate">{ou.name}</div>
+          {#if ou.memberCount > 0}
+            <div class="text-xs text-gray-500">{ou.memberCount} members</div>
+          {/if}
+        </div>
+        <div class="flex-shrink-0">
+          <span class="w-2 h-2 rounded-full {ou.status === 'active' ? 'bg-green-400' : 'bg-red-400'}"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Children -->
+    {#if ou.children && ou.children.length > 0 && expandedNodes.has(ou.id)}
+      {#each ou.children as child}
+        {@render ouTreeNode(child, depth + 1)}
+      {/each}
+    {/if}
+  </div>
+{/snippet}
+
 <svelte:head>
   <title>OU Management - Admin Controls</title>
 </svelte:head>
@@ -922,224 +1112,321 @@
     </div>
   </div>
 
-  <!-- Search and Filters -->
-  <div class="collaboration-card fade-in mb-6">
-    <div class="p-6">
-      <div class="flex items-center space-x-4">
-        <div class="relative flex-1">
-          <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            bind:value={searchQuery}
-            type="text"
-            placeholder="Search organization units..."
-            class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-          />
-        </div>
-        <div class="text-sm text-gray-500 whitespace-nowrap">
-          {filteredOUs.length} of {organizationUnits.length} units
-        </div>
-        <button
-          onclick={() => showCreateModal = true}
-          class="primary-button flex items-center space-x-2 whitespace-nowrap"
-        >
-          <Plus class="w-5 h-5" />
-          <span>Create OU</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- OUs Table with Tabs -->
+  <!-- Main Layout: Directory + Details -->
   <div class="collaboration-card fade-in">
-    <!-- Tabs -->
-    <div class="border-b border-gray-200">
-      <nav class="flex space-x-6 px-6">
-        <button
-          onclick={() => changeTab('active')}
-          class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'active' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
-        >
-          <div class="flex items-center space-x-2">
-            <Building2 class="w-4 h-4" />
-            <span>Active</span>
-            <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.active}</span>
-          </div>
-        </button>
-
-        <button
-          onclick={() => changeTab('inactive')}
-          class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'inactive' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
-        >
-          <div class="flex items-center space-x-2">
-            <X class="w-4 h-4" />
-            <span>Deactivated</span>
-            <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.inactive}</span>
-          </div>
-        </button>
-      </nav>
-    </div>
-
-    <!-- Selection Toolbar -->
-    {#if selectedRows.size > 0}
-      <div class="bg-blue-50 border-b border-blue-200 px-6 py-2.5">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-3">
-            <span class="text-sm font-medium text-blue-900">
-              {selectedRows.size} {selectedRows.size === 1 ? 'unit' : 'units'} selected
-            </span>
+    <div class="flex h-[calc(100vh-200px)]">
+      <!-- Left Side: Directory Tree -->
+      <div class="w-1/4 border-r border-gray-200 flex flex-col">
+        <!-- Header with Search and Create Button -->
+        <div class="p-4 border-b border-gray-200 bg-gray-50">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Organization Units</h3>
             <button
-              onclick={() => { selectedRows = new Set(); selectAll = false; }}
-              class="text-sm text-blue-600 hover:text-blue-800"
+              onclick={() => { parentOUForNewChild = null; showCreateModal = true; }}
+              class="primary-button flex items-center space-x-2 text-sm px-3 py-2"
             >
-              Clear selection
+              <Plus class="w-4 h-4" />
+              <span>Create OU</span>
             </button>
           </div>
-          <div class="flex items-center space-x-2">
-            {#if currentTab === 'active'}
-              <button
-                onclick={() => confirmBulkDeactivateOUs()}
-                class="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Deactivate Selected
-              </button>
-            {:else}
-              <button
-                onclick={() => confirmBulkReactivateOUs()}
-                class="px-3 py-1.5 text-sm bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
-              >
-                Reactivate Selected
-              </button>
-            {/if}
+          
+          <div class="relative mb-4">
+            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              bind:value={searchQuery}
+              type="text"
+              placeholder="Search organization units..."
+              class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+            />
+          </div>
+
+          <!-- Tabs -->
+          <div class="grid grid-cols-2 gap-1">
+            <button
+              onclick={() => changeTab('active')}
+              class="flex items-center justify-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors {currentTab === 'active' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+            >
+              <Building2 class="w-4 h-4" />
+              <span>Activated ({tabCounts.active})</span>
+            </button>
+
+            <button
+              onclick={() => changeTab('inactive')}
+              class="flex items-center justify-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors {currentTab === 'inactive' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+            >
+              <X class="w-4 h-4" />
+              <span>Deactivated ({tabCounts.inactive})</span>
+            </button>
           </div>
         </div>
-      </div>
-    {/if}
 
-    <!-- OUs Table -->
-    <div class="overflow-x-auto">
-      <table class="w-full" tabindex="0" role="table" aria-label="Organization units table">
-        <thead class="bg-gray-50 border-b border-gray-200">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <div class="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  checked={selectAll}
-                  onchange={handleSelectAll}
-                  class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                />
-                <span>Unit</span>
+        <!-- Directory Tree -->
+        <div class="flex-1 overflow-y-auto p-4">
+          {#each hierarchicalOUs as ou}
+            {@render ouTreeNode(ou, 0)}
+          {/each}
+
+          {#if hierarchicalOUs.length === 0}
+            <div class="text-center py-8">
+              <Building2 class="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p class="text-gray-500 text-sm">
+                {searchQuery ? 'No units match your search.' : 'No organization units found.'}
+              </p>
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Right Side: Details Panel -->
+      <div class="w-3/4 flex flex-col">
+        {#if selectedOU}
+          <!-- Check if this OU has children to determine view type -->
+          {@const currentList = currentTab === 'active' ? activeList : inactiveList}
+          {@const hasChildren = currentList.some(ou => ou.parentId === selectedOU.id)}
+          
+          <!-- OU Header -->
+          <div class="p-6 border-b border-gray-200 bg-gray-50">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-4">
+                <div class="h-12 w-12 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
+                  <Building2 class="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 class="text-xl font-bold text-gray-900">{selectedOU.name}</h2>
+                  <p class="text-gray-600">{selectedOU.description}</p>
+                </div>
               </div>
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          {#each filteredOUs as ou}
-            <tr 
-              class="hover:bg-gray-50 transition-colors cursor-pointer {selectedRows.has(ou.id) ? 'bg-blue-50' : ''}"
-              onclick={(e) => {
-                // Only select row if clicking outside of buttons and checkboxes
-                const target = e.target as HTMLElement;
-                if (target && !target.closest('button') && !target.closest('input[type="checkbox"]')) {
-                  handleRowSelect(ou.id);
-                }
-              }}
-            >
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedRows.has(ou.id)}
-                    onchange={() => handleRowSelect(ou.id)}
-                    class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                  />
-                  <div class="flex items-center">
-                    <div class="flex-shrink-0 h-10 w-10">
-                      <div class="h-10 w-10 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
-                        <Building2 class="w-5 h-5 text-white" />
-                      </div>
-                    </div>
-                    <div class="ml-4">
-                      <div class="text-sm font-medium text-gray-900">{ou.name}</div>
-                      <div class="text-sm text-gray-500">{ou.description}</div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <Users class="w-4 h-4 text-gray-400 mr-1" />
-                  <span class="text-sm text-gray-900">{ou.memberCount}</span>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <MapPin class="w-4 h-4 text-gray-400 mr-1" />
-                  <span class="text-sm text-gray-900">{ou.location}</span>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {ou.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                  {ou.status === 'active' ? 'Active' : 'Deactivated'}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <div class="flex items-center space-x-2">
+              
+              <div class="flex items-center space-x-2">
+                {#if hasChildren}
                   <button
-                    onclick={() => viewOUDetails(ou)}
-                    class="flex items-center space-x-1 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-                    title="View Details"
+                    onclick={() => showParentDetailsModal = true}
+                    class="flex items-center space-x-1 px-3 py-1.5 bg-blue-400 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm"
                   >
                     <FileText class="w-3 h-3" />
                     <span>Details</span>
                   </button>
-                  <button
-                    onclick={() => editOUFunction(ou)}
-                    class="flex items-center space-x-1 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-                    title="Edit"
-                  >
-                    <Edit class="w-3 h-3" />
-                    <span>Edit</span>
-                  </button>
-                  {#if ou.status === 'active'}
-                    <button
-                      onclick={() => confirmDeactivateOU(ou)}
-                      class="flex items-center space-x-1 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-                      title="Deactivate"
-                    >
-                      <X class="w-3 h-3" />
-                      <span>Deactivate</span>
-                    </button>
-                  {:else}
-                    <button
-                      onclick={() => reactivateOU(ou.id)}
-                      class="flex items-center space-x-1 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
-                      title="Reactivate"
-                    >
-                      <Building2 class="w-3 h-3" />
-                      <span>Reactivate</span>
-                    </button>
-                  {/if}
-                </div>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+                {/if}
+              </div>
+            </div>
+          </div>
 
-    {#if filteredOUs.length === 0}
-      <div class="text-center py-12">
-        <Building2 class="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 class="text-xl font-semibold text-gray-600 mb-2">No organization units found</h3>
-        <p class="text-gray-500">
-          {searchQuery ? 'Try adjusting your search criteria.' : 'Create your first organization unit to get started.'}
-        </p>
+          <div class="flex-1 overflow-y-auto">
+            {#if hasChildren}
+              <!-- Parent OU View: Show Children in Table -->
+              <div class="p-6">
+                <div class="mb-6">
+                  <p class="text-sm text-gray-600">Handles day-to-day office operations, procurement, facility management, and administrative support.</p>
+                </div>
+                
+                <div class="bg-white rounded-lg border border-gray-200">
+                  <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <h3 class="text-lg font-semibold text-gray-900">Sub-Organization Units</h3>
+                      </div>
+                      <button
+                        onclick={() => { parentOUForNewChild = selectedOU; showCreateModal = true; }}
+                        class="flex items-center space-x-2 px-3 py-1.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors text-sm"
+                      >
+                        <Plus class="w-3 h-3" />
+                        <span>Add Child OU</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div class="overflow-x-auto">
+                    <table class="w-full">
+                      <thead class="bg-gray-50">
+                        <tr>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-200">
+                        {#each currentList.filter(ou => ou.parentId === selectedOU.id) as childOU}
+                          <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                              <div class="flex items-center space-x-3">
+                                <div class="h-8 w-8 rounded bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
+                                  <Building2 class="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                  <div class="text-sm font-medium text-gray-900">{childOU.name}</div>
+                                  <div class="text-sm text-gray-500">{childOU.location || 'No location specified'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td class="px-6 py-4">
+                              <div class="flex items-center space-x-1">
+                                <Users class="w-3 h-3 text-gray-400" />
+                                <span class="text-sm text-gray-900">{childOU.memberCount}</span>
+                              </div>
+                            </td>
+                            <td class="px-6 py-4">
+                              <span class="px-2 py-1 text-xs font-medium rounded-full {childOU.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                {childOU.status === 'active' ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td class="px-6 py-4">
+                              <span class="text-sm text-gray-600">Organization Unit</span>
+                            </td>
+                            <td class="px-6 py-4">
+                              <div class="flex items-center space-x-2">
+                                <!-- Details Button - Calm blue style -->
+                                <button
+                                  onclick={() => selectOU(childOU)}
+                                  class="px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 hover:text-blue-800 text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-300"
+                                >
+                                  Details
+                                </button>
+                                <!-- Edit Button - Compact with icon -->
+                                <button
+                                  onclick={() => editOUFunction(childOU)}
+                                  class="group flex items-center space-x-1.5 px-3 py-1.5 bg-[#01c0a4]/10 text-[#01c0a4] hover:bg-[#01c0a4] hover:text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                                >
+                                  <Edit class="w-3 h-3 group-hover:scale-110 transition-transform duration-200" />
+                                  <span>Edit</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        {/each}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            {:else}
+              <!-- Child OU View: Show Detailed Configuration -->
+              <div class="p-6">
+                <!-- Basic Information -->
+                <div class="grid grid-cols-2 gap-6 mb-8">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-500 mb-1">Location</label>
+                      <div class="flex items-center space-x-2">
+                        <MapPin class="w-4 h-4 text-gray-400" />
+                        <span class="text-gray-900">{selectedOU.location || 'Not specified'}</span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-500 mb-1">Members</label>
+                      <div class="flex items-center space-x-2">
+                        <Users class="w-4 h-4 text-gray-400" />
+                        <span class="text-gray-900">{selectedOU.memberCount} people</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-500 mb-1">Created</label>
+                      <span class="text-gray-900">{formatDate(selectedOU.createdAt)}</span>
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-500 mb-1">Last Modified</label>
+                      <span class="text-gray-900">{formatDate(selectedOU.modifiedAt)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Rules & Policies Preview -->
+                <div class="mb-8">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-4">Rules & Policies</h3>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <MessageCircle class="w-4 h-4 text-[#01c0a4]" />
+                        <span class="font-medium text-gray-900">Chat Permissions</span>
+                      </div>
+                      <div class="space-y-1 text-sm text-gray-600">
+                        <div>File Sharing: {selectedOU.rules.chat.allowFileSharing ? 'Enabled' : 'Disabled'}</div>
+                        <div>Group Creation: {selectedOU.rules.chat.frontlineCanCreateGroups ? 'All Users' : 'Restricted'}</div>
+                        <div>Message Retention: {selectedOU.rules.chat.messageRetentionDays} days</div>
+                      </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <Radio class="w-4 h-4 text-[#01c0a4]" />
+                        <span class="font-medium text-gray-900">Broadcast Permissions</span>
+                      </div>
+                      <div class="space-y-1 text-sm text-gray-600">
+                        <div>Create Broadcasts: {selectedOU.rules.broadcast.frontlineCanCreateBroadcast ? 'All Users' : 'Restricted'}</div>
+                        <div>Approval Required: {selectedOU.rules.broadcast.requireApprovalForBroadcast ? 'Yes' : 'No'}</div>
+                        <div>Retention: {selectedOU.rules.broadcast.broadcastRetentionDays} days</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="border-t border-gray-200 pt-6">
+                  <div class="flex justify-end gap-3">
+                    <button
+                      onclick={() => confirmDeleteOU(selectedOU)}
+                      class="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <Trash2 class="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                    
+                    {#if selectedOU.status === 'active'}
+                      <button
+                        onclick={() => confirmDeactivateOU(selectedOU)}
+                        class="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                      >
+                        <X class="w-4 h-4" />
+                        <span>Deactivate</span>
+                      </button>
+                    {:else}
+                      <button
+                        onclick={() => reactivateOU(selectedOU.id)}
+                        class="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        <UserCheck class="w-4 h-4" />
+                        <span>Reactivate</span>
+                      </button>
+                    {/if}
+                    
+                    <button
+                      onclick={() => editOUFunction(selectedOU)}
+                      class="flex items-center space-x-2 px-4 py-2 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
+                    >
+                      <Edit class="w-4 h-4" />
+                      <span>Edit Details</span>
+                    </button>
+                    
+                    <button
+                      onclick={() => { parentOUForNewChild = selectedOU; showCreateModal = true; }}
+                      class="flex items-center space-x-2 px-4 py-2 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
+                    >
+                      <Plus class="w-4 h-4" />
+                      <span>Add Child OU</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <!-- Empty State -->
+          <div class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+              <Building2 class="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 class="text-xl font-semibold text-gray-600 mb-2">Select an Organization Unit</h3>
+              <p class="text-gray-500">Choose an OU from the directory to view its details and manage settings.</p>
+            </div>
+          </div>
+        {/if}
       </div>
-    {/if}
+    </div>
   </div>
 </div>
 
@@ -1147,7 +1434,7 @@
 {#if showCreateModal}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showCreateModal = false}>
+  <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => { showCreateModal = false; parentOUForNewChild = null; }}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden" onclick={(e) => e.stopPropagation()}>
@@ -1155,8 +1442,8 @@
         <!-- Left Side - Form -->
         <div class="w-1/2 p-6 border-r border-gray-200">
           <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Create Organization Unit</h2>
-            <button onclick={() => showCreateModal = false} class="text-gray-500 hover:text-gray-700">
+            <h2 class="text-2xl font-bold text-gray-900">{parentOUForNewChild ? `Create Child OU under "${parentOUForNewChild.name}"` : 'Create Organization Unit'}</h2>
+            <button onclick={() => { showCreateModal = false; parentOUForNewChild = null; }} class="text-gray-500 hover:text-gray-700">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
@@ -1191,6 +1478,18 @@
                   <p class="text-sm text-green-800">{apiSuccess}</p>
                 </div>
               </div>
+            </div>
+          {/if}
+
+          <!-- Parent OU Context (when creating child) -->
+          {#if parentOUForNewChild}
+            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div class="flex items-center space-x-2">
+                <Building2 class="w-4 h-4 text-blue-600" />
+                <span class="text-sm font-medium text-blue-900">Parent Organization:</span>
+                <span class="text-sm text-blue-800">{parentOUForNewChild.name}</span>
+              </div>
+              <p class="text-xs text-blue-600 mt-1">This new OU will be created as a child under the selected parent organization.</p>
             </div>
           {/if}
 
@@ -1289,7 +1588,7 @@
 
           <!-- Chat Rules -->
           {#if activeRulesTab === 'chat'}
-            <div class="space-y-4 max-h-96 overflow-y-auto">
+            <div class="space-y-4 max-h-127 overflow-y-auto">
               <div class="bg-white p-4 rounded-lg border">
                 <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
                   <User class="w-4 h-4 mr-2" />
@@ -1526,7 +1825,7 @@
 
           <!-- Broadcast Rules -->
           {#if activeRulesTab === 'broadcast'}
-            <div class="space-y-4 max-h-96 overflow-y-auto">
+            <div class="space-y-4 max-h-127 overflow-y-auto">
               <div class="bg-white p-4 rounded-lg border">
                 <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
                   <User class="w-4 h-4 mr-2" />
@@ -1676,64 +1975,6 @@
   </div>
 {/if}
 
-<!-- OU Details Modal -->
-{#if showDetailsModal && selectedOU}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showDetailsModal = false}>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4" onclick={(e) => e.stopPropagation()}>
-      <div class="p-6">
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">Organization Unit Details</h2>
-        
-        <div class="space-y-4">
-          <div class="flex items-center space-x-4">
-            <div class="h-16 w-16 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
-              <Building2 class="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <div class="text-lg font-medium text-gray-900">{selectedOU.name}</div>
-              <div class="text-sm text-gray-500">{selectedOU.description}</div>
-            </div>
-          </div>
-          
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span class="text-gray-500">Location:</span>
-              <div class="font-medium">{selectedOU.location}</div>
-            </div>
-            <div>
-              <span class="text-gray-500">Members:</span>
-              <div class="font-medium">{selectedOU.memberCount} people</div>
-            </div>
-            <div>
-              <span class="text-gray-500">Status:</span>
-              <div class="font-medium text-green-600">{selectedOU.status === 'active' ? 'Active' : 'Deactivated'}</div>
-            </div>
-            <div>
-              <span class="text-gray-500">Created:</span>
-              <div class="font-medium">{formatDate(selectedOU.createdAt)}</div>
-            </div>
-            <div>
-              <span class="text-gray-500">Modified:</span>
-              <div class="font-medium">{formatDate(selectedOU.modifiedAt)}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex space-x-3 mt-6">
-          <button
-            onclick={() => showDetailsModal = false}
-            class="flex-1 secondary-button"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <!-- Edit OU Modal -->
 {#if showEditModal && editOU}
@@ -2217,6 +2458,138 @@
               </div>
             </div>
           {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Parent OU Details Modal -->
+{#if showParentDetailsModal && selectedOU}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showParentDetailsModal = false}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden" onclick={(e) => e.stopPropagation()}>
+      <div class="p-6 border-b border-gray-200 bg-gray-50">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div class="h-12 w-12 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
+              <Building2 class="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">{selectedOU.name}</h2>
+              <p class="text-gray-600">{selectedOU.description}</p>
+            </div>
+          </div>
+          <button onclick={() => showParentDetailsModal = false} class="text-gray-500 hover:text-gray-700">
+            <X class="w-6 h-6" />
+          </button>
+        </div>
+      </div>
+
+      <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)] relative">
+        <!-- Basic Information -->
+        <div class="grid grid-cols-2 gap-6 mb-6">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-500 mb-1">Location</label>
+              <div class="flex items-center space-x-2">
+                <MapPin class="w-4 h-4 text-gray-400" />
+                <span class="text-gray-900">{selectedOU.location || 'Not specified'}</span>
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-500 mb-1">Members</label>
+              <div class="flex items-center space-x-2">
+                <Users class="w-4 h-4 text-gray-400" />
+                <span class="text-gray-900">{selectedOU.memberCount} people</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-500 mb-1">Created</label>
+              <span class="text-gray-900">{formatDate(selectedOU.createdAt)}</span>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-500 mb-1">Last Modified</label>
+              <span class="text-gray-900">{formatDate(selectedOU.modifiedAt)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rules & Policies Overview -->
+        <div class="mb-20">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Rules & Policies Overview</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-gray-50 p-4 rounded-lg">
+              <div class="flex items-center space-x-2 mb-2">
+                <MessageCircle class="w-4 h-4 text-[#01c0a4]" />
+                <span class="font-medium text-gray-900">Chat Permissions</span>
+              </div>
+              <div class="space-y-1 text-sm text-gray-600">
+                <div>File Sharing: {selectedOU.rules.chat.allowFileSharing ? 'Enabled' : 'Disabled'}</div>
+                <div>Group Creation: {selectedOU.rules.chat.frontlineCanCreateGroups ? 'All Users' : 'Restricted'}</div>
+                <div>Message Retention: {selectedOU.rules.chat.messageRetentionDays} days</div>
+              </div>
+            </div>
+            
+            <div class="bg-gray-50 p-4 rounded-lg">
+              <div class="flex items-center space-x-2 mb-2">
+                <Radio class="w-4 h-4 text-[#01c0a4]" />
+                <span class="font-medium text-gray-900">Broadcast Permissions</span>
+              </div>
+              <div class="space-y-1 text-sm text-gray-600">
+                <div>Create Broadcasts: {selectedOU.rules.broadcast.frontlineCanCreateBroadcast ? 'All Users' : 'Restricted'}</div>
+                <div>Approval Required: {selectedOU.rules.broadcast.requireApprovalForBroadcast ? 'Yes' : 'No'}</div>
+                <div>Retention: {selectedOU.rules.broadcast.broadcastRetentionDays} days</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons - Bottom Right -->
+        <div class="absolute bottom-6 right-6">
+          <div class="flex space-x-2">
+            <button
+              onclick={() => { showParentDetailsModal = false; selectOU(selectedOU); }}
+              class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-400 rounded-lg hover:bg-blue-500 transition-colors"
+            >
+              <FileText class="w-4 h-4 mr-2" />
+              Details
+            </button>
+            
+            <button
+              onclick={() => { showParentDetailsModal = false; editOUFunction(selectedOU); }}
+              class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#01c0a4] rounded-lg hover:bg-[#00a085] transition-colors"
+            >
+              <Edit class="w-4 h-4 mr-2" />
+              Edit
+            </button>
+            
+            {#if selectedOU.status === 'active'}
+              <button
+                onclick={() => { showParentDetailsModal = false; confirmDeactivateOU(selectedOU); }}
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                <X class="w-4 h-4 mr-2" />
+                Deactivate
+              </button>
+            {:else}
+              <button
+                onclick={() => { showParentDetailsModal = false; reactivateOU(selectedOU.id); }}
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+              >
+                <UserCheck class="w-4 h-4 mr-2" />
+                Reactivate
+              </button>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
