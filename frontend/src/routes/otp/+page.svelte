@@ -225,7 +225,9 @@ onMount(() => {
                         }
                         goto('/security-question');
                     } else {
-                        goto('/chat');
+                        otpError = 'Invalid user data received. Please try again.';
+                        otpIsLoading = false;
+                        return;
                     }
                 } else {
                     otpError = 'Invalid user data received. Please try again.';

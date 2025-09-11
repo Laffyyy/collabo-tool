@@ -12,6 +12,8 @@ const nodemailer = require('nodemailer');
 const SessionModel = require('../model/session.model');
 const UserRoleModel = require('../model/user-role.model');
 const RoleModel = require('../model/role.model');
+const GlobalSettingsService = require('../services/global-settings.service');
+
 
 // Initialize UserModel with database pool
 const pool = getPool(); // Get the pool once
@@ -37,49 +39,87 @@ function signToken(payload) {
  * @param {Object} credentials - Login credentials
  * @param {string} credentials.username - User's email/username
  * @param {string} credentials.password - User's password
+ * @param {string} credentials.ipAddress - Client IP address
+ * @param {string} credentials.userAgent - Client user agent
  * @returns {Promise<Object>} Login result with next step
  */
-async function login({ username, password }) {
+async function login({ username, password, ipAddress = null, userAgent = null }) {
   try {
+    console.log(`[Auth Service] Login attempt for user: ${username}`);
+    
     // First check if the user exists in database by email - include sensitive data for auth
     const query = 'SELECT * FROM tblusers WHERE demail = $1';
     const result = await userModel.pool.query(query, [username]);
     
-    // If user not found
+    // If user not found - return generic error message for security
     if (result.rows.length === 0) {
+      console.log(`[Auth Service] Login failed - user not found: ${username}`);
       return {
         step: 'FAILED',
         exists: false,
-        message: 'User not found'
+        message: 'Invalid Email/Password'
       };
     }
     
     const userData = result.rows[0];
+    console.log(`[Auth Service] User found: ${userData.did}, username: ${userData.dusername}`);
     const passwordHash = userData.dpasswordhash;
     
     // User exists in database - verify password
     if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
+      console.log(`[Auth Service] Login failed - invalid password for user: ${username}`);
       return {
         step: 'FAILED',
         exists: true,
-        message: 'Invalid password'
+        message: 'Invalid Email/Password'
       };
     }
     
+    console.log(`[Auth Service] Password verified successfully for user: ${username}`);
+    
     // Format the user without sensitive data for the response
     const user = userModel.formatUser(userData);
+    console.log(`[Auth Service] Formatted user data:`, JSON.stringify(user));
     
+    // Get session timeout from database configuration
+    const sessionTimeoutMinutes = await getSessionTimeoutMinutes();
+    console.log(`[Auth Service] Using session timeout of ${sessionTimeoutMinutes} minutes`);
+    
+    // Generate session tokens
+    const sessionToken = uuidv4();
+    const refreshToken = uuidv4();
+    
+    // Create session with dynamic timeout from database
+    const expiresAt = new Date(Date.now() + sessionTimeoutMinutes * 60 * 1000);
+    
+    console.log(`[Auth Service] Session will expire at: ${expiresAt.toISOString()}`);
+    
+    // Create session record in database
+    await sessionModel.create({
+      userId: user.id,
+      sessionToken,
+      refreshToken,
+      expiresAt,
+      ipAddress: ipAddress || '127.0.0.1',
+      userAgent: userAgent || 'Unknown'
+    });
+    
+    console.log(`[Auth Service] Session created with timeout of ${sessionTimeoutMinutes} minutes`);
+
     // Generate OTP and send it to user's email
     const otpData = await generateAndSendOtp(user.email);
+    console.log(`[Auth Service] OTP generated for user: ${username}, expires: ${new Date(otpData.expiresAt).toISOString()}`);
     
-    // Store the OTP in the database or in-memory store
+    // Store the OTP in the database
     await otpModel.create({
       userId: user.id,
       code: otpData.code,
       expiresAt: new Date(otpData.expiresAt)
     });
     
-    // Return success with user info for OTP verification
+    console.log(`[Auth Service] OTP stored in database for user: ${user.id}`);
+    
+    // Return success with user info and session configuration for OTP verification
     return {
       ok: true,
       step: 'OTP',
@@ -87,11 +127,15 @@ async function login({ username, password }) {
       message: 'OTP sent to your email',
       userId: user.id,
       email: user.email,
-      username: user.username
+      username: user.username,
+      sessionToken,
+      sessionTimeout: sessionTimeoutMinutes,
+      sessionExpiresAt: expiresAt.toISOString(),
+      otpExpiresAt: new Date(otpData.expiresAt).toISOString()
     };
     
   } catch (error) {
-    console.error('Database login error:', error);
+    console.error('[Auth Service] Database login error:', error);
     throw new UnauthorizedError('Authentication error');
   }
 }
@@ -108,8 +152,10 @@ async function generateAndSendOtp(email) {
     // Send OTP via email
     await sendOtpEmail(email, otpData.code);
     console.log(`OTP sent to ${email}`);
+    console.log(`🔑 DEVELOPMENT MODE: OTP CODE: ${otpData.code}`);
   } catch (error) {
     console.error('Failed to send OTP email:', error);
+    console.log(`🔑 DEVELOPMENT MODE - EMAIL FAILED BUT OTP IS: ${otpData.code}`);
     // Log but don't throw so authentication can still proceed
   }
   
@@ -125,33 +171,46 @@ async function generateAndSendOtp(email) {
  */
 async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
   try {
-    console.log(`Verifying OTP for user ${userId}`);
+    console.log(`[Auth Service] Verifying OTP for user ${userId}, IP: ${ipAddress}, UA: ${userAgent?.substring(0, 50)}...`);
     
     // Find the OTP record in the database
     const otpRecord = await otpModel.findActiveByCodeAndUserId(userId, otp);
     
     if (!otpRecord) {
+      console.log(`[Auth Service] Invalid or expired OTP for user: ${userId}`);
       throw new UnauthorizedError('Invalid or expired OTP');
     }
 
-    console.log('Valid OTP found, marking as used');
+    console.log(`[Auth Service] Valid OTP found for user: ${userId}, OTP record ID: ${otpRecord.did}`);
     
     // Mark OTP as used
     await otpModel.markAsUsed(otpRecord.did);
+    console.log(`[Auth Service] OTP marked as used: ${otpRecord.did}`);
     
     // Get user info
     const user = await userModel.findById(userId);
     if (!user) {
+      console.log(`[Auth Service] User not found after OTP validation: ${userId}`);
       throw new UnauthorizedError('User not found');
     }
     
+    console.log(`[Auth Service] User retrieved: ${user.id}, name: ${user.firstName} ${user.lastName}`);
+    
     // Get user role(s)
     const userRoles = await userRoleModel.findByUserId(userId);
+    console.log('User roles retrieved:', userRoles);
     const userRole = userRoles.length > 0 ? userRoles[0] : null; // Get primary role
     const role = userRole ? userRole.roleName.toLowerCase() : 'user'; // Default to 'user' if no role
     
+    // Extract the OU ID from the user role
+    const ouId = userRole ? userRole.ouId : null;
+    console.log(`[Auth Service] User OU ID: ${ouId || 'Not assigned'} for user: ${userId}`);
+    
+    console.log(`[Auth Service] User role determined: ${role} for user: ${userId}`);
+    
     // Update last login timestamp
     await userModel.updateLastLogin(userId);
+    console.log(`[Auth Service] Last login updated for user: ${userId}`);
     
     // Generate JWT token with user info and role
     const token = signToken({ 
@@ -159,13 +218,20 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       username: user.username,
       email: user.email,
       role: role,
+      ouId: ouId,
       name: `${user.firstName} ${user.lastName}`
     });
+    console.log(`[Auth Service] JWT token generated for user: ${userId}`);
     
     // Generate session token and create session
     const sessionToken = uuidv4();
     const refreshToken = uuidv4();
     const expiresAt = new Date(Date.now() + parseInt(env.SESSION_EXP_HOURS || 24) * 60 * 60 * 1000);
+    
+    console.log(`[Auth Service] Session tokens generated:
+      - Session Token: ${sessionToken}
+      - Refresh Token: ${refreshToken.substring(0, 8)}...
+      - Expires At: ${expiresAt.toISOString()}`);
     
     // Create session record
     await sessionModel.create({
@@ -176,6 +242,7 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       ipAddress,
       userAgent
     });
+    console.log(`[Auth Service] Session created successfully in database for user: ${userId}`);
     
     return { 
       token,
@@ -185,11 +252,12 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       user: {
         ...user,
         role,
-        mustChangePassword: user.mustChangePassword
+        mustChangePassword: user.mustChangePassword,
+        ouId
       }
     };
   } catch (error) {
-    console.error('OTP verification error:', error);
+    console.error('[Auth Service] OTP verification error:', error);
     throw new UnauthorizedError('OTP verification failed');
   }
 }
@@ -258,8 +326,10 @@ async function resendOtp({ username }) {
       // Send OTP via email - only pass the required parameters
       await sendOtpEmail(email, otpData.code);
       console.log(`New OTP sent to: ${email}`);
+      console.log(`🔑 RESEND OTP CODE: ${otpData.code}`);
     } catch (emailError) {
       console.error('Failed to send OTP email:', emailError);
+      console.log(`🔑 RESEND OTP FAILED BUT CODE: ${otpData.code}`);
       // Continue with the process even if email sending fails
     }
     
@@ -516,6 +586,38 @@ async function validateResetToken({ token }) {
 }
 
 // Update the module.exports to include validateResetToken
+/**
+ * Get session timeout from global settings
+ */
+async function getSessionTimeoutMinutes() {
+  try {
+    console.log('[Auth Service] Fetching session timeout from global settings...');
+    const globalSettings = await GlobalSettingsService.getGeneralSettings();
+    
+    if (globalSettings) {
+      console.log('[Auth Service] Raw global settings:', globalSettings);
+      
+      const settings = typeof globalSettings === 'string' 
+        ? JSON.parse(globalSettings) 
+        : globalSettings;
+      
+      console.log('[Auth Service] Parsed settings:', settings);
+      
+      if (settings.sessionTimeout && settings.sessionTimeout > 0) {
+        console.log(`[Auth Service] Using database session timeout: ${settings.sessionTimeout} minutes`);
+        return settings.sessionTimeout;
+      }
+    }
+  } catch (error) {
+    console.warn('[Auth Service] Failed to load session timeout from global settings:', error);
+  }
+  
+  console.log('[Auth Service] Using default session timeout: 480 minutes');
+  return 480; // Default 8 hours if unable to load from database
+}
+
+
+
 module.exports = {
   login,
   verifyOtp,
@@ -528,5 +630,6 @@ module.exports = {
   answerSecurityQuestions,
   resetPassword,
   validateResetToken, // Add this
+  getSessionTimeoutMinutes, 
 };
 
