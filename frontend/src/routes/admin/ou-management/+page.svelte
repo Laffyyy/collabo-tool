@@ -1279,14 +1279,14 @@
                                 <!-- Details Button - Calm blue style -->
                                 <button
                                   onclick={() => selectOU(childOU)}
-                                  class="px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 hover:text-blue-800 text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200 hover:border-blue-300"
+                                  class="px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 hover:text-blue-800 text-sm font-medium rounded-lg transition-all duration-200 border border-blue-200 hover:border-blue-300"
                                 >
                                   Details
                                 </button>
                                 <!-- Edit Button - Compact with icon -->
                                 <button
                                   onclick={() => editOUFunction(childOU)}
-                                  class="group flex items-center space-x-1.5 px-3 py-1.5 bg-[#01c0a4]/10 text-[#01c0a4] hover:bg-[#01c0a4] hover:text-white text-sm font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                                  class="group flex items-center space-x-1.5 px-3 py-1.5 bg-[#01c0a4]/10 text-[#01c0a4] hover:bg-[#01c0a4] hover:text-white text-sm font-medium rounded-lg transition-all duration-200"
                                 >
                                   <Edit class="w-3 h-3 group-hover:scale-110 transition-transform duration-200" />
                                   <span>Edit</span>
