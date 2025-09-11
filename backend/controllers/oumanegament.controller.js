@@ -147,6 +147,20 @@ async function reactiveOU(req, res, next) {
     }
 }
 
+async function getChildren(req, res, next) {
+    try {
+        const { parentid } = req.query;
+        const children = await oumanegamentService.getChildren(parentid);
+        res.status(200).json({ 
+            ok: true, 
+            data: children,
+            count: children.length
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 module.exports = {
     getOU,
     getDeactiveOU,
@@ -155,5 +169,6 @@ module.exports = {
     deactiveOU,
     updateOU,
     getOUsettings,
-    reactiveOU
+    reactiveOU,
+    getChildren
 };

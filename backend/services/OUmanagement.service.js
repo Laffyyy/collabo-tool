@@ -316,6 +316,17 @@ async function reactiveOU(reactivationlist) {
     }
 }
 
+async function getChildren(parentid) {
+    try {
+        // Get children
+        const result = await ouModel.getChildren(parentid);
+        
+        return result;
+    } catch (error) {
+        throw new Error(`Failed to get children: ${error.message}`);
+    }
+}
+
 module.exports = {
     getOU,
     getDeactiveOU,
@@ -323,5 +334,6 @@ module.exports = {
     deactiveOU,
     updateOU,
     getOUsettings,
-    reactiveOU
+    reactiveOU,
+    getChildren
 };

@@ -166,13 +166,40 @@ class OUmodel {
 
             // Use window function COUNT(*) OVER() to compute total across filtered set
             const query = `
-                WITH filtered AS (
-                    SELECT ou.*
-                    FROM tblorganizationalunits ou
-                    ${whereClause}
-                ),
-                with_members AS (
+                WITH RECURSIVE ou_hierarchy AS (
+                    -- Base case: start with root OUs (no parent) that match our filter
                     SELECT 
+                        did as base_ou,
+                        did as descendant_ou,
+                        ARRAY[did] as path,
+                        1 as depth
+                    FROM tblorganizationalunits
+                    WHERE "bisActive" = ${activeStatus} AND dparentouid IS NULL
+                    
+                    UNION ALL
+                    
+                    -- Recursive case: add child OUs, limiting depth to prevent runaway recursion
+                    SELECT 
+                        h.base_ou,
+                        o.did,
+                        h.path || o.did,
+                        h.depth + 1
+                    FROM tblorganizationalunits o
+                    INNER JOIN ou_hierarchy h ON o.dparentouid = h.descendant_ou
+                    WHERE o."bisActive" = ${activeStatus} AND h.depth < 10
+                ),
+                member_counts AS (
+                    -- Calculate member counts more efficiently using window functions
+                    SELECT 
+                        oh.base_ou,
+                        COUNT(DISTINCT ur.duserid) as membercount
+                    FROM ou_hierarchy oh
+                    LEFT JOIN tbluserroles ur ON ur.douid = oh.descendant_ou
+                    GROUP BY oh.base_ou
+                ),
+                filtered_ous AS (
+                    -- Get base OU information with member counts
+                    SELECT
                         ou.did as ouid,
                         ou.dname,
                         ou.ddescription,
@@ -182,23 +209,12 @@ class OUmodel {
                         ou."dLocation",
                         ou."bisActive",
                         COALESCE(mc.membercount, 0) as membercount
-                    FROM filtered ou
-                    LEFT JOIN (
-                        WITH RECURSIVE ou_hierarchy AS (
-                            SELECT did as base_ou, did as descendant_ou FROM tblorganizationalunits
-                            UNION ALL
-                            SELECT h.base_ou, o.did
-                            FROM tblorganizationalunits o
-                            INNER JOIN ou_hierarchy h ON o.dparentouid = h.descendant_ou
-                        )
-                        SELECT base_ou, COUNT(ur.duserid) as membercount
-                        FROM ou_hierarchy oh
-                        LEFT JOIN tbluserroles ur ON ur.douid = oh.descendant_ou
-                        GROUP BY base_ou
-                    ) mc ON mc.base_ou = ou.did
+                    FROM tblorganizationalunits ou
+                    LEFT JOIN member_counts mc ON mc.base_ou = ou.did
+                    WHERE ou."bisActive" = ${activeStatus}
                 )
                 SELECT *, COUNT(*) OVER() AS total_count
-                FROM with_members
+                FROM filtered_ous
                 ORDER BY ${validSortBy} ${validSort}
                 LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
             `;
@@ -352,7 +368,43 @@ class OUmodel {
             throw new Error(error);
         }
     }
-    
+    async getChildren(parentid) {
+        try {
+            // Log the query parameters
+            
+            const query = `
+                WITH child_counts AS (
+                    SELECT 
+                        douid,
+                        COUNT(DISTINCT duserid) as membercount
+                    FROM tbluserroles
+                    GROUP BY douid
+                )
+                SELECT 
+                    t1.did as ouid,
+                    t1.dname,
+                    t1.ddescription,
+                    t1.dparentouid,
+                    t1.tcreatedat,
+                    t1."jsSettings",
+                    t1."dLocation",
+                    t1."bisActive",
+                    COALESCE(cc.membercount, 0) as membercount
+                FROM tblorganizationalunits t1
+                LEFT JOIN child_counts cc ON t1.did = cc.douid
+                WHERE t1.dparentouid = $1
+                ORDER BY t1.dname ASC`;
+                
+            const result = await db.query(query, [parentid]);
+
+            
+            
+            return result.rows;
+        } catch (error) {
+            console.error('Database error:', error.message);
+            throw new Error(error.message);
+        }
+    }
 }
 module.exports = OUmodel;
 

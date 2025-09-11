@@ -21,6 +21,13 @@ router.get(
     validate,
     OUmanagerController.getOU
 )
+router.get(
+    '/getchildren',
+    [query('parentid').isString().notEmpty().withMessage('parentid must be a non-empty string')
+        .isUUID().withMessage('parentid must be a valid UUID')],
+    validate,
+    OUmanagerController.getChildren
+)
 
 
 router.post(
