@@ -90,5 +90,28 @@ router.post(
   authController.logout
 );
 
-module.exports = router;
+// Validate Session
+router.get(
+  '/validate-session',
+  requireAuth,  // This middleware will check if the session is valid
+  (req, res) => {
+    // If requireAuth passes, session is valid
+    res.status(200).json({ valid: true });
+  }
+);
 
+// Get session info
+router.get(
+  '/session-info',
+  requireAuth,
+  authController.getSessionInfo
+);
+
+// Refresh session
+router.post(
+  '/refresh-session',
+  requireAuth,
+  authController.refreshSession
+);
+
+module.exports = router;

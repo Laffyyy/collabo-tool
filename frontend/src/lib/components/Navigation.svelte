@@ -21,6 +21,9 @@
 	let user = $derived($authStore?.user);
 	let userInitials = $derived($authStore?.userInitials || 'U.U');
 	let onlineStatusColor = $derived($authStore?.onlineStatusColor || 'bg-gray-500');
+	
+	// Role-based access control
+	let canAccessAdmin = $derived($authStore?.canAccessAdmin || false);
 
 	// Get theme info
 	let isDarkMode = $derived(themeStore.isDarkMode);
@@ -70,8 +73,16 @@
 
 	// Add logout function
 	const handleLogout = async () => {
-		await apiClient.logout();
-		goto('/login');
+		try {
+			await apiClient.logout();
+			showProfile = false;
+		} catch (error) {
+			console.error('Logout error:', error);
+		} finally {
+			// Always logout on frontend side regardless of API success/failure
+			$authStore.logout();
+			goto('/login');
+		}
 	};
 </script>
 
@@ -107,20 +118,21 @@
 			{/if}
 		</button>
 		
-		<!-- Admin Controls Dropdown -->
-		<div class="relative">
-			<button 
-				onclick={() => showAdminDropdown = !showAdminDropdown}
-				class="flex items-center space-x-1 text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/admin') ? 'text-[#01c0a4]' : ''}"
-			>
-				<span>Admin Controls</span>
-				<ChevronDown class="w-4 h-4 transition-transform {showAdminDropdown ? 'rotate-180' : ''}" />
-				{#if isActivePage('/admin')}
-					<div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-[#01c0a4] rounded-full"></div>
-				{/if}
-			</button>
+		<!-- Admin Controls Dropdown - Only show for admin users -->
+		{#if canAccessAdmin}
+			<div class="relative">
+				<button 
+					onclick={() => showAdminDropdown = !showAdminDropdown}
+					class="flex items-center space-x-1 text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/admin') ? 'text-[#01c0a4]' : ''}"
+				>
+					<span>Admin Controls</span>
+					<ChevronDown class="w-4 h-4 transition-transform {showAdminDropdown ? 'rotate-180' : ''}" />
+					{#if isActivePage('/admin')}
+						<div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-[#01c0a4] rounded-full"></div>
+					{/if}
+				</button>
 
-			<!-- Admin Dropdown -->
+				<!-- Admin Dropdown -->
 			{#if showAdminDropdown}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -202,6 +214,7 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
 	</nav>
 
 	<!-- Right side actions -->
@@ -345,10 +358,10 @@
 							<div>
 								<p class="text-sm font-medium text-gray-900">
 									{user?.firstName && user?.lastName 
-										? `${user.firstName} ${user.lastName}` 
-										: user?.username || 'User'}
+									? `${user.firstName} ${user.lastName}` 
+									: user?.username || 'Loading...'}
 								</p>
-								<p class="text-xs text-gray-500 capitalize">{user?.role || 'User'}</p>
+								<p class="text-xs text-gray-500 capitalize">{user?.role || 'Loading...'}</p>
 								<p class="text-xs text-gray-400 capitalize">{user?.onlineStatus || 'offline'}</p>
 							</div>
 						</div>

@@ -1,4 +1,6 @@
 import { writable } from 'svelte/store';
+import { sessionManager } from './session.svelte';
+
 
 // Define types
 interface User {
@@ -20,6 +22,11 @@ class AuthStore {
   isLoading = $state(false);
   token = $state<string | null>(null);
   sessionToken = $state<string | null>(null);
+
+  constructor() {
+    // Restore session on initialization
+    this.restoreSession();
+  }
 
   get userRole() {
     return this.user?.role || '';
@@ -67,17 +74,22 @@ class AuthStore {
     return ['admin', 'manager', 'supervisor', 'support'].includes(this.user?.role?.toLowerCase() || '');
   }
 
-  login(userData: User, token: string, sessionToken: string) {
-    this.user = userData;
+  login(user: User, token: string, sessionToken: string) {
+    this.user = user;
     this.isAuthenticated = true;
     this.isLoading = false;
     this.token = token;
     this.sessionToken = sessionToken;
-
-    // Store tokens in cookies (handled by backend) and localStorage for app use
-    localStorage.setItem('auth_user', JSON.stringify(userData));
+    
+    // Store in localStorage
+    localStorage.setItem('auth_user', JSON.stringify(user));
     localStorage.setItem('auth_token', token);
     localStorage.setItem('auth_session', sessionToken);
+    
+    console.log('User logged in:', user.username, 'role:', user.role);
+    
+    // Start session monitoring
+    sessionManager.startMonitoring();
   }
 
   logout() {
@@ -92,9 +104,12 @@ class AuthStore {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_session');
     
-    // Clear cookies - we'll use the API to do this properly
+    // Clear cookies
     document.cookie = 'token=; Max-Age=0; path=/; domain=' + window.location.hostname;
     document.cookie = 'session=; Max-Age=0; path=/; domain=' + window.location.hostname;
+    
+    // Stop session monitoring
+    sessionManager.stopMonitoring();
   }
 
   setLoading(loading: boolean) {
@@ -114,6 +129,7 @@ class AuthStore {
         this.isAuthenticated = true;
         this.token = token;
         this.sessionToken = sessionToken;
+        console.log('Session restored for user:', user.username, 'role:', user.role);
         return true;
       }
     } catch (error) {
