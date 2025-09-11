@@ -206,3 +206,217 @@ exports.addMessage = async (req, res, next) => {
     return next(err);
   }
 };
+
+  exports.createMessage = async (req, res, next) => {
+  try {
+    const { conversationId, content, replyToId, replyToSenderId, replyToContent } = req.body;
+    const senderId = req.user.id; // Assuming you have user ID in the request
+    
+    // Validate required fields
+    if (!conversationId || !content) {
+      return res.status(400).json({ message: 'Conversation ID and content are required' });
+    }
+    
+    // Create message object with optional reply data
+    const messageData = {
+      dconversationid: conversationId,
+      dsenderid: senderId,
+      dcontent: content
+    };
+    
+    // Add reply fields if provided
+    if (replyToId) {
+      messageData.dreplyToId = replyToId;
+      messageData.dreplyToSenderId = replyToSenderId;
+      messageData.dreplyToContent = replyToContent;
+    }
+    
+    // Save message to database
+    const message = await chatModel.createMessage(messageData);
+    
+    return res.status(201).json(message);
+  } catch (error) {
+    console.error('Error creating message:', error);
+    return next(error);
+  }
+};
+
+/**
+ * Update conversation settings
+ */
+exports.updateConversationSettings = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { name, settings } = req.body;
+
+    // Validate conversation ownership/permissions
+    const conversation = await chatService.getConversationById(id);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Check if user is a member of this conversation
+    const isMember = await chatService.isUserInConversation(id, userId);
+    if (!isMember) {
+      return res.status(403).json({ message: 'You are not a member of this conversation' });
+    }
+
+    // Update the conversation
+    const updateData = {};
+    if (name) {
+      updateData.dname = name;
+    }
+    
+    if (settings) {
+      updateData.dsettings = JSON.stringify(settings);
+    }
+
+    const updatedConversation = await chatService.updateConversation(id, updateData);
+
+    return res.json({ 
+      success: true, 
+      conversation: updatedConversation 
+    });
+  } catch (error) {
+    console.error('Error updating conversation settings:', error);
+    return next(error);
+  }
+};
+
+/**
+ * Update conversation photo
+ */
+exports.updateConversationPhoto = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Validate conversation ownership/permissions
+    const conversation = await chatService.getConversationById(id);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Check if user is a member of this conversation
+    const isMember = await chatService.isUserInConversation(id, userId);
+    if (!isMember) {
+      return res.status(403).json({ message: 'You are not a member of this conversation' });
+    }
+
+    // Process the file (e.g., upload to cloud storage, save path to DB)
+    const photoUrl = `/uploads/${req.file.filename}`; // Adjust based on your storage solution
+    
+    // Update conversation with new photo URL
+    await chatService.updateConversation(id, { 
+      dphotourl: photoUrl 
+    });
+
+    return res.json({ 
+      success: true, 
+      photoUrl 
+    });
+  } catch (error) {
+    console.error('Error updating conversation photo:', error);
+    return next(error);
+  }
+};
+
+/**
+ * Archive conversation
+ */
+exports.archiveConversation = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Validate conversation ownership/permissions
+    const conversation = await chatService.getConversationById(id);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Check if user is a member of this conversation
+    const isMember = await chatService.isUserInConversation(id, userId);
+    if (!isMember) {
+      return res.status(403).json({ message: 'You are not a member of this conversation' });
+    }
+
+    // Parse existing settings if any
+    let settings = {};
+    try {
+      settings = JSON.parse(conversation.dsettings || '{}');
+    } catch (e) {
+      console.error('Error parsing settings:', e);
+    }
+    
+    // Update the settings to mark as archived
+    settings.isArchived = true;
+
+    // Update the conversation
+    const updatedConversation = await chatService.updateConversation(id, { 
+      dsettings: JSON.stringify(settings)
+    });
+
+    return res.json({ 
+      success: true, 
+      conversation: updatedConversation 
+    });
+  } catch (error) {
+    console.error('Error archiving conversation:', error);
+    return next(error);
+  }
+};
+
+/**
+ * Update a specific conversation setting
+ */
+exports.updateConversationSetting = async (req, res, next) => {
+  try {
+    const { id, settingName } = req.params;
+    const { value } = req.body;
+    const userId = req.user.id;
+
+    // Validate conversation ownership/permissions
+    const conversation = await chatService.getConversationById(id);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Check if user is a member of this conversation
+    const isMember = await chatService.isUserInConversation(id, userId);
+    if (!isMember) {
+      return res.status(403).json({ message: 'You are not a member of this conversation' });
+    }
+
+    // Get current settings
+    let settings = {};
+    try {
+      settings = JSON.parse(conversation.dsettings || '{}');
+    } catch (e) {
+      console.error('Error parsing settings:', e);
+    }
+
+    // Update the specific setting
+    settings[settingName] = value;
+
+    // Save updated settings
+    const updatedConversation = await chatService.updateConversation(id, { 
+      dsettings: JSON.stringify(settings)
+    });
+
+    return res.json({ 
+      success: true, 
+      conversation: updatedConversation,
+      settings
+    });
+  } catch (error) {
+    console.error(`Error updating ${req.params.settingName} setting:`, error);
+    return next(error);
+  }
+};

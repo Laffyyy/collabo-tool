@@ -303,7 +303,7 @@ export async function getMessagesForConversation(conversationId: string) {
   }
 }
 // In chatServices.ts
-export async function sendMessageToApi(conversationId: string, content: string, messageType: string = 'text') {
+export async function sendMessageToApi(conversationId: string, content: string, metadata: any = {}) {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   
   // Try to get user ID from various sources
@@ -329,33 +329,43 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     userId = "327404ce-d1dd-4a93-a108-dfa5a415a734"; // Fallback, but will log a warning
   }
   
-  console.log('Sending message with:', {
-    conversationId,
-    senderId: userId,
-    content,
-    messageType
-  });
-  
   try {
-    const response = await fetch('http://localhost:5000/api/chat/messages', {
+    // Construct the request body
+    const requestBody: any = {
+      dconversationId: conversationId,
+      dsenderId: metadata.senderId || getUserIdFromStorage(),
+      dcontent: content,
+      dmessageType: metadata.messageType || 'text'
+    };
+    
+    // Add reply data if present
+    if (metadata.replyToId) {
+      requestBody.dreplyToId = metadata.replyToId;
+      requestBody.dreplyToSenderId = metadata.replyToSenderId;
+      requestBody.dreplyToContent = metadata.replyToContent;
+    }
+    
+    // Add attachment data if present
+    if (metadata.attachmentData) {
+      requestBody.dattachment = JSON.stringify(metadata.attachmentData);
+      requestBody.dmessageType = metadata.attachmentData.type;
+    }
+    
+    console.log('Sending message with payload:', requestBody);
+    
+    const response = await fetch(`http://localhost:5000/api/chat/messages`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify({
-        dconversationId: conversationId,
-        dsenderId: userId,
-        dcontent: content,
-        dmessageType: messageType
-      })
+      body: JSON.stringify(requestBody)
     });
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Error sending message:', errorText);
-      throw new Error('Failed to send message');
+      throw new Error(`Failed to send message: ${response.status} ${errorText}`);
     }
     
     return await response.json();
@@ -363,6 +373,27 @@ export async function sendMessageToApi(conversationId: string, content: string, 
     console.error('Error in sendMessageToApi:', error);
     throw error;
   }
+}
+
+// Helper function to get user ID from storage
+function getUserIdFromStorage() {
+  // Try to get user ID from various sources
+  let userId = localStorage.getItem('auth_userId') || 
+               localStorage.getItem('userId');
+               
+  if (!userId) {
+    const userStr = localStorage.getItem('auth_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        userId = user.id || user.did || user._id || user.userId;
+      } catch (e) {
+        console.error('Failed to parse user object:', e);
+      }
+    }
+  }
+  
+  return userId;
 }
 
 export async function markMessageAsRead(messageId: string) {

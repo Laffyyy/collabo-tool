@@ -251,8 +251,79 @@ static async getMessagesByConversation(conversationId) {
   );
   return result.rows;
 }
+  /**
+   * Get conversation by ID
+   */
+  static async getConversationById(conversationId) {
+    try {
+      const result = await query(
+        'SELECT * FROM tblconversations WHERE did = $1',
+        [conversationId]
+      );
+      
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error in getConversationById:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user is a participant in the conversation
+   */
+  static async isUserInConversation(conversationId, userId) {
+    try {
+      const result = await query(
+        'SELECT * FROM tblconversationparticipants WHERE dconversationid = $1 AND duserid = $2',
+        [conversationId, userId]
+      );
+      
+      return result.rows.length > 0;
+    } catch (error) {
+      console.error('Error in isUserInConversation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update conversation data
+   */
+  static async updateConversation(conversationId, updateData) {
+    try {
+      // Create dynamic SQL for the update based on provided fields
+      const updates = [];
+      const values = [conversationId];
+      let paramIndex = 2;
+      
+      Object.entries(updateData).forEach(([key, value]) => {
+        if (value !== undefined) {
+          updates.push(`${key} = $${paramIndex}`);
+          values.push(value);
+          paramIndex++;
+        }
+      });
+      
+      if (updates.length === 0) {
+        throw new Error('No valid fields provided for update');
+      }
+      
+      // Add timestamp update
+      updates.push(`tupdatedat = NOW()`);
+      
+      const sqlQuery = `
+        UPDATE tblconversations 
+        SET ${updates.join(', ')} 
+        WHERE did = $1 
+        RETURNING *
+      `;
+      
+      const result = await query(sqlQuery, values);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error in updateConversation:', error);
+      throw error;
+    }
+  }
 }
-
-
 
 module.exports = ChatModel;

@@ -3,6 +3,45 @@ const { requireAuth } = require('../../auth/requireAuth');
 const { body } = require('express-validator');
 const { validateCreateConversation } = require('../../utils/validate');
 const chatController = require('../../controllers/chat.controller');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../../public/uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('Created uploads directory:', uploadsDir);
+}
+
+// Configure multer storage for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+// Create upload middleware
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB file size limit
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Error: Images Only!'));
+    }
+  }
+});
 
 const router = express.Router();
 
@@ -36,5 +75,11 @@ router.get('/conversations', chatController.getUserConversations);
 
 // Add member to conversation
 router.post('/conversations/:conversationId/members', chatController.addMember);
+
+// Add these new routes with requireAuth instead of authMiddleware
+router.put('/conversations/:id/settings', requireAuth, chatController.updateConversationSettings);
+router.post('/conversations/:id/photo', requireAuth, upload.single('photo'), chatController.updateConversationPhoto);
+router.put('/conversations/:id/archive', requireAuth, chatController.archiveConversation);
+router.put('/conversations/:id/settings/:settingName', requireAuth, chatController.updateConversationSetting);
 
 module.exports = router;

@@ -8,6 +8,7 @@
 	import GroupAvatar from '$lib/components/GroupAvatar.svelte';
 	import UserProfileModal from '$lib/components/UserProfileModal.svelte';
 	import LoginBackground from '../login/LoginBackground.svelte';
+	import { supabase } from '$lib/supabaseClient';
 	import { 
 		Search, Plus, Archive, MessageCircle, Users, Send, Paperclip, 
 		Smile, MoreVertical, Reply, ChevronDown, ChevronRight, X, 
@@ -164,6 +165,7 @@
 	let editingMessage = $state<Message | null>(null);
 	let editingContent = $state('');
 	
+	
 	// Create group state
 	let groupName = $state('');
 	let selectedUsers = $state<User[]>([]);
@@ -249,7 +251,7 @@ function loadUserIdFromAuth() {
   }
 }
 
-  try {
+ try {
     console.log('Loading conversations and users from backend...');
     loadUserIdFromAuth();
     
@@ -257,11 +259,23 @@ function loadUserIdFromAuth() {
     console.log("Raw conversations from backend:", conversations);
     console.log("Current user ID for filtering:", currentUserId);
     
-    // Backend already filters conversations for the current user via JOIN with tblconversationparticipants
-    // So we can use all returned conversations directly
+    // Backend already filters conversations for the current user
     const userConversations = conversations;
     
-    console.log("Using backend-filtered conversations:", userConversations);
+    // ADDED: Fetch the last message for each conversation during initial load
+    for (const conversation of userConversations) {
+      try {
+        const messages = await getMessagesForConversation(conversation.id);
+        if (messages && messages.length > 0) {
+          conversation.messages = messages;
+          // Update conversation properties based on last message
+          conversation.lastMessage = messages[messages.length - 1].content;
+          conversation.lastMessageTime = messages[messages.length - 1].timestamp;
+        }
+      } catch (error) {
+        console.error(`Failed to load messages for conversation ${conversation.id}:`, error);
+      }
+    }
     
     // Separate direct and group conversations
     directConversations = userConversations
@@ -366,9 +380,14 @@ const selectConversation = async (conversation: Conversation) => {
   conversation.unreadCount = 0;
   
   console.log('Selected conversation:', conversation);
-  console.log('Conversation members:', conversation.members);
   
   try {
+    // Enrich member data with roles and departments
+    if (conversation.members) {
+      conversation.members = await enrichMemberData(conversation.members);
+      console.log('Enriched conversation members:', conversation.members);
+    }
+    
     const messages = await getMessagesForConversation(conversation.id);
     currentConversation.messages = messages;
     markConversationAsSeen(conversation.id);
@@ -376,10 +395,9 @@ const selectConversation = async (conversation: Conversation) => {
     // Start polling for new messages
     startMessagePolling(conversation.id);
   } catch (error) {
-    console.error('Failed to load messages:', error);
+    console.error('Failed to load conversation data:', error);
   }
 };
-
 // Clean up polling on component unmount
 onDestroy(() => {
   if (messagePollingInterval) {
@@ -392,7 +410,7 @@ onDestroy(() => {
 
   try {
     // Get the actual message content
-    const msgContent = attachment && attachment.name ? `Shared ${attachment.name}` : messageInput.trim();
+      const msgContent = attachment ? `Shared ${attachment.name}` : messageInput.trim();
     
     // Check if this is a temporary conversation that needs to be created first
     if (currentConversation.isTemporary && currentConversation.targetUser) {
@@ -419,15 +437,34 @@ onDestroy(() => {
       console.log('Conversation created with ID:', backendConversation.did);
     }
     
-    // Now send the message using the real conversation ID
-    const sentMsg = await sendMessageToApi(currentConversation.id, msgContent);
+      // Prepare message data including reply and attachment information
+    const messageData = {
+      conversationId: currentConversation.id,
+      content: msgContent,
+      replyToId: replyingTo ? replyingTo.id : null,
+      replyToSenderId: replyingTo ? replyingTo.senderId : null,
+      replyToContent: replyingTo ? replyingTo.content : null,
+    };
     
-    console.log('Message sent:', sentMsg);
-
+    // Add attachment information if present
+    if (attachment) {
+      messageData.attachmentData = {
+        name: attachment.name,
+        type: attachment.type,
+        url: attachment.url,
+        size: attachment.size,
+        filePath: attachment.filePath,
+        permissions: attachment.permissions
+      };
+    }
+    
+    // Now send the message using the real conversation ID
+    const sentMsg = await sendMessageToApi(currentConversation.id, msgContent, messageData);
+    
     // Create UI message object
     const newMessage: Message = {
       id: sentMsg.did || Date.now().toString(),
-      senderId: currentUserId || '1', // Use real user ID if available
+      senderId: currentUserId || '1',
       senderName: 'You',
       senderDepartment: 'Your Department',
       senderRole: 'Your Role',
@@ -442,10 +479,11 @@ onDestroy(() => {
       pinningEnabled: true
     };
 
-    // Update UI
+    // Update UI and state
     currentConversation.messages.push(newMessage);
     currentConversation.lastMessage = msgContent;
     currentConversation.lastMessageTime = new Date();
+    
     
     // Also update the conversation in the sidebar lists
     const updateConversationInList = (list: Conversation[]) => {
@@ -463,7 +501,7 @@ onDestroy(() => {
     if (!attachment) {
       messageInput = '';
     }
-    replyingTo = null;
+    replyingTo = null; // Reset reply state
     
     // Fetch updated messages to ensure UI is in sync with backend
     const updatedMessages = await getMessagesForConversation(currentConversation.id);
@@ -523,35 +561,89 @@ const markConversationAsSeen = (conversationId?: string) => {
 	// setInterval(simulateTyping, 10000);
 
 	const startReply = (message: Message) => {
-		replyingTo = message;
-	};
+  replyingTo = message;
+  // Focus on the message input field
+  setTimeout(() => {
+    document.querySelector('textarea')?.focus();
+  }, 100);
+};
 
 	const cancelReply = () => {
 		replyingTo = null;
 	};
 
 	const addReaction = (messageId: string, emoji: string) => {
-		if (!currentConversation) return;
-		const message = currentConversation.messages.find(m => m.id === messageId);
-		if (!message) return;
+  if (!currentConversation) return;
+  const message = currentConversation.messages.find(m => m.id === messageId);
+  if (!message) return;
 
-		const existingReaction = message.reactions.find(r => r.emoji === emoji);
-		if (existingReaction) {
-			if (existingReaction.users.includes(currentUserId || '1')) {
-				existingReaction.users = existingReaction.users.filter(u => u !== (currentUserId || '1'));
-				existingReaction.count--;
-				if (existingReaction.count === 0) {
-					message.reactions = message.reactions.filter(r => r.emoji !== emoji);
-				}
-			} else {
-				existingReaction.users.push(currentUserId || '1');
-				existingReaction.count++;
-				existingReaction.timestamp = new Date();
-			}
-		} else {
-			message.reactions.push({ emoji, users: [currentUserId || '1'], count: 1, timestamp: new Date() });
-		}
-	};
+  // Get the current user ID
+  const userId = currentUserId || '1';
+  
+  // Find if the user has already reacted to this message
+  const userReactionIndex = message.reactions.findIndex(r => r.users.includes(userId));
+  
+  if (userReactionIndex !== -1) {
+    // User has already reacted to this message
+    const existingReaction = message.reactions[userReactionIndex];
+    
+    // If the user is clicking the same emoji, remove it (toggle behavior)
+    if (existingReaction.emoji === emoji) {
+      // Remove user from this reaction
+      existingReaction.users = existingReaction.users.filter(u => u !== userId);
+      existingReaction.count--;
+      
+      // If no users left with this reaction, remove the reaction entirely
+      if (existingReaction.count === 0) {
+        message.reactions = message.reactions.filter(r => r.emoji !== emoji);
+      }
+    } else {
+      // User is changing their reaction to a different emoji
+      // First, remove user from their old reaction
+      existingReaction.users = existingReaction.users.filter(u => u !== userId);
+      existingReaction.count--;
+      
+      // If no users left with this reaction, remove the reaction entirely
+      if (existingReaction.count === 0) {
+        message.reactions = message.reactions.filter(r => r.emoji !== existingReaction.emoji);
+      }
+      
+      // Then add user to the new emoji reaction
+      const newReaction = message.reactions.find(r => r.emoji === emoji);
+      if (newReaction) {
+        // Add to existing emoji reaction
+        newReaction.users.push(userId);
+        newReaction.count++;
+        newReaction.timestamp = new Date();
+      } else {
+        // Create new reaction with this emoji
+        message.reactions.push({ 
+          emoji, 
+          users: [userId], 
+          count: 1, 
+          timestamp: new Date() 
+        });
+      }
+    }
+  } else {
+    // User hasn't reacted to this message yet
+    const existingReaction = message.reactions.find(r => r.emoji === emoji);
+    if (existingReaction) {
+      // Add user to existing emoji reaction
+      existingReaction.users.push(userId);
+      existingReaction.count++;
+      existingReaction.timestamp = new Date();
+    } else {
+      // Create new reaction with this emoji
+      message.reactions.push({ 
+        emoji, 
+        users: [userId], 
+        count: 1, 
+        timestamp: new Date() 
+      });
+    }
+  }
+};
 
 	const confirmUnsendMessage = (messageId: string) => {
 		confirmationData = {
@@ -621,32 +713,68 @@ const markConversationAsSeen = (conversationId?: string) => {
 		};
 	};
 
-	const sendMessageWithAttachments = () => {
-		if (selectedFiles.length > 0) {
-			// Create attachments from selected files
-			const attachments = selectedFiles.map(file => ({
-				id: Date.now().toString() + Math.random(),
-				name: file.name,
-				type: getFileType(file.name),
-				url: URL.createObjectURL(file),
-				size: file.size,
-				permissions: { ...filePermissionSettings }
-			}));
+	const sendMessageWithAttachments = async () => {
+  if (selectedFiles.length > 0) {
+    try {
+      // Array to hold all the uploaded file data
+      const attachments = [];
+      
+      for (const file of selectedFiles) {
+        // Create a unique file path in the bucket
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `attachments/${currentConversation.id}/${fileName}`;
+        
+        // Upload to Supabase
+        const { data, error } = await supabase.storage
+          .from('chat-attachments') // Your bucket name
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+          
+        if (error) {
+          console.error('Error uploading file:', error);
+          throw error;
+        }
+        
+        // Get the public URL
+        const { data: urlData } = supabase.storage
+          .from('chat-attachments')
+          .getPublicUrl(filePath);
+          
+        // Create attachment object
+        const attachment = {
+          id: data.path,
+          name: file.name,
+          type: getFileType(file.name),
+          url: urlData.publicUrl,
+          size: file.size,
+          filePath: filePath,
+          permissions: { ...filePermissionSettings }
+        };
+        
+        attachments.push(attachment);
+      }
 
-			// Send messages with attachments
-			attachments.forEach(attachment => {
-				sendMessage(attachment);
-			});
+      // Send messages with attachments
+      for (const attachment of attachments) {
+        await sendMessage(attachment);
+      }
 
-			// Clear selected files and close modal
-			selectedFiles = [];
-			closeFilePermissionModal();
-		} else {
-			// Send regular message if no attachments
-			sendMessage();
-		}
-	};
-
+      // Clear selected files and close modal
+      selectedFiles = [];
+      closeFilePermissionModal();
+      
+    } catch (error) {
+      console.error('Error sending files:', error);
+      alert('Failed to upload one or more files. Please try again.');
+    }
+  } else {
+    // Send regular message if no attachments
+    sendMessage();
+  }
+};
 	const getFileType = (fileName: string): 'file' | 'image' | 'video' | 'link' => {
 		const extension = fileName.toLowerCase().split('.').pop() || '';
 		
@@ -770,42 +898,254 @@ const markConversationAsSeen = (conversationId?: string) => {
 	};
 
 	const openGroupSettings = () => {
-		if (currentConversation?.type === 'group') {
-			editingGroupName = currentConversation.name;
-			showGroupSettings = true;
+	if (currentConversation?.type === 'group') {
+		// Initialize default settings if they don't exist
+		if (!currentConversation.settings) {
+		currentConversation.settings = {
+			allowEmojis: true,
+			allowAttachments: true,
+			allowForwarding: true,
+			allowPinning: false,
+			isArchived: false
+		};
 		}
+		
+		// Set the editing group name to the current name
+		editingGroupName = currentConversation.name;
+		
+		// Open the settings modal
+		showGroupSettings = true;
+		
+		console.log('Opening group settings for:', currentConversation.name);
+	}
 	};
 
 	const closeGroupSettings = () => {
 		showGroupSettings = false;
 	};
 
-	const saveGroupSettings = () => {
-		if (currentConversation && editingGroupName.trim()) {
-			currentConversation.name = editingGroupName.trim();
-			closeGroupSettings();
-		}
-	};
+	const saveGroupSettings = async () => {
+  if (!currentConversation || !editingGroupName.trim()) return;
+  
+  try {
+    console.log('Saving group settings...');
+    
+    // Update the conversation name
+    const originalName = currentConversation.name;
+    currentConversation.name = editingGroupName.trim();
+    
+    // Create payload with all settings
+    const settingsPayload = {
+      conversationId: currentConversation.id,
+      name: editingGroupName.trim(),
+      settings: {
+        allowEmojis: currentConversation.settings?.allowEmojis || true,
+        allowAttachments: currentConversation.settings?.allowAttachments || true,
+        allowForwarding: currentConversation.settings?.allowForwarding || true,
+        allowPinning: currentConversation.settings?.allowPinning || false,
+        isArchived: currentConversation.settings?.isArchived || false
+      }
+    };
+    
+    // Save to backend
+    const response = await fetch(`http://localhost:5000/api/chat/conversations/${currentConversation.id}/settings`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(settingsPayload)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save group settings');
+    }
+    
+    // Update the conversation in the group chats list too
+    const index = groupChats.findIndex(c => c.id === currentConversation.id);
+    if (index !== -1) {
+      groupChats[index].name = editingGroupName.trim();
+      groupChats[index].settings = {...currentConversation.settings};
+    }
+    
+    // Close the settings panel
+    closeGroupSettings();
+    
+    console.log('Group settings saved successfully');
+  } catch (error) {
+    console.error('Failed to save group settings:', error);
+    // Revert the name change if there was an error
+    if (originalName) {
+      currentConversation.name = originalName;
+    }
+    alert('Failed to save group settings. Please try again.');
+  }
+};
 
-	const toggleEmojis = () => {
-		if (currentConversation?.settings) {
-			currentConversation.settings.allowEmojis = !currentConversation.settings.allowEmojis;
-		}
-	};
+const toggleSetting = async (settingName) => {
+  if (!currentConversation?.settings) return;
+  
+  // Toggle the setting
+  const newValue = !currentConversation.settings[settingName];
+  currentConversation.settings[settingName] = newValue;
+  
+  try {
+    console.log(`Updating ${settingName} to ${newValue}`);
+    
+    // Save to backend with updated endpoint
+    const response = await fetch(`http://localhost:5000/api/chat/conversations/${currentConversation.id}/settings/${settingName}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ value: newValue })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to update ${settingName} setting: ${errorText}`);
+    }
+    
+    // Update the conversation in the group chats list too
+    const index = groupChats.findIndex(c => c.id === currentConversation.id);
+    if (index !== -1) {
+      groupChats[index].settings = {...currentConversation.settings};
+    }
+    
+    console.log(`${settingName} setting updated:`, currentConversation.settings[settingName]);
+  } catch (error) {
+    console.error(`Error updating ${settingName} setting:`, error);
+    // Revert the change on error
+    currentConversation.settings[settingName] = !newValue;
+  }
+};
 
-	const toggleAttachments = () => {
-		if (currentConversation?.settings) {
-			currentConversation.settings.allowAttachments = !currentConversation.settings.allowAttachments;
-		}
-	};
+// Fix the archiveGroup function
+const archiveGroup = async () => {
+  if (!currentConversation) return;
+  
+  try {
+    // Set the archived status in the UI
+    if (!currentConversation.settings) {
+      currentConversation.settings = {
+        allowEmojis: true,
+        allowAttachments: true,
+        allowForwarding: true,
+        allowPinning: false,
+        isArchived: true
+      };
+    } else {
+      currentConversation.settings.isArchived = true;
+    }
+    
+    // Update in backend
+    const response = await fetch(`http://localhost:5000/api/chat/conversations/${currentConversation.id}/archive`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to archive group: ${errorText}`);
+    }
+    
+    // Remove from active group chats and add to archived list if needed
+    const index = groupChats.findIndex(c => c.id === currentConversation.id);
+    if (index !== -1) {
+      const archivedConversation = groupChats[index];
+      groupChats.splice(index, 1);
+    }
+    
+    // Close all related panels
+    closeGroupSettings();
+    showMembersPanel = false;
+    currentConversation = null;
+    
+    console.log('Group archived successfully');
+  } catch (error) {
+    console.error('Failed to archive group:', error);
+    // Revert UI changes
+    if (currentConversation?.settings) {
+      currentConversation.settings.isArchived = false;
+    }
+    alert('Failed to archive group. Please try again.');
+  }
+};
 
-	const archiveGroup = () => {
-		if (currentConversation?.settings) {
-			currentConversation.settings.isArchived = true;
-			closeGroupSettings();
-		}
-	};
+const changeGroupPhoto = () => {
+  // Create a file input element
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*';
+  
+  // Handle file selection
+  fileInput.onchange = async (e) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    
+    const file = e.target.files[0];
+    
+    try {
+      // Create form data to upload the file
+      const formData = new FormData();
+      formData.append('photo', file);
+      
+      console.log('Uploading photo for conversation:', currentConversation.id);
+      
+      // Upload the file to the server
+      const response = await fetch(`http://localhost:5000/api/chat/conversations/${currentConversation.id}/photo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${jwtToken}`
+          // Don't set Content-Type with FormData - browser sets it with boundary
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Photo upload error (${response.status}): ${errorText}`);
+        throw new Error('Failed to upload group photo');
+      }
+      
+      const data = await response.json();
+      
+      // Update the avatar in the UI
+      currentConversation.avatar = data.photoUrl;
+      
+      // Update in the group chats list too
+      const index = groupChats.findIndex(c => c.id === currentConversation.id);
+      if (index !== -1) {
+        groupChats[index].avatar = data.photoUrl;
+      }
+      
+      console.log('Group photo updated successfully');
+    } catch (error) {
+      console.error('Failed to update group photo:', error);
+      alert('Failed to update group photo. Please try again.');
+    }
+  };
+  
+  // Trigger the file selection dialog
+  fileInput.click();
+};
 
+const ensureConversationSettings = () => {
+  if (currentConversation) {
+    if (!currentConversation.settings) {
+      currentConversation.settings = {
+        allowEmojis: true,
+        allowAttachments: true,
+        allowForwarding: true,
+        allowPinning: false,
+        isArchived: false
+      };
+    }
+  }
+};
 	const toggleMute = (memberId: string) => {
 		if (currentConversation) {
 			const member = currentConversation.members.find(m => m.id === memberId);
@@ -836,13 +1176,17 @@ const createGroup = async () => {
 
   try {
     // First create the conversation in the backend
-    const newGroup = await createConversation({
+       const newGroup = await createConversation({
       dname: groupName,
       dtype: 'group',
       dcreatedBy: currentUserId
     });
     
-    console.log("New group created:", newGroup);
+    console.log("New group created with creator:", {
+      userId: currentUserId,
+      newGroupCreator: newGroup.dcreatedBy || newGroup.createdBy
+    });
+    
     
     // Now add each member to the conversation in the backend
   for (const user of selectedUsers) {
@@ -858,26 +1202,56 @@ const createGroup = async () => {
 }
     
     // Now enhance with UI data for display
-    const enhancedGroup = {
-      ...newGroup,
-      id: newGroup.did || newGroup.id,
-      name: newGroup.dname || groupName,
-      type: 'group',
-      lastMessage: 'Group created',
-      lastMessageTime: new Date(),
-      unreadCount: 0,
-      isRead: true,
-      avatar: '/placeholder.svg',
-      isOnline: false,
-      messages: [],
-      members: [...selectedUsers, { 
-        id: currentUserId, 
-        name: 'You', 
-        avatar: '/placeholder.svg', 
-        department: 'My Dept', 
-        role: 'My Role' 
-      }]
-    };
+ const enhancedGroup = {
+  ...newGroup,
+  id: newGroup.did || newGroup.id,
+  name: newGroup.dname || groupName,
+  type: 'group',
+  lastMessage: 'Group created',
+  lastMessageTime: new Date(),
+  unreadCount: 0,
+  isRead: true,
+  avatar: '/placeholder.svg',
+  isOnline: false,
+  messages: [],
+  members: [
+    // Add the selected users
+    ...selectedUsers.map(user => ({
+      ...user,
+      isOnline: user.isOnline || false,
+      isMuted: false
+    })),
+    // Add the current user as a member (creator)
+    { 
+      id: currentUserId, 
+      name: 'You', 
+      firstName: 'Current',
+      lastName: 'User',
+      username: 'currentuser',
+      avatar: '/placeholder.svg', 
+      department: 'My Department', 
+      role: 'My Role',
+      isOnline: true,
+      isMuted: false
+    }
+  ],
+  // Add additional group properties
+  dcreatedBy: currentUserId,
+  createdBy: currentUserId,
+  settings: {
+    allowEmojis: true,
+    allowAttachments: true,
+    allowForwarding: true,
+    allowPinning: false,
+    isArchived: false
+  },
+  pinnedMessages: [],
+  mediaHistory: {
+    files: [],
+    media: [],
+    links: []
+  }
+};
     
     // Update frontend state
     conversations = [...conversations, enhancedGroup];
@@ -1116,7 +1490,7 @@ const createGroup = async () => {
 	};
 
 	// Toggle settings functions
-	const toggleForwarding = () => {
+	/*const toggleForwarding = () => {
 		if (currentConversation?.settings) {
 			currentConversation.settings.allowForwarding = !currentConversation.settings.allowForwarding;
 		}
@@ -1126,7 +1500,7 @@ const createGroup = async () => {
 		if (currentConversation?.settings) {
 			currentConversation.settings.allowPinning = !currentConversation.settings.allowPinning;
 		}
-	};
+	};*/
 
 	// Filter users function for group creation
 	const filteredUsersForGroup = $derived.by(() => {
@@ -1456,7 +1830,51 @@ const createGroup = async () => {
 		
 		return user;
 	}
-
+async function enrichMemberData(members) {
+  // For each member, fetch additional data
+  for (const member of members) {
+    if (!member.roleName && !member.departmentName) {
+      try {
+        // First try to get data from cached users
+        const cachedUser = availableUsers.find(u => 
+          u.id === member.userId || u.id === member.id
+        );
+        
+        if (cachedUser) {
+          member.roleName = cachedUser.roleName || cachedUser.role || 'Not specified';
+          member.departmentName = cachedUser.departmentName || cachedUser.department || 'Not specified';
+          continue;
+        }
+        
+        // If not in cache, fetch from backend
+        const response = await fetch(`http://localhost:5000/api/users/${member.userId || member.id}/details`, {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          member.roleName = userData.roleName || userData.role || 'Not specified';
+          member.departmentName = userData.departmentName || userData.department || 'Not specified';
+          
+          // Set standard fields too for consistency
+          member.role = member.roleName;
+          member.department = member.departmentName;
+        }
+      } catch (error) {
+        console.error(`Failed to fetch details for member ${member.name || member.firstName + ' ' + member.lastName}:`, error);
+      }
+    } else {
+      // Ensure standard fields are set too
+      if (member.roleName && !member.role) member.role = member.roleName;
+      if (member.departmentName && !member.department) member.department = member.departmentName;
+    }
+  }
+  return members;
+}
 	function groupMessagesByTime(messages: Message[]) {
   const groups: { 
     timeLabel: string, 
@@ -1466,9 +1884,9 @@ const createGroup = async () => {
   }[] = [];
   const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
   
-  // Sort messages by timestamp in descending order (newest first)
+  // FIXED: Sort messages by timestamp in ASCENDING order (oldest first)
   const sortedMessages = [...messages].sort((a, b) => 
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
   
   sortedMessages.forEach((message, index) => {
@@ -1478,7 +1896,7 @@ const createGroup = async () => {
     
     // Check if we need a new time group
     const needNewGroup = !prevTime || 
-      (prevTime.getTime() - messageTime.getTime()) > TIME_THRESHOLD ||
+      (messageTime.getTime() - prevTime.getTime()) > TIME_THRESHOLD ||
       prevMessage.isDeleted ||
       message.isDeleted;
     
@@ -1765,7 +2183,7 @@ const groupedMessages = $derived(() => {
 										selectConversation(conversation);
 									}
 								}}
-								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								 class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
 									<div 
@@ -1781,30 +2199,27 @@ const groupedMessages = $derived(() => {
 									</div>
 								</div>
 								
-								<div class="flex-1 min-w-0">
-									<div class="flex items-center justify-between">
-										<h3 class="font-medium truncate text-sm {conversation.isRead === false ? 'text-gray-900' : 'text-gray-500'}">
-											{conversation.name}
-										</h3>
-										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
-									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
-										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet'}
-											{#if conversation.messages && conversation.messages.length > 0}
-												{@const lastMessage = conversation.messages[conversation.messages.length - 1]}
-												{#if lastMessage?.senderId === currentUserId || lastMessage?.senderId === '1'}
-													Me: {conversation.lastMessage}
-												{:else}
-													{conversation.lastMessage}
-												{/if}
-											{:else}
-												{conversation.lastMessage}
-											{/if}
-										{:else}
-											{conversation.department && conversation.role ? `${conversation.department} • ${conversation.role}` : 'No messages yet'}
-										{/if}
-									</p>
-								</div>
+								      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between">
+          <h3 class="font-medium truncate text-sm {conversation.isRead === false ? 'text-gray-900' : 'text-gray-500'}">
+            {conversation.name}
+          </h3>
+          <span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
+        </div>
+        <p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+          {#if conversation.messages && conversation.messages.length > 0}
+            {#if conversation.messages[conversation.messages.length - 1].senderId === currentUserId}
+              Me: {conversation.messages[conversation.messages.length - 1].content}
+            {:else}
+              {conversation.name}: {conversation.messages[conversation.messages.length - 1].content}
+            {/if}
+          {:else if conversation.lastMessage && conversation.lastMessage !== 'No messages yet'}
+            {conversation.lastMessage}
+          {:else}
+            {conversation.department && conversation.role ? `${conversation.department} • ${conversation.role}` : 'No messages yet'}
+          {/if}
+        </p>
+      </div>
 								
 								{#if conversation.unreadCount > 0}
 									<div class="bg-[#01c0a4] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -2050,10 +2465,23 @@ const groupedMessages = $derived(() => {
 											{/if}
 											
 											{#if message.replyTo}
-												<div class="mb-2 p-2 bg-gray-100 rounded-lg border-l-2 border-[#01c0a4] text-sm">
-													<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderId === currentUserId ? 'Me' : message.replyTo.senderName}</div>
-													<div class="text-gray-700 {message.replyTo.isDeleted ? 'italic text-gray-500' : ''}">{message.replyTo.content}</div>
+											<div class="mb-2 px-3 py-2 bg-gray-100 rounded-lg border-l-2 border-[#01c0a4] text-sm">
+												<div class="flex items-center space-x-2 mb-1">
+												<Reply class="w-3 h-3 text-gray-500" />
+												<div class="text-xs text-gray-600 flex-1">
+													Replying to 
+													<span class="font-medium">
+													{message.replyTo.senderId === currentUserId ? 'Yourself' : message.replyTo.senderName}
+													</span>
 												</div>
+												<div class="text-xs text-gray-400">
+													{formatTime(message.replyTo.timestamp)}
+												</div>
+												</div>
+												<div class="text-gray-700 {message.replyTo.isDeleted ? 'italic text-gray-500' : ''}">
+												{message.replyTo.content}
+												</div>
+											</div>
 											{/if}
 											
 											<div class="relative">
@@ -2069,9 +2497,9 @@ const groupedMessages = $derived(() => {
 												class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
 												aria-label="Reply to message"
 												title="Reply"
-											>
+												>
 												<Reply class="w-3 h-3 text-gray-600" />
-											</button>
+												</button>
 											{#if message.forwardingEnabled && currentConversation.settings?.allowForwarding}
 												<button
 													onclick={() => startForwardMessage(message)}
@@ -2249,16 +2677,31 @@ const groupedMessages = $derived(() => {
 				<!-- Reply Preview -->
 				{#if replyingTo}
 					<div class="px-4 py-2 bg-gray-100 border-t border-gray-300 flex items-center justify-between">
-						<div class="flex items-center space-x-2">
-							<Reply class="w-4 h-4 text-gray-500" />
-							<span class="text-sm text-gray-600">Replying to {replyingTo.senderId === currentUserId ? 'Me' : replyingTo.senderName}</span>
-							<span class="text-sm text-gray-500 truncate max-w-xs">{replyingTo.content}</span>
+						<div class="flex-1 flex items-start space-x-2">
+						<Reply class="w-4 h-4 text-gray-500 mt-1" />
+						<div>
+							<div class="flex items-center">
+							<span class="text-sm font-medium text-gray-700">
+								Replying to {replyingTo.senderId === currentUserId ? 'Yourself' : replyingTo.senderName}
+							</span>
+							<span class="text-xs text-gray-500 ml-2">
+								{formatTime(replyingTo.timestamp)}
+							</span>
+							</div>
+							<p class="text-sm text-gray-600 truncate max-w-md">
+							{replyingTo.content}
+							</p>
 						</div>
-						<button onclick={cancelReply} class="text-gray-500 hover:text-gray-700" aria-label="Cancel reply">
-							×
+						</div>
+						<button 
+						onclick={cancelReply} 
+						class="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-200" 
+						aria-label="Cancel reply"
+						>
+						<X class="w-4 h-4" />
 						</button>
 					</div>
-				{/if}
+					{/if}
 
 				<!-- Edit Preview -->
 				{#if editingMessage}
@@ -2399,20 +2842,28 @@ const groupedMessages = $derived(() => {
 						</div>
 						
 						<button
-							onclick={editingMessage ? saveEditedMessage : selectedFiles.length > 0 ? openFilePermissionModal : sendMessage}
+							onclick={() => {
+								if (editingMessage) {
+								saveEditedMessage();
+								} else if (selectedFiles.length > 0) {
+								openFilePermissionModal();
+								} else {
+								sendMessage();
+								messageInput = ''; // Add this line to clear the input when clicking the button
+								}
+							}}
 							disabled={!messageInput.trim() && selectedFiles.length === 0}
 							class="p-4 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
 							aria-label={editingMessage ? "Save edited message" : selectedFiles.length > 0 ? "Set file permissions and send" : "Send message"}
-						>
+							>
 							{#if editingMessage}
 								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
 								</svg>
 							{:else}
 								<Send class="w-4 h-4" />
 							{/if}
-						</button>
-					</div>
+							</button>
 				</div>
 			</main>
 		{:else}
@@ -2484,76 +2935,108 @@ const groupedMessages = $derived(() => {
 
 				<!-- Tab Content -->
 				<div class="flex-1 overflow-y-auto">
-					{#if currentMembersTab === 'members'}
-						<!-- Members List -->
-						{#each currentConversation.members as member, index (member.id || member.userId || `member-${index}`)}
-							<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-								<div class="flex items-center space-x-3">
-									<button 
-										type="button"
-										onclick={(event) => {
-											event.stopPropagation();
-											const fullUserData = getUserDetails(member.id || member.userId);
-											if (fullUserData) {
-												showUserProfile(fullUserData);
-											}
-										}}
-										class="relative hover:scale-105 transition-transform duration-200"
-									>
-										<ProfileAvatar 
-											user={getUserForAvatar(member)} 
-											size="md" 
-											showOnlineStatus={member.isOnline}
-											onlineStatus={member.isOnline ? 'online' : 'offline'}
-										/>
-									</button>
-									
-									<div>
-										<div class="flex items-center space-x-2">
-											<h4 class="font-medium text-gray-900">{member.name}</h4>
-											{#if member.id === currentUserId}
-												<Crown class="w-3 h-3 text-yellow-500" />
-											{/if}
-										</div>
-										<p class="text-sm text-gray-500">
-											{member.department || member.organizationalUnit || 'No Department'} • {member.role || 'No Role'}
-										</p>
-										<p class="text-xs text-gray-400">
-											{member.isOnline ? 'Online' : 'Offline'}
-											{#if member.isMuted}
-												<span class="text-red-500">• Muted</span>
-											{/if}
-										</p>
-									</div>
-								</div>
-								
-								{#if member.id !== '1'}
-									<div class="flex items-center space-x-1">
-										<button
-											onclick={() => toggleMute(member.id)}
-											class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors"
-											title={member.isMuted ? 'Unmute' : 'Mute'}
-											aria-label={member.isMuted ? 'Unmute member' : 'Mute member'}
-										>
-											{#if member.isMuted}
-												<VolumeX class="w-4 h-4" />
-											{:else}
-												<Volume2 class="w-4 h-4" />
-											{/if}
-										</button>
-										
-										<button
-											onclick={() => removeMember(member.id)}
-											class="p-1 text-gray-500 hover:text-red-500 transition-colors"
-											title="Remove member"
-											aria-label="Remove member"
-										>
-											<UserMinus class="w-4 h-4" />
-										</button>
-									</div>
+				{#if currentMembersTab === 'members'}
+					<!-- Members List -->
+					{#each currentConversation.members as member, index (member.id || member.userId || `member-${index}`)}
+						<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100">
+						<div class="flex items-center space-x-3">
+							<button 
+							type="button"
+							onclick={(event) => {
+								event.stopPropagation();
+								const fullUserData = getUserDetails(member.id || member.userId);
+								if (fullUserData) {
+								showUserProfile(fullUserData);
+								}
+							}}
+							class="relative hover:scale-105 transition-transform duration-200"
+							>
+							<ProfileAvatar 
+								user={getUserForAvatar(member)} 
+								size="md" 
+								showOnlineStatus={member.isOnline}
+								onlineStatus={member.isOnline ? 'online' : 'offline'}
+							/>
+							</button>
+							
+							<div>
+							<!-- Remove the debug output line -->
+							<!-- <div class="text-xs text-red-500 mb-1">DEBUG: {JSON.stringify(member)}</div> -->
+							
+							<div class="flex items-center space-x-2">
+								{console.log('Member object:', member)}
+								<!-- Show name with fallback options -->
+								<h4 class="font-medium text-gray-900">
+								{member.name || member.dusername || (member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : '') || member.id || 'Unknown User'}
+								</h4>
+								{#if member.id === currentUserId}
+								<span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">You</span>
+								{/if}
+								{#if member.id && (member.id === currentConversation.dcreatedBy || member.id === currentConversation.createdBy)}
+								<Crown class="w-3 h-3 text-yellow-500" title="Group Admin" />
 								{/if}
 							</div>
-						{/each}
+							
+							<!-- Enhanced user organization info with better styling -->
+						<div class="flex flex-col mt-1">
+							<!-- Show role with correct property names -->
+								<div class="flex items-center text-sm text-gray-600">
+									<span class="inline-block w-20 text-gray-500">Role:</span>
+									<span class="font-medium">
+									{member.roleName || member.role || 'Not specified'}
+									</span>
+								</div>
+								
+								<!-- Show department with correct property names -->
+								<div class="flex items-center text-sm text-gray-600">
+									<span class="inline-block w-20 text-gray-500">Dept:</span>
+									<span class="font-medium">
+									{member.departmentName || member.department || 'Not specified'}
+									</span>
+								</div>
+								</div>
+							
+							<!-- Status info -->
+							<p class="text-xs text-gray-400 mt-1 flex items-center">
+								<span class={`inline-block w-2 h-2 rounded-full mr-2 ${member.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+								{member.isOnline ? 'Online' : 'Offline'}
+								{#if member.isMuted}
+								<span class="text-red-500 ml-2 flex items-center">
+									<VolumeX class="w-3 h-3 mr-1" /> Muted
+								</span>
+								{/if}
+							</p>
+							</div>
+						</div>
+						
+						<!-- Member actions -->
+						{#if member.id !== currentUserId && (currentConversation.dcreatedBy === currentUserId || currentConversation.createdBy === currentUserId)}
+							<div class="flex items-center space-x-1">
+							<button
+								onclick={() => toggleMute(member.id)}
+								class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors rounded-full hover:bg-gray-100"
+								title={member.isMuted ? 'Unmute' : 'Mute'}
+								aria-label={member.isMuted ? 'Unmute member' : 'Mute member'}
+							>
+								{#if member.isMuted}
+								<VolumeX class="w-4 h-4" />
+								{:else}
+								<Volume2 class="w-4 h-4" />
+								{/if}
+							</button>
+							
+							<button
+								onclick={() => removeMember(member.id)}
+								class="p-1 text-gray-500 hover:text-red-500 transition-colors rounded-full hover:bg-gray-100"
+								title="Remove member"
+								aria-label="Remove member"
+							>
+								<UserMinus class="w-4 h-4" />
+							</button>
+							</div>
+						{/if}
+						</div>
+					{/each}
 					{:else if currentMembersTab === 'files'}
 						<!-- Files Tab -->
 						{#if currentConversation}
@@ -2689,12 +3172,13 @@ const groupedMessages = $derived(() => {
 							{:else}
 								<GroupAvatar members={currentConversation?.members || []} groupName={currentConversation?.name || ''} size="xl" />
 							{/if}
-							<button 
-								class="absolute -bottom-1 -right-1 w-8 h-8 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm hover:bg-[#00a085] transition-colors shadow-lg"
-								aria-label="Change group photo"
-							>
-								<Camera class="w-4 h-4" />
-							</button>
+						<button 
+						onclick={changeGroupPhoto}
+						class="absolute -bottom-1 -right-1 w-8 h-8 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm hover:bg-[#00a085] transition-colors shadow-lg"
+						aria-label="Change group photo"
+						>
+						<Camera class="w-4 h-4" />
+						</button>
 						</div>
 						<div class="flex-1">
 							<label for="editGroupName" class="block text-sm font-medium text-gray-700 mb-1">
@@ -2732,77 +3216,53 @@ const groupedMessages = $derived(() => {
 					<h4 class="font-medium text-gray-900">Chat Settings</h4>
 					
 					<!-- Allow Emojis -->
-					<div class="flex items-center justify-between">
-						<div class="flex items-center space-x-3">
-							<Smile class="w-5 h-5 text-gray-500" />
-							<div>
-								<p class="font-medium text-gray-900">Allow Emojis and Reactions</p>
-								<p class="text-sm text-gray-500">Enable emoji reactions in this group</p>
-							</div>
-						</div>
-						<button
-							onclick={toggleEmojis}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowEmojis ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-							aria-label="Toggle emojis"
-						>
-							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowEmojis ? 'translate-x-6' : 'translate-x-1'}"></span>
-						</button>
-					</div>
-
-					<!-- Allow Attachments -->
-					<div class="flex items-center justify-between">
-						<div class="flex items-center space-x-3">
-							<Paperclip class="w-5 h-5 text-gray-500" />
-							<div>
-								<p class="font-medium text-gray-900">Allow File Attachments</p>
-								<p class="text-sm text-gray-500">Enable file and image sharing</p>
-							</div>
-						</div>
-						<button
-							onclick={toggleAttachments}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowAttachments ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-							aria-label="Toggle attachments"
-						>
-							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowAttachments ? 'translate-x-6' : 'translate-x-1'}"></span>
-						</button>
-					</div>
-
-					<!-- Allow Forwarding -->
-					<div class="flex items-center justify-between">
-						<div class="flex items-center space-x-3">
-							<Share2 class="w-5 h-5 text-gray-500" />
-							<div>
-								<p class="font-medium text-gray-900">Allow Message Forwarding</p>
-								<p class="text-sm text-gray-500">Enable forwarding messages to other chats</p>
-							</div>
-						</div>
-						<button
-							onclick={toggleForwarding}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowForwarding ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-							aria-label="Toggle forwarding"
-						>
-							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowForwarding ? 'translate-x-6' : 'translate-x-1'}"></span>
-						</button>
-					</div>
-
-					<!-- Allow Pinning -->
-					<div class="flex items-center justify-between">
-						<div class="flex items-center space-x-3">
-							<Pin class="w-5 h-5 text-gray-500" />
-							<div>
-								<p class="font-medium text-gray-900">Allow Pinned Messages</p>
-								<p class="text-sm text-gray-500">Enable pinning important messages</p>
-							</div>
-						</div>
-						<button
-							onclick={togglePinning}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowPinning ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
-							aria-label="Toggle pinning"
-						>
-							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowPinning ? 'translate-x-6' : 'translate-x-1'}"></span>
-						</button>
-					</div>
-				</div>
+			  <div class="flex items-center justify-between">
+    <div class="flex flex-col">
+      <h3 class="font-medium text-gray-800">Allow Emojis and Reactions</h3>
+      <p class="text-sm text-gray-500">Enable emoji reactions in this group</p>
+    </div>
+    <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowEmojis ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
+         onclick={toggleEmojis} role="switch" aria-checked={currentConversation?.settings?.allowEmojis}>
+      <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowEmojis ? 'translate-x-6' : ''}`}></div>
+    </div>
+  </div>
+  
+  <!-- Allow File Attachments -->
+  <div class="flex items-center justify-between">
+    <div class="flex flex-col">
+      <h3 class="font-medium text-gray-800">Allow File Attachments</h3>
+      <p class="text-sm text-gray-500">Enable file and image sharing</p>
+    </div>
+    <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowAttachments ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
+         onclick={toggleAttachments} role="switch" aria-checked={currentConversation?.settings?.allowAttachments}>
+      <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowAttachments ? 'translate-x-6' : ''}`}></div>
+    </div>
+  </div>
+  
+  <!-- Allow Message Forwarding -->
+  <div class="flex items-center justify-between">
+    <div class="flex flex-col">
+      <h3 class="font-medium text-gray-800">Allow Message Forwarding</h3>
+      <p class="text-sm text-gray-500">Enable forwarding messages to other chats</p>
+    </div>
+    <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowForwarding ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
+         onclick={toggleForwarding} role="switch" aria-checked={currentConversation?.settings?.allowForwarding}>
+      <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowForwarding ? 'translate-x-6' : ''}`}></div>
+    </div>
+  </div>
+  
+  <!-- Allow Pinned Messages -->
+  <div class="flex items-center justify-between">
+    <div class="flex flex-col">
+      <h3 class="font-medium text-gray-800">Allow Pinned Messages</h3>
+      <p class="text-sm text-gray-500">Enable pinning important messages</p>
+    </div>
+    <div class={`w-12 h-6 rounded-full p-1 transition-colors ${currentConversation?.settings?.allowPinning ? 'bg-[#01c0a4]' : 'bg-gray-300'}`} 
+         onclick={togglePinning} role="switch" aria-checked={currentConversation?.settings?.allowPinning}>
+      <div class={`w-4 h-4 rounded-full bg-white transform transition-transform ${currentConversation?.settings?.allowPinning ? 'translate-x-6' : ''}`}></div>
+    </div>
+  </div>
+</div>
 
 				<!-- Actions -->
 				<div class="pt-4 border-t border-gray-200 space-y-3">

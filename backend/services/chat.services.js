@@ -106,3 +106,42 @@ exports.getUserConversations = async (userId) => {
 exports.addMemberToConversation = async (conversationId, userId) => {
   return await ChatModel.addMember(conversationId, userId);
 };
+
+/**
+ * Get conversation by ID
+ */
+exports.getConversationById = async (conversationId) => {
+  try {
+    const result = await ChatModel.getConversationById(conversationId);
+    return result;
+  } catch (error) {
+    console.error('Error in getConversationById service:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if user is in conversation
+ */
+exports.isUserInConversation = async (conversationId, userId) => {
+  try {
+    const result = await ChatModel.isUserInConversation(conversationId, userId);
+    return result;
+  } catch (error) {
+    console.error('Error in isUserInConversation service:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update conversation details
+ */
+exports.updateConversation = async (conversationId, updateData) => {
+  try {
+    const result = await ChatModel.updateConversation(conversationId, updateData);
+    return result;
+  } catch (error) {
+    console.error('Error in updateConversation service:', error);
+    throw error;
+  }
+};
