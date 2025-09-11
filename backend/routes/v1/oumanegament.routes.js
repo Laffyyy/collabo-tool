@@ -37,6 +37,7 @@ router.post(
     body('OrgName').isString().notEmpty(),
     body('Description').isString().notEmpty(),
     body('Location').isString().notEmpty(),
+    body('ParentId').optional().isString().notEmpty(),
     body('Settings').isObject().notEmpty(),
     // Chat settings validation (optional - only validate if present)
     body('Settings.Chat.Frontline.Init1v1').optional().isBoolean(),

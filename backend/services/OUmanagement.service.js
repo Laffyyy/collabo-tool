@@ -146,6 +146,14 @@ async function getDeactiveOU(howmany, page, sort) {
  */
 async function createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
     try {
+        // Check if parent OU exists if parentouid is provided
+        if (parentouid) {
+            const parentOU = await ouModel.getOUById(parentouid);
+            if (!parentOU) {
+                throw new Error('Parent OU does not exist');
+            }
+        }
+
         const result = await ouModel.createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings);
         if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
             result.jsSettings = deserializeJsSettings(result.jsSettings);

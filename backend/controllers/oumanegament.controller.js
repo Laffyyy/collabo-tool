@@ -11,6 +11,16 @@ async function getOU(req, res, next) {
     }
 }
 
+async function OUexists(req, res, next) {
+    try {
+        const { id } = req.query;
+        const result = await oumanegamentService.OUexists(id);
+        res.status(200).json({ ok: true, ...result });
+    } catch (err) {
+        next(err);
+    }
+}
+
 async function getDeactiveOU(req, res, next) {
     try {
         const result = await oumanegamentService.getDeactiveOU();
@@ -33,7 +43,7 @@ async function getDeactiveOUList(req, res, next) {
 async function createOUmanager(req, res, next) {
     try {
         // Extract fields from request body according to the new structure
-        const { OrgName, Description, Location, Settings } = req.body;
+        const { OrgName, Description, Location, Settings, ParentId } = req.body;
 
         // Basic validation
         if (!OrgName || !Description || !Location || !Settings) {
@@ -72,7 +82,7 @@ async function createOUmanager(req, res, next) {
             result = await oumanegamentService.createOU(
                 OrgName,
                 Description,
-                null, // parentouid is not provided in the new structure
+                ParentId || null,
                 OUsettings,
                 Location,
                 jsSettings
