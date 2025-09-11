@@ -314,7 +314,7 @@
 {#if $firstTimeShowTermsModal}
 	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
 		<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
-			<h3 class="text-lg font-bold text-gray-800 mb-4">Terms of Service & PII Protection</h3>
+			<h3 class="text-lg font-bold text-gray-800 mb-4">Privacy Policy</h3>
 			<div class="text-gray-600 mb-6 space-y-3">
 				<p>By using this system, you agree to:</p>
 				<ul class="list-disc list-inside space-y-1 ml-4">

@@ -913,6 +913,216 @@ class UserModel {
   }
 
   /**
+ * Track a failed login attempt
+ * @param {string} userId - User ID
+ * @param {string} ipAddress - IP address of the client
+ * @param {string} userAgent - User agent of the client
+ * @returns {Promise<boolean>} Success status
+ */
+async trackFailedLoginAttempt(userId, ipAddress = null, userAgent = null) {
+  try {
+    // Use the audit logs table instead of login logs
+    await this.pool.query(
+      `INSERT INTO tblauditlogs (duserid, daction, dtargettype, dtargetid, ddetails, tcreatedat) 
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        userId,
+        'LOGIN_FAILED',
+        'user',
+        userId,
+        JSON.stringify({
+          ipAddress: ipAddress || 'unknown',
+          userAgent: userAgent || 'unknown'
+        })
+      ]
+    );
+    return true;
+  } catch (error) {
+    console.error('[User Model] Failed to log login attempt:', error);
+    return false;
+  }
+}
+
+/**
+ * Count failed login attempts within a time period, but only since the last reset
+ * @param {string} userId - User ID
+ * @param {number} hours - Time period in hours (default: 24)
+ * @returns {Promise<number>} Number of failed attempts
+ */
+async countFailedLoginAttempts(userId, hours = 24) {
+  try {
+    // First, find the timestamp of the last counter reset (if any)
+    const resetQuery = `
+      SELECT MAX(tcreatedat) as last_reset
+      FROM tblauditlogs 
+      WHERE duserid = $1 
+      AND daction = 'LOGIN_COUNTER_RESET'
+      AND tcreatedat > NOW() - INTERVAL '${hours} HOURS'
+    `;
+    const resetResult = await this.pool.query(resetQuery, [userId]);
+    const lastReset = resetResult.rows[0].last_reset || null;
+    
+    // Build the query to count failed attempts
+    let countQuery = `
+      SELECT COUNT(*) as attempts 
+      FROM tblauditlogs 
+      WHERE duserid = $1 
+      AND daction = 'LOGIN_FAILED' 
+      AND tcreatedat > NOW() - INTERVAL '${hours} HOURS'
+    `;
+    
+    // If there was a reset, only count failures after that reset
+    const params = [userId];
+    if (lastReset) {
+      countQuery += ` AND tcreatedat > $2`;
+      params.push(lastReset);
+    }
+    
+    const result = await this.pool.query(countQuery, params);
+    return parseInt(result.rows[0].attempts || '0', 10);
+  } catch (error) {
+    console.error('[User Model] Error checking previous login attempts:', error);
+    return 0;
+  }
+}
+
+/**
+ * Lock a user account after too many failed login attempts
+ * @param {string} userId - User ID
+ * @param {string} reason - Reason for locking (optional)
+ * @returns {Promise<boolean>} Success status
+ */
+async lockAccount(userId, reason = 'Too many failed login attempts') {
+  try {
+    await this.pool.query(
+      `UPDATE tblusers 
+       SET daccountstatus = $1, tupdatedat = NOW() 
+       WHERE did = $2`,
+      [UserModel.ACCOUNT_STATUS.LOCKED, userId]
+    );
+    
+    // Record the lock action in the audit log with correct table name
+    try {
+      await this.pool.query(
+        `INSERT INTO tblauditlogs (duserid, daction, dtargettype, dtargetid, ddetails, tcreatedat) 
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        [
+          userId, 
+          'ACCOUNT_LOCKED', 
+          'user',
+          userId,
+          JSON.stringify({ reason })
+        ]
+      );
+    } catch (auditError) {
+      // Non-fatal if audit logging fails
+      console.warn('[User Model] Failed to record account lock in audit log:', auditError);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[User Model] Failed to lock account:', error);
+    return false;
+  }
+}
+
+/**
+ * Reset login attempts after successful login
+ * @param {string} userId - User ID
+ * @param {string} ipAddress - IP address of the client
+ * @param {string} userAgent - User agent of the client
+ * @returns {Promise<boolean>} Success status
+ */
+async trackSuccessfulLogin(userId, ipAddress = null, userAgent = null) {
+  try {
+    // Log the successful attempt in audit logs
+    await this.pool.query(
+      `INSERT INTO tblauditlogs (duserid, daction, dtargettype, dtargetid, ddetails, tcreatedat) 
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        userId,
+        'LOGIN_SUCCESS',
+        'user',
+        userId,
+        JSON.stringify({
+          ipAddress: ipAddress || 'unknown',
+          userAgent: userAgent || 'unknown'
+        })
+      ]
+    );
+    
+    // Reset failed login attempts counter
+    await this.resetFailedLoginAttempts(userId);
+    
+    // Update last login timestamp
+    await this.updateLastLogin(userId);
+    
+    return true;
+  } catch (error) {
+    console.error('[User Model] Failed to log successful login:', error);
+    return false;
+  }
+}
+
+/**
+ * Get max login attempts from global settings
+ * @returns {Promise<number>} Max login attempts (default: 5)
+ */
+async getMaxLoginAttempts() {
+  try {
+    // Query the global settings table for the max login attempts
+    const query = `
+      SELECT dsettingvalue::jsonb->'maxLoginAttempts' as max_attempts
+      FROM tblglobalsettings
+      WHERE dsettingkey = 'general'
+      LIMIT 1
+    `;
+    
+    const result = await this.pool.query(query);
+    
+    // Extract the value or use default if not found
+    if (result.rows.length > 0 && result.rows[0].max_attempts) {
+      const maxAttempts = parseInt(result.rows[0].max_attempts, 10);
+      return !isNaN(maxAttempts) && maxAttempts > 0 ? maxAttempts : 5;
+    }
+    
+    return 5; // Default if not found
+  } catch (error) {
+    console.error('[User Model] Failed to get max login attempts:', error);
+    return 5; // Default on error
+  }
+}
+
+/**
+ * Reset failed login attempts counter after successful login
+ * This adds a marker in the audit log indicating that previous failed attempts should no longer count
+ * @param {string} userId - User ID
+ * @returns {Promise<boolean>} Success status
+ */
+async resetFailedLoginAttempts(userId) {
+  try {
+    // Add a "reset counter" entry to the audit logs
+    await this.pool.query(
+      `INSERT INTO tblauditlogs (duserid, daction, dtargettype, dtargetid, ddetails, tcreatedat) 
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        userId,
+        'LOGIN_COUNTER_RESET',
+        'user',
+        userId,
+        JSON.stringify({
+          reason: 'Successful login'
+        })
+      ]
+    );
+    return true;
+  } catch (error) {
+    console.error('[User Model] Failed to reset login attempts counter:', error);
+    return false;
+  }
+}
+
+  /**
    * Format user for management interface
    * @param {Object} user - Raw user object from database
    * @returns {Object} Formatted user object for management
