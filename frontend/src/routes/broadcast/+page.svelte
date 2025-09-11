@@ -31,6 +31,10 @@
   import { API_CONFIG } from '$lib/api/config';
   import { authStore } from '$lib/stores/auth.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
+
+  // Get theme info
+  let isDarkMode = $derived(themeStore.isDarkMode);
 
   // Add global settings state
   let globalSettings = $state<{
@@ -701,9 +705,9 @@ const formatFullTimestamp = (date: Date) => {
   onMount(async () => {
     await loadGlobalSettings();
     // Continue with existing broadcast loading logic...
-    loadBroadcasts();
+    loadMyBroadcasts();
     loadReceivedBroadcasts();
-    loadTemplates();
+    loadTemplate();
     loadTargetData();
   });
 
@@ -1589,12 +1593,12 @@ onMount(async () => {
   <title>Broadcast - CollabHub</title>
 </svelte:head>
 
-<div class="p-6 space-y-6">
+<div class="min-h-screen p-6 space-y-6 transition-colors duration-300 {isDarkMode ? 'bg-gray-900' : 'bg-white'}">
   <!-- Header -->
   <div class="flex items-center justify-between fade-in">
     <div>
-      <h1 class="text-3xl font-bold text-gray-800 mb-2">Broadcast Center</h1>
-      <p class="text-gray-600">Send announcements and track acknowledgments</p>
+      <h1 class="text-3xl font-bold mb-2 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-800'}">Broadcast Center</h1>
+      <p class="transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">Send announcements and track acknowledgments</p>
     </div>
     {#if canSendBroadcasts}
       <button
@@ -1610,17 +1614,17 @@ onMount(async () => {
   <!-- Create Broadcast Modal -->
   {#if showCreateBroadcast}
     <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+      <div class="rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}">
         <!-- Modal Header -->
-        <div class="border-b border-gray-200 p-6">
+        <div class="border-b p-6 transition-colors duration-300 {isDarkMode ? 'border-gray-700' : 'border-gray-200'}">
           <div class="flex items-center justify-between">
             <div>
-              <h2 class="text-2xl font-bold text-gray-800">Create New Broadcast</h2>
-              <p class="text-sm text-gray-600 mt-1">Send an announcement to your organization</p>
+              <h2 class="text-2xl font-bold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-800'}">Create New Broadcast</h2>
+              <p class="text-sm mt-1 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">Send an announcement to your organization</p>
             </div>
             <button
               onclick={closeCreateModal}
-              class="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              class="text-2xl font-bold transition-colors duration-300 {isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}"
             >
               ×
             </button>
@@ -1631,19 +1635,19 @@ onMount(async () => {
           <form onsubmit={(e) => { e.preventDefault(); createBroadcast(); }} class="space-y-8">
             
             <!-- Template Section -->
-            <div class="bg-blue-50 rounded-lg p-5 border border-blue-200">
-              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <div class="rounded-lg p-5 border transition-colors duration-300 {isDarkMode ? 'bg-blue-900/20 border-blue-700' : 'bg-blue-50 border-blue-200'}">
+              <h3 class="text-lg font-semibold mb-4 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-800'}">
                 <span class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">📋</span>
                 Templates
               </h3>
               
               <div class="flex flex-col sm:flex-row gap-4">
                 <div class="flex-1">
-                  <label for="templateSelect" class="block text-sm font-medium text-gray-700 mb-2">Load from Template</label>
+                  <label for="templateSelect" class="block text-sm font-medium mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Load from Template</label>
                     <div class="flex space-x-3">
                       {#if isLoadingTemplates}
                       <div class="input-field flex-1 flex items-center justify-center">
-                        <span class="text-gray-500">Loading templates...</span>
+                        <span class="transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Loading templates...</span>
                       </div>
                     {:else}
                       <select 
@@ -1705,8 +1709,8 @@ onMount(async () => {
                   </div>
                 </div>
                 
-                <div class="sm:border-l sm:border-gray-300 sm:pl-4">
-                  <span class="block text-sm font-medium text-gray-700 mb-2">Save Current as Template</span>
+                <div class="sm:border-l sm:pl-4 transition-colors duration-300 {isDarkMode ? 'sm:border-gray-600' : 'sm:border-gray-300'}">
+                  <span class="block text-sm font-medium mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Save Current as Template</span>
                   {#if !showSaveTemplate}
                     <!-- This button SHOWS the template name input -->
                     <button
@@ -1748,7 +1752,7 @@ onMount(async () => {
                       <button
                         type="button"
                         onclick={deleteTemplate}
-                        class="text-red-600 hover:text-red-700 text-sm flex items-center space-x-1"
+                        class="text-red-600 hover:text-red-700 text-sm flex items-center space-x-1 transition-colors duration-300"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2">
                           <path d="M3 6h18"></path>
@@ -1764,57 +1768,57 @@ onMount(async () => {
                 </div>
               </div>
               
-              <p class="text-xs text-gray-500 mt-3">
+              <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mt-3 transition-colors duration-300">
                 Templates help you quickly create broadcasts with predefined content and settings. Load a template to auto-fill the form, or save your current broadcast as a template for future use.
               </p>
             </div>
 
             <!-- Section 1: Basic Information -->
-            <div class="bg-gray-50 rounded-lg p-5">
-              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <div class="{isDarkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-gray-50'} rounded-lg p-5 transition-colors duration-300">
+              <h3 class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-800'} mb-4 flex items-center transition-colors duration-300">
                 <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">1</span>
                 Basic Information
               </h3>
               
               <div class="space-y-4">
                 <div>
-                  <label for="title" class="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+                  <label for="title" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">Title *</label>
                   <input
                     id="title"
                     bind:value={newBroadcast.title}
                     placeholder="Enter a clear, descriptive title"
                     required
-                    class="input-field"
+                    class="input-field {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300"
                   />
                 </div>
 
                 <div>
-                  <label for="content" class="block text-sm font-medium text-gray-700 mb-2">Message Content *</label>
+                  <label for="content" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">Message Content *</label>
                   <textarea
                     id="content"
                     bind:value={newBroadcast.content}
                     placeholder="Write your broadcast message here..."
                     required
                     rows="4"
-                    class="input-field resize-none"
+                    class="input-field resize-none {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300"
                   ></textarea>
                 </div>
 
                 <div>
-                  <label for="priority" class="block text-sm font-medium text-gray-700 mb-2">Priority Level</label>
-                  <select id="priority" bind:value={newBroadcast.priority} class="input-field">
+                  <label for="priority" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">Priority Level</label>
+                  <select id="priority" bind:value={newBroadcast.priority} class="input-field {isDarkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300">
                     {#each priorities as priority}
                       <option value={priority.value}>{priority.label}</option>
                     {/each}
                   </select>
-                  <p class="text-xs text-gray-500 mt-1">High priority broadcasts will be highlighted with a red border</p>
+                  <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mt-1 transition-colors duration-300">High priority broadcasts will be highlighted with a red border</p>
                 </div>
               </div>
             </div>
 
             <!-- Section 2: Target Audience -->
-            <div class="bg-gray-50 rounded-lg p-5">
-              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <div class="{isDarkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-gray-50'} rounded-lg p-5 transition-colors duration-300">
+              <h3 class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-800'} mb-4 flex items-center transition-colors duration-300">
                 <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">2</span>
                 Target Audience
               </h3>
@@ -1822,45 +1826,45 @@ onMount(async () => {
               <!-- Organizational Unit Selector -->
               <div class="space-y-4">
               <div>
-                <label for="ou-selector" class="block text-sm font-medium text-gray-700 mb-2">Organizational Units *</label>
+                <label for="ou-selector" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">Organizational Units *</label>
                 <div class="relative">
                   <button
                     id="ou-selector"
                     type="button"
                     onclick={() => showOUDropdown = !showOUDropdown}
-                    class="input-field w-full text-left flex items-center justify-between"
+                    class="input-field w-full text-left flex items-center justify-between {isDarkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300"
                   >
                     {#if newBroadcast.targetOUs.length === 0}
-                      <span class="text-gray-400">Select Organizational Units</span>
+                      <span class="{isDarkMode ? 'text-gray-400' : 'text-gray-400'}">Select Organizational Units</span>
                     {:else}
-                      <span>
+                      <span class="{isDarkMode ? 'text-white' : ''}">
                         {newBroadcast.targetOUs.length} unit{newBroadcast.targetOUs.length !== 1 ? 's' : ''} selected
                       </span>
                     {/if}
-                    <ChevronDown class="w-4 h-4 text-gray-400" />
+                    <ChevronDown class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-400'}" />
                   </button>
                   
                   {#if showOUDropdown}
-                    <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-hidden">
+                    <div class="absolute z-10 mt-1 w-full {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} shadow-lg rounded-md border max-h-60 overflow-hidden transition-colors duration-300">
                       <!-- Search input -->
-                      <div class="p-2 border-b border-gray-200">
+                      <div class="p-2 border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'}">
                         <input
                           type="text"
                           bind:value={ouSearchQuery}
                           placeholder="Search organizational units..."
-                          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+                          class="w-full px-3 py-2 text-sm rounded-md focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300'} transition-colors duration-300"
                           onclick={(e) => e.stopPropagation()}
                         />
                       </div>
                       
                       <div class="max-h-48 overflow-y-auto">
                         {#if isLoadingOUs}
-                          <div class="p-3 text-center text-gray-500">Loading organizational units...</div>
+                          <div class="p-3 text-center {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Loading organizational units...</div>
                         {:else if availableOUs.length === 0}
-                          <div class="p-3 text-center text-gray-500">No organizational units found</div>
+                          <div class="p-3 text-center {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">No organizational units found</div>
                         {:else}
                           <!-- Select All option -->
-                          <div class="p-2 hover:bg-gray-100 border-b border-gray-100">
+                          <div class="p-2 {isDarkMode ? 'hover:bg-gray-700 border-gray-600' : 'hover:bg-gray-100 border-gray-100'} border-b transition-colors duration-300">
                             <label class="flex items-center space-x-2 cursor-pointer w-full font-medium">
                               <input
                                 type="checkbox"
@@ -1878,12 +1882,12 @@ onMount(async () => {
                           </div>
                           
                           {#if filteredOUs.length === 0}
-                            <div class="p-3 text-center text-gray-500">
+                            <div class="p-3 text-center {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
                               No units match "{ouSearchQuery}"
                             </div>
                           {:else}
                             {#each filteredOUs as ou}
-                              <div class="p-2 hover:bg-gray-100">
+                              <div class="p-2 {isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors duration-300">
                                 <label class="flex items-center space-x-2 cursor-pointer w-full">
                                   <input
                                     type="checkbox"
@@ -1899,7 +1903,7 @@ onMount(async () => {
                                     }}
                                     class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                                   />
-                                  <span>{ou.name}</span>
+                                  <span class="{isDarkMode ? 'text-white' : ''} transition-colors duration-300">{ou.name}</span>
                                 </label>
                               </div>
                             {/each}
@@ -1912,7 +1916,7 @@ onMount(async () => {
 
                 <!-- Show selected OUs count and names -->
                 {#if newBroadcast.targetOUs.length > 0}
-                  <div class="mt-2 text-xs text-gray-600">
+                  <div class="mt-2 text-xs {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">
                     <span class="font-medium">Selected:</span>
                     {#if newBroadcast.targetOUs.length <= 5}
                       {newBroadcast.targetOUs.map(id => availableOUs.find(ou => ou.id === id)?.name).filter(Boolean).join(', ')}
@@ -1926,10 +1930,10 @@ onMount(async () => {
 
                 <!-- Target Roles selection -->
                 <div>
-                  <span class="block text-sm font-medium text-gray-700 mb-3">Target Roles *</span>
+                  <span class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-3 transition-colors duration-300">Target Roles *</span>
                   <div class="grid grid-cols-2 gap-3">
                     {#if isLoadingRoles}
-                      <div class="col-span-2 p-3 text-center text-gray-500">Loading roles...</div>
+                      <div class="col-span-2 p-3 text-center {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Loading roles...</div>
                     {:else}
                       {#each availableRoles as role}
                         <div class="flex items-center space-x-2">
@@ -1947,7 +1951,7 @@ onMount(async () => {
                             }}
                             class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                           />
-                          <label for="role-{role.id}" class="text-sm text-gray-700 cursor-pointer">
+                          <label for="role-{role.id}" class="text-sm {isDarkMode ? 'text-gray-200' : 'text-gray-700'} cursor-pointer transition-colors duration-300">
                             {role.name}
                           </label>
                         </div>
@@ -1958,23 +1962,23 @@ onMount(async () => {
               </div>
 
             <!-- Section 3: Response Settings -->
-            <div class="bg-gray-50 rounded-lg p-5">
-              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <div class="{isDarkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-gray-50'} rounded-lg p-5 transition-colors duration-300">
+              <h3 class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-800'} mb-4 flex items-center transition-colors duration-300">
                 <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">3</span>
                 Response Settings
               </h3>
               
               <div class="space-y-4">
                 <div>
-                  <label for="acknowledgmentType" class="block text-sm font-medium text-gray-700 mb-2">Response Type</label>
-                  <select id="acknowledgmentType" bind:value={newBroadcast.acknowledgmentType} class="input-field">
+                  <label for="acknowledgmentType" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">Response Type</label>
+                  <select id="acknowledgmentType" bind:value={newBroadcast.acknowledgmentType} class="input-field {isDarkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300">
                     <option value="none">No Response Required</option>
                     <option value="required">Requires Acknowledgment</option>
                     <option value="preferred-date">Preferred Date Selection</option>
                     <option value="choices">Multiple Choice Options</option>
                     <option value="textbox">Text Response</option>
                   </select>
-                  <p class="text-xs text-gray-500 mt-1">
+                  <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mt-1 transition-colors duration-300">
                     {#if newBroadcast.acknowledgmentType === 'none'}
                       Recipients will receive the broadcast without needing to respond
                     {:else if newBroadcast.acknowledgmentType === 'required'}
@@ -1991,8 +1995,8 @@ onMount(async () => {
 
                 <!-- Dynamic Choices Section -->
                 {#if newBroadcast.acknowledgmentType === 'choices'}
-                  <div class="bg-white rounded border border-gray-200 p-4">
-                    <span class="block text-sm font-medium text-gray-700 mb-3">Choice Options</span>
+                  <div class="{isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-white border-gray-200'} rounded border p-4 transition-colors duration-300">
+                    <span class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-3 transition-colors duration-300">Choice Options</span>
                     <div class="space-y-3">
                       {#each newBroadcast.choices as choice, index}
                         <div class="flex space-x-2">
@@ -2000,13 +2004,13 @@ onMount(async () => {
                             type="text"
                             bind:value={newBroadcast.choices[index]}
                             placeholder="Option {index + 1}"
-                            class="input-field flex-1"
+                            class="input-field flex-1 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300"
                           />
                           {#if newBroadcast.choices.length > 1}
                             <button
                               type="button"
                               onclick={() => newBroadcast.choices.splice(index, 1)}
-                              class="px-3 py-2 text-red-600 hover:text-red-800 text-sm font-medium"
+                              class="px-3 py-2 text-red-600 hover:text-red-800 text-sm font-medium transition-colors duration-300"
                             >
                               Remove
                             </button>
@@ -2017,12 +2021,12 @@ onMount(async () => {
                         <button
                           type="button"
                           onclick={() => newBroadcast.choices.push('')}
-                          class="text-sm text-[#01c0a4] hover:text-[#00a085] font-medium"
+                          class="text-sm text-[#01c0a4] hover:text-[#00a085] font-medium transition-colors duration-300"
                         >
                           + Add Another Option
                         </button>
                       {:else}
-                        <p class="text-xs text-gray-500 italic">Maximum of 8 options allowed</p>
+                        <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} italic transition-colors duration-300">Maximum of 8 options allowed</p>
                       {/if}
                     </div>
                   </div>
@@ -2031,17 +2035,17 @@ onMount(async () => {
             </div>
 
             <!-- Section 4: Scheduling -->
-            <div class="bg-gray-50 rounded-lg p-5">
-              <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <div class="{isDarkMode ? 'bg-gray-800/50 border border-gray-700/50' : 'bg-gray-50'} rounded-lg p-5 transition-colors duration-300">
+              <h3 class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-800'} mb-4 flex items-center transition-colors duration-300">
                 <span class="w-6 h-6 bg-[#01c0a4] text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">4</span>
                 Scheduling
               </h3>
               
               <div class="space-y-4">
                 <div>
-                  <span class="block text-sm font-medium text-gray-700 mb-3">When to send this broadcast?</span>
+                  <span class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-3 transition-colors duration-300">When to send this broadcast?</span>
                   <div class="space-y-3">
-                    <label class="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                    <label class="flex items-start space-x-3 p-3 {isDarkMode ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} rounded border cursor-pointer transition-colors duration-300">
                       <input
                         type="radio"
                         bind:group={newBroadcast.scheduleType}
@@ -2049,11 +2053,11 @@ onMount(async () => {
                         class="mt-1 rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                       />
                       <div>
-                        <span class="text-sm font-medium">Send Immediately</span>
-                        <p class="text-xs text-gray-500">The broadcast will be sent as soon as you create it</p>
+                        <span class="text-sm font-medium {isDarkMode ? 'text-white' : ''} transition-colors duration-300">Send Immediately</span>
+                        <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">The broadcast will be sent as soon as you create it</p>
                       </div>
                     </label>
-                    <label class="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                    <label class="flex items-start space-x-3 p-3 {isDarkMode ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} rounded border cursor-pointer transition-colors duration-300">
                       <input
                         type="radio"
                         bind:group={newBroadcast.scheduleType}
@@ -2061,8 +2065,8 @@ onMount(async () => {
                         class="mt-1 rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                       />
                       <div>
-                        <span class="text-sm font-medium">Schedule for Later</span>
-                        <p class="text-xs text-gray-500">Choose a specific date and time to send the broadcast</p>
+                        <span class="text-sm font-medium {isDarkMode ? 'text-white' : ''} transition-colors duration-300">Schedule for Later</span>
+                        <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Choose a specific date and time to send the broadcast</p>
                       </div>
                     </label>
                   </div>
@@ -2070,8 +2074,8 @@ onMount(async () => {
 
                 <!-- Schedule Details (conditional) -->
                 {#if newBroadcast.scheduleType === 'pick'}
-                  <div class="bg-white rounded border border-gray-200 p-4">
-                    <label for="scheduledFor" class="block text-sm font-medium text-gray-700 mb-2">Schedule Date & Time</label>
+                  <div class="{isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-white border-gray-200'} rounded border p-4 transition-colors duration-300">
+                    <label for="scheduledFor" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">Schedule Date & Time</label>
                       <div
                         role="button"
                         tabindex="0"
@@ -2098,15 +2102,15 @@ onMount(async () => {
                 {/if}
                 
                 <!-- End Date -->
-                <div class="bg-white rounded border border-gray-200 p-4">
-                  <label for="endDate" class="block text-sm font-medium text-gray-700 mb-2">End Date (Optional)</label>
-                  <p class="text-xs text-gray-500 mb-3">Set when this broadcast should expire and be marked as "Done"</p>
+                <div class="{isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-white border-gray-200'} rounded border p-4 transition-colors duration-300">
+                  <label for="endDate" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">End Date (Optional)</label>
+                  <p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-3 transition-colors duration-300">Set when this broadcast should expire and be marked as "Done"</p>
                   <input
                     id="endDate"
                     type="datetime-local"
                     bind:value={newBroadcast.endDate}
                     onclick={(e) => (e.target as HTMLInputElement).showPicker()}
-                    class="input-field w-full cursor-pointer"
+                    class="input-field w-full cursor-pointer {isDarkMode ? 'bg-gray-700 border-gray-600 text-white focus:border-[#01c0a4] focus:ring-[#01c0a4]/20' : ''} transition-colors duration-300"
                     placeholder="Select end date..."
                   />
                 </div>
@@ -2114,18 +2118,18 @@ onMount(async () => {
 
             <!-- Show API error if any -->
             {#if apiError}
-              <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <div class="{isDarkMode ? 'bg-red-900/20 border-red-700 text-red-400' : 'bg-red-50 border-red-200 text-red-700'} px-4 py-3 rounded relative border transition-colors duration-300" role="alert">
                 <strong class="font-bold">Error:</strong>
                 <span class="block sm:inline">{apiError}</span>
               </div>
             {/if}
 
             <!-- Actions -->
-            <div class="flex justify-between pt-6 border-t border-gray-200">
+            <div class="flex justify-between pt-6 border-t {isDarkMode ? 'border-gray-700' : 'border-gray-200'} transition-colors duration-300">
               <button
                 type="button"
                 onclick={closeCreateModal}
-                class="secondary-button"
+                class="secondary-button {isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500' : ''} transition-colors duration-300"
               >
                 Cancel
               </button>
@@ -2181,7 +2185,7 @@ onMount(async () => {
           type="text"
           bind:value={searchQuery}
           placeholder="Search broadcasts..."
-          class="block w-64 pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] text-sm"
+          class="block w-64 pl-10 pr-3 py-2 border rounded-md leading-5 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] text-sm {isDarkMode ? 'bg-gray-700 border-white text-white placeholder-gray-400' : 'bg-white border-gray-300 placeholder-gray-500 focus:placeholder-gray-400'} transition-colors duration-300"
         />
       </div>
       
@@ -2189,7 +2193,7 @@ onMount(async () => {
 <div class="relative">
   <button
     onclick={() => showFilterDropdown = !showFilterDropdown}
-    class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+    class="inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] {isDarkMode ? 'border-white text-gray-200 bg-gray-700 hover:bg-gray-600' : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'} transition-colors duration-300"
   >
     <Filter class="h-4 w-4 mr-2" />
     {priorityFilter === 'all' ? 'All Priorities' : priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1) + ' Priority'}
@@ -2205,7 +2209,7 @@ onMount(async () => {
       onclick={() => showFilterDropdown = false}
     ></div>
     
-    <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+    <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-20 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white'} transition-colors duration-300">
       <div class="py-1">
         <button
           onclick={(e) => { 
@@ -2213,7 +2217,7 @@ onMount(async () => {
             priorityFilter = 'all'; 
             showFilterDropdown = false; 
           }}
-          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'all' ? 'bg-gray-100 font-medium' : ''}"
+          class="block px-4 py-2 text-sm w-full text-left transition-colors {priorityFilter === 'all' ? 'font-medium' : ''} {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} {priorityFilter === 'all' ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-100') : ''}"
         >
           <div class="flex items-center space-x-2">
             <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
@@ -2229,7 +2233,7 @@ onMount(async () => {
             priorityFilter = 'high'; 
             showFilterDropdown = false; 
           }}
-          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'high' ? 'bg-red-50 font-medium' : ''}"
+          class="block px-4 py-2 text-sm w-full text-left transition-colors {priorityFilter === 'high' ? 'font-medium' : ''} {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} {priorityFilter === 'high' ? (isDarkMode ? 'bg-red-900/20' : 'bg-red-50') : ''}"
         >
           <div class="flex items-center space-x-2">
             <div class="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -2245,7 +2249,7 @@ onMount(async () => {
             priorityFilter = 'medium'; 
             showFilterDropdown = false; 
           }}
-          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'medium' ? 'bg-yellow-50 font-medium' : ''}"
+          class="block px-4 py-2 text-sm w-full text-left transition-colors {priorityFilter === 'medium' ? 'font-medium' : ''} {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} {priorityFilter === 'medium' ? (isDarkMode ? 'bg-yellow-900/20' : 'bg-yellow-50') : ''}"
         >
           <div class="flex items-center space-x-2">
             <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -2261,7 +2265,7 @@ onMount(async () => {
             priorityFilter = 'low'; 
             showFilterDropdown = false; 
           }}
-          class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left transition-colors {priorityFilter === 'low' ? 'bg-green-50 font-medium' : ''}"
+          class="block px-4 py-2 text-sm w-full text-left transition-colors {priorityFilter === 'low' ? 'font-medium' : ''} {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} {priorityFilter === 'low' ? (isDarkMode ? 'bg-green-900/20' : 'bg-green-50') : ''}"
         >
           <div class="flex items-center space-x-2">
             <div class="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -2281,7 +2285,7 @@ onMount(async () => {
         <div class="relative">
           <button
             onclick={() => showResponseStatusDropdown = !showResponseStatusDropdown}
-            class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4]"
+            class="inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#01c0a4] focus:border-[#01c0a4] {isDarkMode ? 'border-white text-gray-200 bg-gray-700 hover:bg-gray-600' : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'} transition-colors duration-300"
           >
             <CheckCircle class="h-4 w-4 mr-2" />
             {#if responseStatusFilter === 'all'}
@@ -2296,11 +2300,11 @@ onMount(async () => {
           </button>
           
           {#if showResponseStatusDropdown}
-            <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+            <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white'} transition-colors duration-300">
               <div class="py-1">
                 <button
                   onclick={() => { responseStatusFilter = 'all'; showResponseStatusDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'all' ? 'bg-gray-100' : ''}"
+                  class="block px-4 py-2 text-sm w-full text-left {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} {responseStatusFilter === 'all' ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-100') : ''} transition-colors duration-300"
                 >
                   <div class="flex items-center space-x-2">
                     <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
@@ -2309,7 +2313,7 @@ onMount(async () => {
                 </button>
                 <button
                   onclick={() => { responseStatusFilter = 'responded'; showResponseStatusDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'responded' ? 'bg-gray-100' : ''}"
+                  class="block px-4 py-2 text-sm {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} w-full text-left {responseStatusFilter === 'responded' ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-100') : ''} transition-colors duration-300"
                 >
                   <div class="flex items-center space-x-2">
                     <div class="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -2318,7 +2322,7 @@ onMount(async () => {
                 </button>
                 <button
                   onclick={() => { responseStatusFilter = 'unresponded'; showResponseStatusDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'unresponded' ? 'bg-gray-100' : ''}"
+                  class="block px-4 py-2 text-sm {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} w-full text-left {responseStatusFilter === 'unresponded' ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-100') : ''} transition-colors duration-300"
                 >
                   <div class="flex items-center space-x-2">
                     <div class="w-3 h-3 bg-orange-500 rounded-full"></div>
@@ -2327,7 +2331,7 @@ onMount(async () => {
                 </button>
                 <button
                   onclick={() => { responseStatusFilter = 'done'; showResponseStatusDropdown = false; }}
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left {responseStatusFilter === 'done' ? 'bg-gray-100' : ''}"
+                  class="block px-4 py-2 text-sm {isDarkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} w-full text-left {responseStatusFilter === 'done' ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-100') : ''} transition-colors duration-300"
                 >
                   <div class="flex items-center space-x-2">
                     <div class="w-3 h-3 bg-gray-500 rounded-full"></div>
@@ -2349,16 +2353,16 @@ onMount(async () => {
 
     
       {#if isLoading}
-        <div class="collaboration-card p-12 text-center">
+        <div class="collaboration-card p-12 text-center {isDarkMode ? 'bg-gray-800 border-gray-700' : ''} transition-colors duration-300">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#01c0a4] mx-auto mb-4"></div>
-          <h3 class="text-xl font-semibold text-gray-600 mb-2">Loading your broadcasts...</h3>
-          <p class="text-gray-500">Fetching broadcasts from the server</p>
+          <h3 class="text-xl font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-2 transition-colors duration-300">Loading your broadcasts...</h3>
+          <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Fetching broadcasts from the server</p>
         </div>
       {:else if error}
-        <div class="collaboration-card p-12 text-center">
+        <div class="collaboration-card p-12 text-center {isDarkMode ? 'bg-gray-800 border-gray-700' : ''} transition-colors duration-300">
           <AlertTriangle class="w-16 h-16 text-red-300 mx-auto mb-4" />
-          <h3 class="text-xl font-semibold text-gray-600 mb-2">Unable to load broadcasts</h3>
-          <p class="text-gray-500 mb-4">{error}</p>
+          <h3 class="text-xl font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-2 transition-colors duration-300">Unable to load broadcasts</h3>
+          <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-4 transition-colors duration-300">{error}</p>
           <div class="space-y-3">
             <button
               onclick={() => loadMyBroadcasts()}
@@ -2366,20 +2370,20 @@ onMount(async () => {
             >
               Try Again
             </button>
-            <p class="text-sm text-gray-400">
+            <p class="text-sm {isDarkMode ? 'text-gray-500' : 'text-gray-400'} transition-colors duration-300">
               Check your internet connection or contact support if the problem persists
             </p>
           </div>
         </div>
       {:else if sortedBroadcasts.length === 0}
-        <div class="collaboration-card p-12 text-center">
+        <div class="collaboration-card p-12 text-center {isDarkMode ? 'bg-gray-800 border-gray-700' : ''} transition-colors duration-300">
           <Megaphone class="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 class="text-xl font-semibold text-gray-600 mb-2">
+          <h3 class="text-xl font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-2 transition-colors duration-300">
             {searchQuery || priorityFilter !== 'all' 
               ? 'No broadcasts match your filters' 
               : 'No broadcasts created yet'}
           </h3>
-          <p class="text-gray-500 mb-4">
+          <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-4 transition-colors duration-300">
             {#if searchQuery || priorityFilter !== 'all'}
               Try adjusting your search or filter criteria
             {:else}
@@ -2405,16 +2409,16 @@ onMount(async () => {
           
           {#if needsSeparator}
             <div class="flex items-center my-8">
-              <div class="flex-1 border-t border-gray-300"></div>
-              <div class="mx-4 px-3 py-1 bg-gray-100 rounded-full">
-                <span class="text-sm font-medium text-gray-600">Completed Broadcasts</span>
+              <div class="flex-1 border-t {isDarkMode ? 'border-gray-600' : 'border-gray-300'} transition-colors duration-300"></div>
+              <div class="mx-4 px-3 py-1 {isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} rounded-full transition-colors duration-300">
+                <span class="text-sm font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Completed Broadcasts</span>
               </div>
-              <div class="flex-1 border-t border-gray-300"></div>
+              <div class="flex-1 border-t {isDarkMode ? 'border-gray-600' : 'border-gray-300'} transition-colors duration-300"></div>
             </div>
           {/if}
           
           <div 
-            class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isNewBroadcast ? 'ring-2 ring-blue-200 bg-blue-50' : ''} {!broadcast.isActive ? 'opacity-60 bg-gray-50' : ''}"
+            class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isNewBroadcast ? (isDarkMode ? 'ring-2 ring-blue-400 bg-blue-900/20' : 'ring-2 ring-blue-200 bg-blue-50') : ''} {!broadcast.isActive ? (isDarkMode ? 'opacity-60 bg-gray-700/50' : 'opacity-60 bg-gray-50') : ''} {isDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}"
             role="button"
             tabindex="0"
             onclick={() => openBroadcastDetails(broadcast)}
@@ -2422,13 +2426,13 @@ onMount(async () => {
           >
             {#if !broadcast.isActive}
               <div class="absolute top-2 right-2">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-800'} transition-colors duration-300">
                   DONE
                 </span>
               </div>
             {:else if isNewBroadcast}
               <div class="absolute top-2 right-2">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {isDarkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-100 text-blue-800'} transition-colors duration-300">
                   NEW
                 </span>
               </div>
@@ -2437,7 +2441,7 @@ onMount(async () => {
             <div class="flex items-start justify-between">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center space-x-3 mb-2">
-                  <h3 class="text-lg font-bold text-gray-800 truncate">{broadcast.title}</h3>
+                  <h3 class="text-lg font-bold {isDarkMode ? 'text-white' : 'text-gray-800'} truncate transition-colors duration-300">{broadcast.title}</h3>
                   <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)}">
                     {broadcast.priority.toUpperCase()}
                   </span>
@@ -2445,16 +2449,16 @@ onMount(async () => {
                 </div>
                 
                 <div class="mb-3">
-                  <p class="text-gray-600 text-sm line-clamp-2 break-words">
+                  <p class="{isDarkMode ? 'text-gray-300' : 'text-gray-600'} text-sm line-clamp-2 break-words transition-colors duration-300">
                     {#if broadcast.content.length > 120}
-                      {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
+                      {broadcast.content.substring(0, 120)}... <span class="text-xs {isDarkMode ? 'text-gray-500' : 'text-gray-400'} italic transition-colors duration-300">Click to read more</span>
                     {:else}
                       {broadcast.content}
                     {/if}
                   </p>
                 </div>
                 
-                <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
+                <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-gray-400' : 'text-gray-500')} flex-wrap transition-colors duration-300">
                   <div class="flex items-center space-x-1">
                     <Calendar class="w-4 h-4 flex-shrink-0" />
                     <span class="whitespace-nowrap">{formatDate(broadcast.createdAt)}</span>
@@ -2478,7 +2482,7 @@ onMount(async () => {
 
               {#if broadcast.requiresAcknowledgment}
                 <div class="text-right flex-shrink-0 ml-4">
-                  <div class="flex items-center space-x-2 text-sm text-gray-600">
+                  <div class="flex items-center space-x-2 text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">
                     <CheckCircle class="w-4 h-4 flex-shrink-0" />
                     <span class="break-words">{broadcast.acknowledgments.length} acknowledgments</span>
                   </div>
@@ -2508,20 +2512,20 @@ onMount(async () => {
     
     {:else if activeTab === 'Received Broadcasts'}
   {#if isLoadingReceived}
-    <div class="collaboration-card p-12 text-center">
+    <div class="collaboration-card p-12 text-center {isDarkMode ? 'bg-gray-800 border-gray-700' : ''} transition-colors duration-300">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#01c0a4] mx-auto mb-4"></div>
-      <h3 class="text-xl font-semibold text-gray-600 mb-2">Loading received broadcasts...</h3>
-      <p class="text-gray-500">Fetching broadcasts from the server</p>
+      <h3 class="text-xl font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-2 transition-colors duration-300">Loading received broadcasts...</h3>
+      <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Fetching broadcasts from the server</p>
     </div>
   {:else if receivedBroadcasts.length === 0}
-    <div class="collaboration-card p-12 text-center">
+    <div class="collaboration-card p-12 text-center {isDarkMode ? 'bg-gray-800 border-gray-700' : ''} transition-colors duration-300">
       <Megaphone class="w-16 h-16 text-gray-300 mx-auto mb-4" />
-      <h3 class="text-xl font-semibold text-gray-600 mb-2">
+      <h3 class="text-xl font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-2 transition-colors duration-300">
         {searchQuery || priorityFilter !== 'all' 
           ? 'No received broadcasts match your filters' 
           : 'No received broadcasts yet'}
       </h3>
-      <p class="text-gray-500 mb-4">
+      <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-4 transition-colors duration-300">
         {#if searchQuery || priorityFilter !== 'all'}
           Try adjusting your search or filter criteria
         {:else}
@@ -2537,7 +2541,7 @@ onMount(async () => {
       {@const isBroadcastDone = !broadcast.isActive}
       
       <div 
-        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isBroadcastDone ? 'opacity-60 bg-gray-50' : ''}"
+        class="collaboration-card p-4 fade-in cursor-pointer hover:shadow-lg transition-all relative {broadcast.priority === 'high' ? 'border-l-4 border-red-500' : ''} {isBroadcastDone ? (isDarkMode ? 'opacity-60 bg-gray-700/50' : 'opacity-60 bg-gray-50') : ''} {isDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}"
         role="button"
         tabindex="0"
         onclick={() => openBroadcastDetails(broadcast)}
@@ -2545,13 +2549,13 @@ onMount(async () => {
       >
         {#if isBroadcastDone}
           <div class="absolute top-2 right-2">
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-800'} transition-colors duration-300">
               DONE
             </span>
           </div>
         {:else if hasResponded}
           <div class="absolute top-2 right-2">
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-800'} transition-colors duration-300">
               RESPONDED
             </span>
           </div>
@@ -2560,7 +2564,7 @@ onMount(async () => {
         <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0">
             <div class="flex items-center space-x-3 mb-2">
-              <h3 class="text-lg font-bold {isBroadcastDone ? 'text-gray-500' : 'text-gray-800'} truncate">{broadcast.title}</h3>
+              <h3 class="text-lg font-bold {isBroadcastDone ? (isDarkMode ? 'text-gray-400' : 'text-gray-500') : (isDarkMode ? 'text-white' : 'text-gray-800')} truncate transition-colors duration-300">{broadcast.title}</h3>
             </div>
             <div class="flex items-center space-x-3 mb-3">
               <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap {getPriorityStyle(broadcast.priority)} {isBroadcastDone ? 'opacity-75' : ''}">
@@ -2569,9 +2573,9 @@ onMount(async () => {
               <div class="w-2 h-2 rounded-full flex-shrink-0 {broadcast.priority === 'high' ? 'bg-red-500' : broadcast.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'} {isBroadcastDone ? 'opacity-60' : ''}"></div>
             </div>
             <div class="mb-3">
-              <p class="text-gray-600 text-sm line-clamp-2 break-words {isBroadcastDone ? 'opacity-60' : ''}">
+              <p class="{isDarkMode ? 'text-gray-300' : 'text-gray-600'} text-sm line-clamp-2 break-words {isBroadcastDone ? 'opacity-60' : ''} transition-colors duration-300">
                 {#if broadcast.content.length > 120}
-                  {broadcast.content.substring(0, 120)}... <span class="text-xs text-gray-400 italic">Click to read more</span>
+                  {broadcast.content.substring(0, 120)}... <span class="text-xs {isDarkMode ? 'text-gray-500' : 'text-gray-400'} italic transition-colors duration-300">Click to read more</span>
                 {:else}
                   {broadcast.content}
                 {/if}
@@ -2580,29 +2584,29 @@ onMount(async () => {
             
             <!-- Show user's response if they have responded -->
             {#if hasResponded && !isBroadcastDone}
-              <div class="bg-green-50 rounded border border-green-200 p-3 mb-3 shadow-sm">
+              <div class="{isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200'} rounded border p-3 mb-3 shadow-sm transition-colors duration-300">
                 <div class="flex items-center space-x-2 mb-1">
-                  <CheckCircle class="w-4 h-4 text-green-600 flex-shrink-0" />
-                  <span class="text-sm font-medium text-green-700">Your Response:</span>
+                  <CheckCircle class="w-4 h-4 {isDarkMode ? 'text-green-400' : 'text-green-600'} flex-shrink-0 transition-colors duration-300" />
+                  <span class="text-sm font-medium {isDarkMode ? 'text-green-300' : 'text-green-700'} transition-colors duration-300">Your Response:</span>
                 </div>
-                <p class="text-sm text-gray-600 break-words">
+                <p class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-600'} break-words transition-colors duration-300">
                   {formatResponseDisplay(userResponse)}
                 </p>
               </div>
             {:else if hasResponded && isBroadcastDone}
-              <div class="bg-gray-100 rounded border border-gray-300 p-3 mb-3 shadow-sm">
+              <div class="{isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-100 border-gray-300'} rounded border p-3 mb-3 shadow-sm transition-colors duration-300">
                 <div class="flex items-center space-x-2 mb-1">
-                  <CheckCircle class="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  <span class="text-sm font-medium text-gray-700">Your Response:</span>
+                  <CheckCircle class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-600'} flex-shrink-0 transition-colors duration-300" />
+                  <span class="text-sm font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Your Response:</span>
                 </div>
-                <p class="text-sm text-gray-500 break-words">
+                <p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} break-words transition-colors duration-300">
                   {formatResponseDisplay(userResponse)}
                 </p>
               </div>
             {/if}
 
             <!-- Display broadcast metadata -->
-            <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? 'text-gray-400' : 'text-gray-500'} flex-wrap">
+            <div class="flex items-center space-x-4 text-sm {isBroadcastDone ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-gray-400' : 'text-gray-500')} flex-wrap transition-colors duration-300">
               <div class="flex items-center space-x-1">
                 <User class="w-4 h-4 flex-shrink-0" />
                   <span class="truncate">Created By: <b>
@@ -3015,39 +3019,39 @@ onMount(async () => {
               <p class="text-sm text-gray-500 mt-1">No users have responded to this broadcast.</p>
             </div>
           {:else}
-            <div class="overflow-x-auto border border-gray-200 rounded-lg">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+            <div class="overflow-x-auto border rounded-lg {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
+              <table class="min-w-full divide-y {isDarkMode ? 'divide-gray-600' : 'divide-gray-200'} transition-colors duration-300">
+                <thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
                   <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-500'} uppercase tracking-wider transition-colors duration-300">User</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-500'} uppercase tracking-wider transition-colors duration-300">Response</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-500'} uppercase tracking-wider transition-colors duration-300">Time</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-600' : 'bg-white divide-gray-200'} transition-colors duration-300">
                   {#each reportResponses as response}
-                    <tr class="hover:bg-gray-50">
+                    <tr class="{isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors duration-300">
                       <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
-                          <div class="flex-shrink-0 h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-semibold uppercase">
+                          <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-semibold uppercase {isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-500'} transition-colors duration-300">
                             {response.user ? (response.user.firstName?.[0] || '') + (response.user.lastName?.[0] || '') : '?'}
                           </div>
                           <div class="ml-3">
-                            <div class="text-sm font-medium text-gray-900">
+                            <div class="text-sm font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">
                               {response.user ? `${response.user.firstName} ${response.user.lastName}` : 'Unknown User'}
                             </div>
-                            <div class="text-sm text-gray-500">
+                            <div class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
                               {response.user?.email || ''}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td class="px-6 py-4">
-                        <div class="text-sm text-gray-900">
+                        <div class="text-sm {isDarkMode ? 'text-gray-200' : 'text-gray-900'} transition-colors duration-300">
                           {formatResponse(response.responseData)}
                         </div>
                       </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td class="px-6 py-4 whitespace-nowrap text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
                         {formatDate(response.acknowledgedAt)}
                       </td>
                     </tr>
@@ -3057,12 +3061,12 @@ onMount(async () => {
             </div>
             
             <div class="mt-4 flex justify-between items-center">
-              <div class="text-sm text-gray-500">
+              <div class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
                 Showing {reportResponses.length} response{reportResponses.length !== 1 ? 's' : ''}
               </div>
               <button 
                 onclick={() => reportBroadcast && exportCSV(reportBroadcast)}
-                class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap"
+                class="text-sm text-[#01c0a4] hover:text-[#00a085] flex items-center space-x-1 whitespace-nowrap transition-colors duration-300"
               >
                 <Download class="w-4 h-4" />
                 <span>Export to CSV</span>

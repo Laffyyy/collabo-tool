@@ -30,6 +30,10 @@
 	} from '$lib/api/user-management';
 	import type { ApiUser } from '$lib/api/types';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { themeStore } from '$lib/stores/theme.svelte';
+
+	// Theme reactivity
+	const isDarkMode = $derived(themeStore.isDarkMode);
 
 	// TypeScript interfaces
 	interface UserData {
@@ -1546,30 +1550,30 @@
 	<title>User Management - Workspace</title>
 </svelte:head>
 
-<div class="h-screen bg-gray-50 flex flex-col">
+<div class="h-screen {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} flex flex-col transition-colors duration-300">
 	<div class="w-full max-w-[98%] mx-auto flex-1 flex flex-col p-6 min-h-0">
 		<!-- Header -->
 		<div class="mb-4 fade-in">
-			<h1 class="text-xl font-bold text-gray-900 mb-1">User Management</h1>
-			<p class="text-sm text-gray-600">Manage users, administrators, and access permissions</p>
+			<h1 class="text-xl font-bold {isDarkMode ? 'text-white' : 'text-gray-900'} mb-1 transition-colors duration-300">User Management</h1>
+			<p class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Manage users, administrators, and access permissions</p>
 		</div>
 
 		<!-- Search and Filters -->
-		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0 fade-in">
+		<div class="{isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} rounded-xl shadow-sm border mb-4 flex-shrink-0 fade-in transition-colors duration-300">
 				<!-- Search Bar Section -->
-				<div class="p-4 border-b border-gray-200">
+				<div class="p-4 border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
 					<div class="flex flex-col lg:flex-row gap-3">
 						<!-- Search Bar -->
 						<div class="flex-1 lg:flex-initial lg:min-w-[800px] lg:max-w-[500px]">
 							<div class="relative">
-								<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+								<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 {isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 transition-colors duration-300" />
 								<input
 									bind:value={searchQuery}
 									oninput={(e) => handleInput(e, validateSearchInput)}
 									type="text"
 									maxlength="70"
 									placeholder="Search by name, email, or employee ID..."
-									class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+									class="w-full pl-9 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'}"
 								/>
 							</div>
 						</div>
@@ -1580,7 +1584,7 @@
 							{#if currentTab !== 'admin'}
 								<select
 									bind:value={selectedOU}
-									class="flex-1 max-w-[250px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+									class="flex-1 max-w-[250px] px-2 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'}"
 								>
 									<option value="all">All OUs</option>
 									{#each ouOptions as ou}
@@ -1593,7 +1597,7 @@
 							{#if ['locked', 'deactivated', 'first-time'].includes(currentTab)}
 								<select
 									bind:value={selectedRole}
-									class="flex-1 max-w-[150px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+									class="flex-1 max-w-[150px] px-2 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'}"
 								>
 									<option value="all">All Roles</option>
 									{#each roleOptions as role}
@@ -1606,7 +1610,7 @@
 							{#if !['locked', 'deactivated', 'first-time', 'frontline', 'support', 'supervisor', 'manager', 'admin'].includes(currentTab)}
 								<select
 									bind:value={selectedStatus}
-									class="flex-1 max-w-[120px] px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+									class="flex-1 max-w-[120px] px-2 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'}"
 								>
 									<option value="all">All Status</option>
 									{#each statusOptions as status}
@@ -1628,93 +1632,93 @@
 				</div>
 
 				<!-- Tabs -->
-				<div class="border-b border-gray-200">
+				<div class="border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
 					<nav class="flex space-x-6 px-4">
 						<button
 							onclick={() => changeTab('first-time')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'first-time' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'first-time' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<UserPlus class="w-4 h-4" />
 								<span>First-time</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.firstTime}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.firstTime}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('frontline')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'frontline' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'frontline' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<User class="w-4 h-4" />
 								<span>Frontline</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.frontline}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.frontline}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('support')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'support' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'support' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<Headphones class="w-4 h-4" />
 								<span>Support</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.support}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.support}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('supervisor')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'supervisor' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'supervisor' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<Users class="w-4 h-4" />
 								<span>Supervisor</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.supervisor}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.supervisor}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('manager')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'manager' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'manager' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<Crown class="w-4 h-4" />
 								<span>Manager</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.manager}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.manager}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('admin')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'admin' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'admin' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<Shield class="w-4 h-4" />
 								<span>Admin</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.admin}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.admin}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('locked')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'locked' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'locked' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<LockKeyhole class="w-4 h-4" />
 								<span>Locked</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.locked}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.locked}</span>
 							</div>
 						</button>
 
 						<button
 							onclick={() => changeTab('deactivated')}
-							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'deactivated' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {currentTab === 'deactivated' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							<div class="flex items-center space-x-2">
 								<X class="w-4 h-4" />
 								<span>Deactivated</span>
-								<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.deactivated}</span>
+								<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts.deactivated}</span>
 							</div>
 						</button>
 					</nav>
@@ -1722,7 +1726,7 @@
 
 				<!-- Selection Toolbar -->
 				{#if selectedRows.size > 0}
-					<div class="bg-blue-50 border-b border-blue-200 px-4 py-2.5">
+					<div class="{isDarkMode ? 'bg-blue-900/30 border-blue-700' : 'bg-blue-50 border-blue-200'} border-b px-4 py-2.5 transition-colors duration-300">
 						<div class="flex items-center justify-between">
 							<div class="flex items-center space-x-3">
 								<span class="text-sm font-medium text-blue-900">
@@ -1791,30 +1795,30 @@
 				<div class="w-full overflow-x-auto flex-1 min-h-0 relative">
 					<!-- Loading Overlay -->
 					{#if loadingUsers}
-						<div class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+						<div class="{isDarkMode ? 'bg-gray-800 bg-opacity-75' : 'bg-white bg-opacity-75'} absolute inset-0 flex items-center justify-center z-10 transition-colors duration-300">
 							<div class="text-center">
-								<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-								<p class="text-gray-500">Loading users...</p>
+								<div class="{isDarkMode ? 'border-[#01c0a4]' : 'border-blue-600'} animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4"></div>
+								<p class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} transition-colors duration-300">Loading users...</p>
 							</div>
 						</div>
 					{/if}
 					
 					<div class="h-full overflow-y-auto">
 					<table class="w-full table-fixed min-w-[1400px]">
-						<thead class="bg-gray-50">
+						<thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
 							<tr>
 								<th class="w-12 px-3 py-3 text-left">
 									<input
 										type="checkbox"
 										checked={selectAll}
 										onchange={handleSelectAll}
-										class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+										class="{isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300'} rounded text-[#01c0a4] focus:ring-[#01c0a4] transition-colors duration-300"
 									/>
 								</th>
 								<th class="w-32 px-3 py-3 text-left">
 									<button 
 										onclick={() => handleSort('employeeId')}
-										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+										class="{isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} flex items-center space-x-1 text-xs font-medium uppercase tracking-wider transition-colors"
 									>
 										<span>Employee ID</span>
 										<svelte:component this={getSortIcon('employeeId')} class="w-3 h-3" />
@@ -1823,7 +1827,7 @@
 								<th class="w-56 px-3 py-3 text-left">
 									<button 
 										onclick={() => handleSort('name')}
-										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+										class="{isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} flex items-center space-x-1 text-xs font-medium uppercase tracking-wider transition-colors"
 									>
 										<span>Name</span>
 										<svelte:component this={getSortIcon('name')} class="w-3 h-3" />
@@ -1832,7 +1836,7 @@
 								<th class="w-64 px-3 py-3 text-left">
 									<button 
 										onclick={() => handleSort('email')}
-										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+										class="{isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} flex items-center space-x-1 text-xs font-medium uppercase tracking-wider transition-colors"
 									>
 										<span>Email</span>
 										<svelte:component this={getSortIcon('email')} class="w-3 h-3" />
@@ -1841,7 +1845,7 @@
 								<th class="w-36 px-3 py-3 text-left">
 									<button 
 										onclick={() => handleSort('ou')}
-										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+										class="{isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} flex items-center space-x-1 text-xs font-medium uppercase tracking-wider transition-colors"
 									>
 										<span>OU</span>
 										<svelte:component this={getSortIcon('ou')} class="w-3 h-3" />
@@ -1850,34 +1854,34 @@
 								<th class="w-32 px-3 py-3 text-left">
 									<button 
 										onclick={() => handleSort('role')}
-										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+										class="{isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} flex items-center space-x-1 text-xs font-medium uppercase tracking-wider transition-colors"
 									>
 										<span>Role</span>
 										<svelte:component this={getSortIcon('role')} class="w-3 h-3" />
 									</button>
 								</th>
 								{#if currentTab === 'frontline' || currentTab === 'support'}
-									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
-									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+									<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-40 px-3 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Supervisor</th>
+									<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-40 px-3 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Manager</th>
 								{:else if currentTab === 'supervisor'}
-									<th class="w-40 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+									<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-40 px-3 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Manager</th>
 								{/if}
 								<th class="w-28 px-3 py-3 text-left">
 									<button 
 										onclick={() => handleSort('status')}
-										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
+										class="{isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'} flex items-center space-x-1 text-xs font-medium uppercase tracking-wider transition-colors"
 									>
 										<span>Status</span>
 										<svelte:component this={getSortIcon('status')} class="w-3 h-3" />
 									</button>
 								</th>
-								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+								<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-48 px-3 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Actions</th>
 							</tr>
 						</thead>
-						<tbody class="bg-white divide-y divide-gray-200">
+						<tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'} divide-y transition-colors duration-300">
 							{#each paginatedUsers() as user, index (user.id || `user-${index}`)}
 								<tr 
-									class="hover:bg-gray-50 {selectedRows.has(user.id) ? 'bg-blue-50' : ''} cursor-pointer" 
+									class="{isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} {selectedRows.has(user.id) ? (isDarkMode ? 'bg-blue-900/30' : 'bg-blue-50') : ''} cursor-pointer transition-colors duration-300" 
 									onclick={(e) => handleRowSelection(user.id, index, e)}
 								>
 									<td class="w-12 px-3 py-3 whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
@@ -1885,46 +1889,46 @@
 											type="checkbox"
 											checked={selectedRows.has(user.id)}
 											onchange={() => handleCheckboxChange(user.id, index)}
-											class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+											class="{isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300'} rounded text-[#01c0a4] focus:ring-[#01c0a4] transition-colors duration-300"
 										/>
 									</td>
-									<td class="w-32 px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+									<td class="{isDarkMode ? 'text-white' : 'text-gray-900'} w-32 px-3 py-3 whitespace-nowrap text-sm font-medium transition-colors duration-300">
 										{user.employeeId}
 									</td>
 									<td class="w-56 px-3 py-3 whitespace-nowrap">
 										<div class="flex items-center">
 											<div class="mr-2"><ProfileAvatar user={{ name: user.name }} size="sm" showOnlineStatus={false} /></div>
-											<div class="text-sm font-medium text-gray-900 truncate">{user.name}</div>
+											<div class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-sm font-medium truncate transition-colors duration-300">{user.name}</div>
 										</div>
 									</td>
-									<td class="w-64 px-3 py-3 whitespace-nowrap text-sm text-gray-500 truncate">
+									<td class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-64 px-3 py-3 whitespace-nowrap text-sm truncate transition-colors duration-300">
 										{user.email}
 									</td>
-									<td class="w-36 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+									<td class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-36 px-3 py-3 whitespace-nowrap text-sm transition-colors duration-300">
 										{user.ou}
 									</td>
-									<td class="w-32 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+									<td class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-32 px-3 py-3 whitespace-nowrap text-sm transition-colors duration-300">
 										{user.role}
 									</td>
 									{#if currentTab === 'frontline' || currentTab === 'support'}
-										<td class="w-40 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+										<td class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-40 px-3 py-3 whitespace-nowrap text-sm transition-colors duration-300">
 											{getSupervisorName(user.supervisorId)}
 										</td>
-										<td class="w-40 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+										<td class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-40 px-3 py-3 whitespace-nowrap text-sm transition-colors duration-300">
 											{getManagerName(user.managerId)}
 										</td>
 									{:else if currentTab === 'supervisor'}
-										<td class="w-40 px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+										<td class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} w-40 px-3 py-3 whitespace-nowrap text-sm transition-colors duration-300">
 											{getManagerName(user.managerId)}
 										</td>
 									{/if}
 									<td class="w-28 px-3 py-3 whitespace-nowrap">
 										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {
-											user.status === 'Active' ? 'bg-green-100 text-green-800' :
-											user.status === 'Locked' ? 'bg-red-100 text-red-800' :
-											user.status === 'Deactivated' ? 'bg-gray-100 text-gray-800' :
-											'bg-yellow-100 text-yellow-800'
-										}">
+											user.status === 'Active' ? (isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800') :
+											user.status === 'Locked' ? (isDarkMode ? 'bg-red-800 text-red-200' : 'bg-red-100 text-red-800') :
+											user.status === 'Deactivated' ? (isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800') :
+											(isDarkMode ? 'bg-yellow-800 text-yellow-200' : 'bg-yellow-100 text-yellow-800')
+										} transition-colors duration-300">
 											{user.status}
 										</span>
 									</td>
@@ -1933,7 +1937,7 @@
 											{#if user.role === 'Manager' || user.role === 'Supervisor'}
 												<button
 													onclick={() => showTeamInfo(user)}
-													class="flex items-center space-x-1 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
+													class="{isDarkMode ? 'bg-purple-800 text-purple-200 hover:bg-purple-700 hover:text-purple-100' : 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700'} flex items-center space-x-1 px-2 py-1 rounded-md transition-colors text-xs font-medium"
 													title="View team"
 												>
 													<Info class="w-3 h-3" />
@@ -1943,7 +1947,7 @@
 											
 											<button
 												onclick={() => editUser(user)}
-												class="flex items-center space-x-1 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-md transition-colors text-xs font-medium"
+												class="{isDarkMode ? 'bg-blue-800 text-blue-200 hover:bg-blue-700 hover:text-blue-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700'} flex items-center space-x-1 px-2 py-1 rounded-md transition-colors text-xs font-medium"
 												title="Edit user"
 											>
 												<Edit class="w-3 h-3" />
@@ -2060,15 +2064,15 @@
 
 				<!-- Pagination -->
 				{#if totalPages > 1}
-					<div class="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
-						<div class="text-sm text-gray-700">
+					<div class="{isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} px-6 py-3 border-t flex items-center justify-between transition-colors duration-300">
+						<div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">
 							Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalUsers)} of {totalUsers} results
 						</div>
 						<div class="flex items-center space-x-2">
 							<button
 								onclick={() => goToPage(currentPage - 1)}
 								disabled={currentPage === 1}
-								class="p-2 text-gray-500 hover:text-[#01c0a4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+								class="{isDarkMode ? 'text-gray-400 hover:text-[#01c0a4]' : 'text-gray-500 hover:text-[#01c0a4]'} p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 							>
 								<ChevronLeft class="w-5 h-5" />
 							</button>
@@ -2080,20 +2084,20 @@
 										class="px-3 py-2 text-sm font-medium rounded-lg transition-colors {
 											page === currentPage 
 												? 'bg-[#01c0a4] text-white' 
-												: 'text-gray-700 hover:bg-gray-100'
+												: (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')
 										}"
 									>
 										{page}
 									</button>
 								{:else if page === currentPage - 3 || page === currentPage + 3}
-									<span class="px-2 py-2 text-gray-500">...</span>
+									<span class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} px-2 py-2 transition-colors duration-300">...</span>
 								{/if}
 							{/each}
 
 							<button
 								onclick={() => goToPage(currentPage + 1)}
 								disabled={currentPage === totalPages}
-								class="p-2 text-gray-500 hover:text-[#01c0a4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+								class="{isDarkMode ? 'text-gray-400 hover:text-[#01c0a4]' : 'text-gray-500 hover:text-[#01c0a4]'} p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 							>
 								<ChevronRight class="w-5 h-5" />
 							</button>
@@ -2107,7 +2111,7 @@
 <!-- Edit User Modal -->
 {#if showEditUserModal && selectedUser}
 	<div 
-		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
+		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 {isDarkMode ? 'bg-black/50' : 'bg-black/25'}" 
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
@@ -2117,20 +2121,20 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div 
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" 
+			class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto transition-colors duration-300" 
 			role="document"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-xl font-semibold text-gray-900">Edit User</h2>
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
+				<h2 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-xl font-semibold transition-colors duration-300">Edit User</h2>
 				<button
 					onclick={() => closeModal('edit')}
-					class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+					class="{isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} p-2 rounded-lg transition-colors"
 					disabled={isAnyLoading()}
 				>
-					<X class="w-5 h-5 text-gray-500" />
+					<X class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} w-5 h-5 transition-colors duration-300" />
 				</button>
 			</div>
 
@@ -2145,14 +2149,14 @@
 							value={selectedUser.employeeId}
 							type="text"
 							disabled
-							class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-500 cursor-not-allowed"
+							class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-500'} w-full px-4 py-3 border rounded-lg cursor-not-allowed transition-colors duration-300"
 						/>
-						<p class="text-xs text-gray-500 mt-1">Employee ID cannot be changed</p>
+						<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-xs mt-1 transition-colors duration-300">Employee ID cannot be changed</p>
 					</div>
 
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
-							<label for="editName" class="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+							<label for="editName" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Name *</label>
 							<input
 								id="editName"
 								bind:value={editForm.name}
@@ -2160,11 +2164,11 @@
 								type="text"
 								maxlength="100"
 								placeholder="Enter full name"
-								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 							/>
 						</div>
 						<div>
-							<label for="editEmail" class="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+							<label for="editEmail" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Email *</label>
 							<input
 								id="editEmail"
 								bind:value={editForm.email}
@@ -2172,7 +2176,7 @@
 								type="email"
 								maxlength="70"
 								placeholder="Enter email address"
-								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 							/>
 						</div>
 					</div>
@@ -2180,18 +2184,18 @@
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
 							{#if selectedUser.type === 'admin'}
-								<label for="editRole" class="block text-sm font-medium text-gray-700 mb-2">Role</label>
-								<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-500">
+								<label for="editRole" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Role</label>
+								<div class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-500'} w-full px-4 py-3 border rounded-lg transition-colors duration-300">
 									Admin
 								</div>
 								<p class="text-xs text-orange-600 mt-1">Admin role cannot be changed</p>
 							{:else}
-								<label for="editRole" class="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+								<label for="editRole" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Role *</label>
 								<select
 									id="editRole"
 									bind:value={editForm.role}
 									onchange={handleRoleChangeEdit}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 								>
 									<option value="">Select Role</option>
 									{#each roleOptions as role}
@@ -2207,12 +2211,12 @@
 						<!-- Hierarchical Field Selection for Edit Form -->
 						{#if selectedUser.type !== 'admin' && editForm.role === 'Supervisor'}
 							<div>
-								<label for="editManager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+								<label for="editManager" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Manager</label>
 								<select
 									id="editManager"
 									bind:value={editForm.managerId}
 									onchange={handleManagerChangeEdit}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 								>
 									<option value="">Select Manager</option>
 									{#each getAvailableManagersEdit() as manager}
@@ -2227,7 +2231,7 @@
 									id="editSupervisor"
 									bind:value={editForm.supervisorId}
 									onchange={handleSupervisorChangeEdit}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 								>
 									<option value="">Select Supervisor</option>
 									{#each getAvailableSupervisorsEdit() as supervisor}
@@ -2243,8 +2247,8 @@
 						{#if selectedSupervisor && selectedSupervisor.managerId}
 							{@const selectedManager = hierarchyOptions.managers.find(m => m.id === selectedSupervisor.managerId)}
 							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-2">Manager (Auto-assigned)</label>
-								<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+								<label class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Manager (Auto-assigned)</label>
+								<div class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'} w-full px-4 py-3 border rounded-lg transition-colors duration-300">
 									{selectedManager ? `${selectedManager.name} - ${selectedManager.ou}` : 'Manager not found'}
 								</div>
 							</div>
@@ -2253,18 +2257,18 @@
 
 					{#if selectedUser.type !== 'admin'}
 						<div>
-							<label for="editOu" class="block text-sm font-medium text-gray-700 mb-2">
+							<label for="editOu" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">
 								Organizational Unit *
 								{#if editForm.role === 'Supervisor' && editForm.managerId}
-									<span class="text-sm text-gray-500">(Based on Manager's OUs)</span>
+									<span class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm transition-colors duration-300">(Based on Manager's OUs)</span>
 								{:else if (editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId}
-									<span class="text-sm text-gray-500">(Based on Supervisor's OU)</span>
+									<span class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm transition-colors duration-300">(Based on Supervisor's OU)</span>
 								{/if}
 							</label>
 							<select
 								id="editOu"
 								bind:value={editForm.ou}
-								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 							>
 								<option value="">Select OU</option>
 								{#each getAvailableOUsEdit() as ou}
@@ -2277,26 +2281,26 @@
 					<!-- Password Section -->
 					<!-- Current Status Display -->
 					<div>
-						<div class="block text-sm font-medium text-gray-700 mb-2">Current Status</div>
+						<div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Current Status</div>
 						<div class="flex items-center space-x-2">
 							<span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full {
-								selectedUser.status === 'Active' ? 'bg-green-100 text-green-800' :
-								selectedUser.status === 'Locked' ? 'bg-red-100 text-red-800' :
-								selectedUser.status === 'Deactivated' ? 'bg-gray-100 text-gray-800' :
-								'bg-yellow-100 text-yellow-800'
-							}">
+								selectedUser.status === 'Active' ? (isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800') :
+								selectedUser.status === 'Locked' ? (isDarkMode ? 'bg-red-800 text-red-200' : 'bg-red-100 text-red-800') :
+								selectedUser.status === 'Deactivated' ? (isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800') :
+								(isDarkMode ? 'bg-yellow-800 text-yellow-200' : 'bg-yellow-100 text-yellow-800')
+							} transition-colors duration-300">
 								{selectedUser.status}
 							</span>
-							<span class="text-xs text-gray-500">Status can be changed using action buttons in the main table</span>
+							<span class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-xs transition-colors duration-300">Status can be changed using action buttons in the main table</span>
 						</div>
 					</div>
 
 					<!-- Password Management Section -->
-					<div class="border-t border-gray-200 pt-4">
+					<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} border-t pt-4 transition-colors duration-300">
 						<div class="flex items-center mb-3">
 							<div class="flex items-center space-x-2">
-								<Key class="w-5 h-5 text-gray-600" />
-								<span class="text-sm font-medium text-gray-700">Password Management</span>
+								<Key class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} w-5 h-5 transition-colors duration-300" />
+								<span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm font-medium transition-colors duration-300">Password Management</span>
 							</div>
 						</div>
 
@@ -2304,13 +2308,13 @@
 							<div class="flex space-x-3">
 								<button
 									onclick={handlePasswordReset}
-									class="flex-1 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+									class="{isDarkMode ? 'bg-blue-800 text-blue-200 hover:bg-blue-700' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'} flex-1 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
 								>
 									Send Reset Email
 								</button>
 								<button
 									onclick={togglePasswordSection}
-									class="flex-1 px-4 py-2 bg-[#01c0a4]/10 text-[#01c0a4] rounded-lg hover:bg-[#01c0a4]/20 transition-colors text-sm font-medium"
+									class="{isDarkMode ? 'bg-[#01c0a4]/20 text-[#01c0a4] hover:bg-[#01c0a4]/30' : 'bg-[#01c0a4]/10 text-[#01c0a4] hover:bg-[#01c0a4]/20'} flex-1 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
 								>
 									Set New Password
 								</button>
@@ -2418,7 +2422,7 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end p-6 border-t border-gray-200">
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex justify-end p-6 border-t transition-colors duration-300">
 				<button
 					onclick={saveEditUser}
 					disabled={loadingEdit}
@@ -2460,7 +2464,7 @@
 <!-- Team Modal -->
 {#if showTeamModal && teamModalUser}
 	<div 
-		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
+		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 {isDarkMode ? 'bg-black/50' : 'bg-black/25'}" 
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
@@ -2468,19 +2472,19 @@
 		onkeydown={(e) => e.key === 'Escape' && closeModal('team')}
 	>
 		<div 
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto" 
+			class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto transition-colors duration-300" 
 			role="document"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
 				<div class="flex items-center space-x-3">
-					<div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-						<Users class="w-5 h-5 text-blue-600" />
+					<div class="{isDarkMode ? 'bg-blue-800' : 'bg-blue-100'} w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-300">
+						<Users class="{isDarkMode ? 'text-blue-200' : 'text-blue-600'} w-5 h-5 transition-colors duration-300" />
 					</div>
 					<div>
-						<h2 class="text-xl font-semibold text-gray-900">
+						<h2 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-xl font-semibold transition-colors duration-300">
 							{selectedSupervisorView ? `${selectedSupervisorView.name}'s Team` : 
 							 teamModalUser?.role === 'Supervisor' ? `${teamModalUser.name}'s Team` :
 							 `${teamModalUser.name}'s Organization`}
@@ -2516,8 +2520,8 @@
 					<!-- Loading State -->
 					<div class="flex items-center justify-center py-12">
 						<div class="text-center">
-							<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-							<p class="text-gray-500">Loading team information...</p>
+							<div class="{isDarkMode ? 'border-[#01c0a4]' : 'border-blue-600'} animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4"></div>
+							<p class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} transition-colors duration-300">Loading team information...</p>
 						</div>
 					</div>
 				{:else if selectedSupervisorView}
@@ -2767,7 +2771,7 @@
 <!-- Add User Modal -->
 {#if showAddUserModal}
 	<div 
-		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
+		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 {isDarkMode ? 'bg-black/50' : 'bg-black/25'}" 
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
@@ -2775,14 +2779,14 @@
 		onkeydown={(e) => e.key === 'Escape' && closeModal('add')}
 	>
 		<div 
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" 
+			class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto transition-colors duration-300" 
 			role="document"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-xl font-semibold text-gray-900">Add New User</h2>
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
+				<h2 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-xl font-semibold transition-colors duration-300">Add New User</h2>
 				<button
 					onclick={() => closeModal('add')}
 					class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -2793,17 +2797,17 @@
 			</div>
 
 			<!-- Tabs -->
-			<div class="border-b border-gray-200">
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} border-b transition-colors duration-300">
 				<nav class="flex space-x-8 px-6">
 					<button
 						onclick={() => addUserTab = 'individual'}
-						class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {addUserTab === 'individual' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {addUserTab === 'individual' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 					>
 						Individual Add
 					</button>
 					<button
 						onclick={() => addUserTab = 'bulk'}
-						class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {addUserTab === 'bulk' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {addUserTab === 'bulk' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 					>
 						Bulk Add
 					</button>
@@ -2817,7 +2821,7 @@
 					<div class="space-y-4">
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label for="employeeId" class="block text-sm font-medium text-gray-700 mb-2">Employee ID</label>
+								<label for="employeeId" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Employee ID</label>
 								<input
 									id="employeeId"
 									bind:value={individualForm.employeeId}
@@ -2825,11 +2829,11 @@
 									type="text"
 									maxlength="10"
 									placeholder="Enter employee ID"
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 								/>
 							</div>
 							<div>
-								<label for="name" class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+								<label for="name" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Name</label>
 								<input
 									id="name"
 									bind:value={individualForm.name}
@@ -2837,13 +2841,13 @@
 									type="text"
 									maxlength="100"
 									placeholder="Enter full name"
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 								/>
 							</div>
 						</div>
 
 						<div>
-							<label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+							<label for="email" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Email</label>
 							<input
 								id="email"
 								bind:value={individualForm.email}
@@ -2851,18 +2855,18 @@
 								type="email"
 								maxlength="70"
 								placeholder="Enter email address"
-								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 							/>
 						</div>
 
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<label for="role" class="block text-sm font-medium text-gray-700 mb-2">Role</label>
+								<label for="role" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Role</label>
 								<select
 									id="role"
 									bind:value={individualForm.role}
 									onchange={handleRoleChange}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 								>
 									<option value="">Select Role</option>
 									{#each roleOptions as role}
@@ -2874,12 +2878,12 @@
 							<!-- Hierarchical Field Selection -->
 							{#if individualForm.role === 'Supervisor'}
 								<div>
-									<label for="manager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+									<label for="manager" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Manager</label>
 									<select
 										id="manager"
 										bind:value={individualForm.managerId}
 										onchange={handleManagerChange}
-										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+										class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 									>
 										<option value="">Select Manager</option>
 										{#each getAvailableManagers() as manager}
@@ -2889,12 +2893,12 @@
 								</div>
 							{:else if individualForm.role === 'Frontline' || individualForm.role === 'Support'}
 								<div>
-									<label for="supervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+									<label for="supervisor" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Supervisor</label>
 									<select
 										id="supervisor"
 										bind:value={individualForm.supervisorId}
 										onchange={handleSupervisorChange}
-										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+										class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 									>
 										<option value="">Select Supervisor</option>
 										{#each getAvailableSupervisors() as supervisor}
@@ -2908,8 +2912,8 @@
 									{#if selectedSupervisor && selectedSupervisor.managerId}
 										{@const selectedManager = hierarchyOptions.managers.find(m => m.id === selectedSupervisor.managerId)}
 										<div>
-											<label class="block text-sm font-medium text-gray-700 mb-2">Manager (Auto-assigned)</label>
-											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+											<label class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Manager (Auto-assigned)</label>
+											<div class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'} w-full px-4 py-3 border rounded-lg transition-colors duration-300">
 												{selectedManager ? `${selectedManager.name} - ${selectedManager.ou}` : 'Manager not found'}
 											</div>
 										</div>
@@ -2919,12 +2923,12 @@
 
 							{#if individualForm.role !== 'Admin'}
 								<div>
-									<label for="ou" class="block text-sm font-medium text-gray-700 mb-2">
+									<label for="ou" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">
 										Organizational Unit
 										{#if individualForm.role === 'Supervisor' && individualForm.managerId}
-											<span class="text-sm text-gray-500">(Auto-filled based on Manager's OU)</span>
+											<span class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm transition-colors duration-300">(Auto-filled based on Manager's OU)</span>
 										{:else if (individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId}
-											<span class="text-sm text-gray-500">(Auto-filled based on Supervisor's OU)</span>
+											<span class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm transition-colors duration-300">(Auto-filled based on Supervisor's OU)</span>
 										{/if}
 									</label>
 									{#if (individualForm.role === 'Supervisor' && individualForm.managerId && individualForm.ou) || ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId && individualForm.ou)}
@@ -2933,16 +2937,16 @@
 											id="ou"
 											value={individualForm.ou}
 											readonly
-											class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed"
+											class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-600'} w-full px-4 py-3 border rounded-lg cursor-not-allowed transition-colors duration-300"
 											placeholder="Auto-filled based on hierarchy"
 										/>
-										<p class="text-xs text-gray-500 mt-1">OU is automatically determined by your selected {individualForm.role === 'Supervisor' ? 'manager' : 'supervisor'}</p>
+										<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-xs mt-1 transition-colors duration-300">OU is automatically determined by your selected {individualForm.role === 'Supervisor' ? 'manager' : 'supervisor'}</p>
 									{:else}
 										<!-- Dropdown for manual selection -->
 										<select
 											id="ou"
 											bind:value={individualForm.ou}
-											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+											class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'} w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 										>
 											<option value="">Select OU</option>
 											{#each getAvailableOUs() as ou}
@@ -2980,13 +2984,13 @@
 							<div class="mb-4">
 								<button
 									onclick={downloadTemplate}
-									class="inline-flex items-center space-x-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors"
+									class="{isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} inline-flex items-center space-x-2 px-6 py-3 rounded-lg transition-colors"
 								>
 									<Download class="w-5 h-5" />
 									<span>Download Templates</span>
 								</button>
 							</div>
-							<div class="text-sm text-gray-600 mb-4 space-y-2">
+							<div class="{isDarkMode ? 'text-gray-300' : 'text-gray-600'} text-sm mb-4 space-y-2 transition-colors duration-300">
 								<p class="font-medium">Four template files will be downloaded:</p>
 								<div class="text-left max-w-md mx-auto space-y-1">
 									<p><strong>• Frontline/Support:</strong> Includes Supervisor Name and Manager Name columns</p>
@@ -3034,7 +3038,7 @@
 <!-- Bulk Preview Modal -->
 {#if showBulkPreview}
 	<div 
-		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" 
+		class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 {isDarkMode ? 'bg-black/50' : 'bg-black/25'}" 
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
@@ -3042,15 +3046,15 @@
 		onkeydown={(e) => e.key === 'Escape' && (showBulkPreview = false)}
 	>
 		<div 
-			class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto" 
+			class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto transition-colors duration-300" 
 			role="document"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-xl font-semibold text-gray-900">Preview Upload Data</h2>
-				<button onclick={() => showBulkPreview = false} class="p-2 text-gray-500 hover:text-gray-700 transition-colors">
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
+				<h2 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-xl font-semibold transition-colors duration-300">Preview Upload Data</h2>
+				<button onclick={() => showBulkPreview = false} class="{isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'} p-2 transition-colors">
 					<X class="w-5 h-5" />
 				</button>
 			</div>
@@ -3145,3 +3149,51 @@
 </div>
 
 <svelte:window onkeydown={handleKeydown} />
+
+<style>
+	/* Custom scrollbar styling for select dropdowns in dark mode */
+	:global(.dark select) {
+		scrollbar-width: thin;
+		scrollbar-color: #6b7280 #374151;
+	}
+	
+	:global(.dark select::-webkit-scrollbar) {
+		width: 8px;
+	}
+	
+	:global(.dark select::-webkit-scrollbar-track) {
+		background: #374151; /* gray-700 */
+		border-radius: 4px;
+	}
+	
+	:global(.dark select::-webkit-scrollbar-thumb) {
+		background: #6b7280; /* gray-500 */
+		border-radius: 4px;
+		border: 1px solid #374151;
+	}
+	
+	:global(.dark select::-webkit-scrollbar-thumb:hover) {
+		background: #9ca3af; /* gray-400 */
+	}
+	
+	/* Also style any other scrollbars in dark mode within this component */
+	:global(.dark) :global(*::-webkit-scrollbar) {
+		width: 8px;
+		height: 8px;
+	}
+	
+	:global(.dark) :global(*::-webkit-scrollbar-track) {
+		background: #374151;
+		border-radius: 4px;
+	}
+	
+	:global(.dark) :global(*::-webkit-scrollbar-thumb) {
+		background: #6b7280;
+		border-radius: 4px;
+		border: 1px solid #374151;
+	}
+	
+	:global(.dark) :global(*::-webkit-scrollbar-thumb:hover) {
+		background: #9ca3af;
+	}
+</style>
