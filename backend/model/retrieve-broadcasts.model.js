@@ -53,7 +53,8 @@ class RetrieveBroadcastModel {
           b.drequiresacknowledgment, b.dresponsetype, b.dstatus, b.dchoices,
           b.tcreatedat, b.tscheduledfor, b.tsentat, b.teventdate, b.tenddate,
           b.dreportreason, b.dreportedby, b.treportedat,
-          u.demail AS createdby_email
+          u.demail AS createdby_email,
+          b.drecurring, b.drecurringtype, b.drecurringdays, b.trecurringtime
         FROM tblbroadcasts b
         LEFT JOIN tblusers u ON b.dcreatedby = u.did
         ${whereClause}
@@ -170,48 +171,140 @@ class RetrieveBroadcastModel {
    * @returns {Object} Formatted broadcast
    */
   formatBroadcast(broadcast) {
-    if (!broadcast) return null;
+  if (!broadcast) return null;
 
-    // Only broadcasts with dstatus === 'done' should be considered completed.
-    // Deleted and archived should not be shown in completed.
-    const isActive =
-      broadcast.dstatus !== 'done' &&
-      broadcast.dstatus !== 'deleted' &&
-      broadcast.dstatus !== 'archived';
+  // Only broadcasts with dstatus === 'done' should be considered completed.
+  // Deleted and archived should not be shown in completed.
+  const isActive =
+    broadcast.dstatus !== 'done' &&
+    broadcast.dstatus !== 'deleted' &&
+    broadcast.dstatus !== 'archived';
 
-    const isCompleted =
-      broadcast.dstatus === 'done';
-
-    return {
-      id: broadcast.did,
-      title: broadcast.dtitle,
-      content: broadcast.dcontent,
-      priority: broadcast.dpriority,
-      status: broadcast.dstatus, 
-      createdByEmail: broadcast.createdby_email,
-      requiresAcknowledgment: broadcast.drequiresacknowledgment || false,
-      responseType: broadcast.dresponsetype || 'none',
-      status: broadcast.dstatus,
-      choices: broadcast.dchoices,
-      createdAt: broadcast.tcreatedat,
-      creatorFirstName: broadcast.creator_firstname || '',
-      creatorLastName: broadcast.creator_lastname || '',
-      scheduledFor: broadcast.tscheduledfor,
-      sentAt: broadcast.tsentat,
-      eventDate: broadcast.teventdate,
-      endDate: broadcast.tenddate,
-      reportReason: broadcast.dreportreason,
-      reportedBy: broadcast.dreportedby,
-      reportedAt: broadcast.treportedat,
-
-      // Frontend compatibility fields (using defaults since not in current schema)
-      targetRoles: [],
-      targetOUs: [],
-      acknowledgments: [],
-      isActive,
-      isCompleted // <-- Add this field for frontend to easily filter completed broadcasts
-    };
+  const isCompleted = broadcast.dstatus === 'done';
+  
+  // Parse JSON fields for recurring data
+    let recurrenceDays = null;
+  if (broadcast.drecurringdays) {
+    // Check if it's already a JavaScript array or object (pg driver parses jsonb)
+    if (Array.isArray(broadcast.drecurringdays) || 
+       (typeof broadcast.drecurringdays === 'object' && broadcast.drecurringdays !== null)) {
+      recurrenceDays = broadcast.drecurringdays;
+      console.log('[DEBUG] Already parsed recurrenceDays:', recurrenceDays);
+    } else if (typeof broadcast.drecurringdays === 'string') {
+      try {
+        // Try to parse if it's a JSON string
+        recurrenceDays = JSON.parse(broadcast.drecurringdays);
+        console.log('[DEBUG] Parsed recurrenceDays from string:', recurrenceDays);
+      } catch (error) {
+        // It's a regular string (like "Friday")
+        if (!isNaN(broadcast.drecurringdays)) {
+          // If it's a number stored as string (for monthly recurrence)
+          recurrenceDays = [parseInt(broadcast.drecurringdays)];
+        } else if (broadcast.drecurringdays.includes(',')) {
+          // If it's a comma-separated list of days
+          recurrenceDays = broadcast.drecurringdays.split(',').map(day => day.trim());
+        } else {
+          // If it's a single day
+          recurrenceDays = [broadcast.drecurringdays];
+        }
+        console.log('[DEBUG] Created recurrenceDays from string:', recurrenceDays);
+      }
+    }
   }
+  
+  let recurrenceTimes = null;
+  if (broadcast.trecurringtime) {
+    // Check if it's already a JavaScript array or object (pg driver parses jsonb)
+    if (Array.isArray(broadcast.trecurringtime) || 
+       (typeof broadcast.trecurringtime === 'object' && broadcast.trecurringtime !== null)) {
+      recurrenceTimes = broadcast.trecurringtime;
+      console.log('[DEBUG] Already parsed recurrenceTimes:', recurrenceTimes);
+    } else if (typeof broadcast.trecurringtime === 'string') {
+      try {
+        // Try to parse if it's a JSON string
+        recurrenceTimes = JSON.parse(broadcast.trecurringtime);
+        console.log('[DEBUG] Parsed recurrenceTimes from string:', recurrenceTimes);
+      } catch (error) {
+        // It's a regular string
+        if (broadcast.trecurringtime.includes(',')) {
+          // If it's a comma-separated list of times
+          recurrenceTimes = broadcast.trecurringtime.split(',').map(time => time.trim());
+        } else {
+          // If it's a single time
+          recurrenceTimes = [broadcast.trecurringtime];
+        }
+        console.log('[DEBUG] Created recurrenceTimes from string:', recurrenceTimes);
+      }
+    }
+  }
+  
+  // Extract monthlyDay from recurrenceDays if it's a monthly pattern
+let monthlyDay = null;
+  if (broadcast.drecurringtype === 'monthly' && 
+      Array.isArray(recurrenceDays) && 
+      recurrenceDays.length > 0) {
+    // Try to parse as integer if it's a string
+    if (typeof recurrenceDays[0] === 'string' && !isNaN(recurrenceDays[0])) {
+      monthlyDay = parseInt(recurrenceDays[0]);
+    } else {
+      monthlyDay = recurrenceDays[0];
+    }
+    console.log('[DEBUG] Extracted monthlyDay:', monthlyDay);
+  }
+
+  // Parse choices JSON if present
+  let choices = null;
+  if (broadcast.dchoices) {
+    // Check if it's already a JavaScript array or object (pg driver parses jsonb)
+    if (Array.isArray(broadcast.dchoices) || 
+       (typeof broadcast.dchoices === 'object' && broadcast.dchoices !== null)) {
+      choices = broadcast.dchoices;
+    } else if (typeof broadcast.dchoices === 'string') {
+      try {
+        choices = JSON.parse(broadcast.dchoices);
+      } catch (error) {
+        console.error('Error parsing choices:', error);
+      }
+    }
+  }
+
+  return {
+    id: broadcast.did,
+    title: broadcast.dtitle,
+    content: broadcast.dcontent,
+    priority: broadcast.dpriority,
+    status: broadcast.dstatus, 
+    createdByEmail: broadcast.createdby_email,
+    requiresAcknowledgment: broadcast.drequiresacknowledgment || false,
+    responseType: broadcast.dresponsetype || 'none',
+    status: broadcast.dstatus,
+    choices: choices,
+    createdAt: broadcast.tcreatedat,
+    creatorFirstName: broadcast.creator_firstname || '',
+    creatorLastName: broadcast.creator_lastname || '',
+    scheduledFor: broadcast.tscheduledfor,
+    sentAt: broadcast.tsentat,
+    eventDate: broadcast.teventdate,
+    endDate: broadcast.tenddate,
+    reportReason: broadcast.dreportreason,
+    reportedBy: broadcast.dreportedby,
+    reportedAt: broadcast.treportedat,
+    
+    // Add recurring fields
+    isRecurring: broadcast.drecurring || false,
+    recurrencePattern: broadcast.drecurringtype,
+    recurrenceDays: recurrenceDays,
+    recurrenceTimes: recurrenceTimes,
+    monthlyDay: monthlyDay,
+
+    // Frontend compatibility fields
+    targetRoles: [],
+    targetOUs: [],
+    acknowledgments: [],
+    isActive,
+    isCompleted
+  };
+}
 
   /**
    * Create a new broadcast using existing schema

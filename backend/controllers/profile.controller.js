@@ -1,5 +1,5 @@
 const ProfileService = require('../services/profile.services');
-const { validateRequest } = require('../utils/validate');
+const { validationResult } = require('express-validator');
 
 class ProfileController {
   /**
@@ -8,8 +8,12 @@ class ProfileController {
   async getUserProfile(req, res, next) {
     try {
       const userId = req.user.id;
+      console.log('[Profile Controller] Getting profile for userId:', userId);
       
       const result = await ProfileService.getUserProfile(userId);
+      console.log('[Profile Controller] Service result:', result);
+      console.log('[Profile Controller] Profile photo in result:', result.profile?.profilePhoto);
+      console.log('[Profile Controller] Cover photo in result:', result.profile?.coverPhoto);
       
       res.status(200).json({
         ok: true,
@@ -26,28 +30,36 @@ class ProfileController {
    */
   async updateUserProfile(req, res, next) {
     try {
-      // Validate request
-      const errors = validateRequest(req);
-      if (errors.length > 0) {
+      // Check for validation errors from express-validator middleware
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
         return res.status(400).json({
           ok: false,
-          errors
+          message: 'Validation failed',
+          errors: errors.array()
         });
       }
 
       const userId = req.user.id;
       const updateData = req.body;
       
+      console.log('Controller updateUserProfile - userId:', userId);
+      console.log('Controller updateUserProfile - updateData:', updateData);
+      
       const result = await ProfileService.updateUserProfile(userId, updateData);
       
       res.status(200).json({
         ok: true,
-        data: result,
-        message: result.message
+        data: { profile: result.profile },
+        message: 'Profile updated successfully'
       });
     } catch (error) {
       console.error('Controller error in updateUserProfile:', error);
-      next(error);
+      res.status(500).json({
+        ok: false,
+        message: error.message || 'Failed to update profile',
+        error: error.message
+      });
     }
   }
 
