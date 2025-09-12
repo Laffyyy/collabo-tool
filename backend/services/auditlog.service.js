@@ -130,7 +130,20 @@ class AuditLogService {
    * @returns {Object} Formatted log data
    */
   static formatAuditLog(rawLog) {
-    const details = rawLog.details || {};
+    // Parse details if it's a string, otherwise use as-is
+    let details = {};
+    if (rawLog.details) {
+      if (typeof rawLog.details === 'string') {
+        try {
+          details = JSON.parse(rawLog.details);
+        } catch (e) {
+          console.warn('Failed to parse details JSON:', rawLog.details);
+          details = { description: rawLog.details };
+        }
+      } else {
+        details = rawLog.details;
+      }
+    }
     
     // Map database dtargettype to frontend category names
     const categoryMapping = {
@@ -143,6 +156,33 @@ class AuditLogService {
     
     const category = categoryMapping[rawLog.target_type] || rawLog.target_type || 'system';
     
+    // Format details for display - show the JSON content or a structured message
+    let formattedDetails;
+    if (details.reason) {
+      formattedDetails = `Reason: ${details.reason}`;
+    } else if (details.description) {
+      formattedDetails = details.description;
+    } else if (Object.keys(details).length > 0) {
+      // If there are other properties, show them as key-value pairs
+      formattedDetails = Object.entries(details)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+    } else {
+      // Fallback to action if no details available
+      formattedDetails = rawLog.action;
+    }
+    
+    // Determine success status based on action name
+    let success = true; // Default to success
+    const actionUpper = rawLog.action.toUpperCase();
+    
+    if (actionUpper.includes('FAIL')) {
+      success = false;
+    } else if (actionUpper.includes('SUCCESS')) {
+      success = true;
+    }
+    // If neither SUCCESS nor FAIL is found, keep default (true)
+    
     return {
       id: rawLog.id,
       timestamp: new Date(rawLog.created_at),
@@ -150,11 +190,11 @@ class AuditLogService {
       action: rawLog.action,
       category: category,
       target: details.target || rawLog.target_type || null,
-      details: details.description || rawLog.action,
+      details: formattedDetails,
       ipAddress: rawLog.ip_address || 'Unknown',
       userAgent: rawLog.user_agent || 'Unknown',
       severity: details.severity || this.inferSeverityFromAction(rawLog.action),
-      success: details.success !== undefined ? details.success : true,
+      success: success, // Use determined success status instead of details.success
       priority: details.priority || null,
       // Additional user info for detailed view
       userInfo: {
@@ -162,7 +202,9 @@ class AuditLogService {
         firstName: rawLog.user_first_name,
         lastName: rawLog.user_last_name,
         username: rawLog.username
-      }
+      },
+      // Include raw details for debugging
+      rawDetails: details
     };
   }
   
