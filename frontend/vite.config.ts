@@ -7,6 +7,13 @@ export default defineConfig({
 		host: '0.0.0.0', // <- 👈 This exposes it to the local network
 		port: 5173, // optional: you can set a fixed port if needed
 		allowedHosts: ['.ngrok-free.app'],
+		proxy: {
+			'/api': {
+				target: 'http://localhost:5000',
+				changeOrigin: true,
+				secure: false
+			}
+		}
 	},
 	plugins: [tailwindcss(), sveltekit()],
 	test: {

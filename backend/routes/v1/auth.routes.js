@@ -72,5 +72,8 @@ router.post(
   authController.answerSecurityQuestions
 );
 
+// Demo login endpoint for frontend testing
+router.post('/demo-login', authController.demoLogin);
+
 module.exports = router;
 

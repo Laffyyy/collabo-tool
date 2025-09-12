@@ -1,276 +1,88 @@
 <script lang="ts">
   import { FileText, Search, Filter, Download, Eye, AlertTriangle, User, Activity, Shield, Database, Calendar, MessageSquare, Radio, Users, Building2, Settings } from 'lucide-svelte';
-
-  interface AdminLog {
-    id: string;
-    timestamp: Date;
-    user: string;
-    action: string;
-    category: 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config' | 'security' | 'system';
-    target?: string;
-    details: string;
-    ipAddress: string;
-    userAgent: string;
-    severity: 'low' | 'medium' | 'high' | 'critical';
-    success: boolean;
-    priority?: 'low' | 'medium' | 'high'; // For broadcast logs
-  }
+  import { AuditLogAPI, type AuditLog, type AuditLogsData } from '$lib/api/auditlog';
+  import { onMount } from 'svelte';
 
   let activeTab = $state<'all' | 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config'>('all');
   let searchQuery = $state('');
+  let currentPage = $state(1);
+  let pageLimit = $state(50);
+  
+  // Data state
+  let logsData = $state<AuditLogsData | null>(null);
+  let loading = $state(false);
+  let error = $state<string | null>(null);
+  let selectedLog = $state<AuditLog | null>(null);
+  let showLogDetails = $state(false);
 
-  // Mock admin logs data
-  const mockLogs: AdminLog[] = [
-    // Chat logs
-    {
-      id: '1',
-      timestamp: new Date('2024-01-15T14:30:00'),
-      user: 'admin@company.com',
-      action: 'Group Chat Created',
-      category: 'chat',
-      target: 'Marketing Team Chat',
-      details: 'Created new group chat for Marketing department with 15 members',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '2',
-      timestamp: new Date('2024-01-15T14:25:00'),
-      user: 'manager@company.com',
-      action: 'Message Deleted',
-      category: 'chat',
-      target: 'General Chat',
-      details: 'Deleted inappropriate message from user john.doe@company.com',
-      ipAddress: '192.168.1.105',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    // Broadcast logs
-    {
-      id: '3',
-      timestamp: new Date('2024-01-15T14:20:00'),
-      user: 'admin@company.com',
-      action: 'Broadcast Sent',
-      category: 'broadcast',
-      target: 'All Employees',
-      details: 'Emergency maintenance notice sent to all users',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'high',
-      success: true,
-      priority: 'high'
-    },
-    {
-      id: '4',
-      timestamp: new Date('2024-01-15T14:15:00'),
-      user: 'manager@company.com',
-      action: 'Broadcast Approved',
-      category: 'broadcast',
-      target: 'Department Update',
-      details: 'Approved broadcast message for HR department',
-      ipAddress: '192.168.1.105',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true,
-      priority: 'medium'
-    },
-    // User Management logs
-    {
-      id: '5',
-      timestamp: new Date('2024-01-15T14:10:00'),
-      user: 'admin@company.com',
-      action: 'User Created',
-      category: 'user-management',
-      target: 'john.doe@company.com',
-      details: 'Created new user account with Supervisor role',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '6',
-      timestamp: new Date('2024-01-15T14:05:00'),
-      user: 'admin@company.com',
-      action: 'User Role Changed',
-      category: 'user-management',
-      target: 'jane.smith@company.com',
-      details: 'Changed user role from Support to Supervisor',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    // OU Management logs
-    {
-      id: '7',
-      timestamp: new Date('2024-01-15T14:00:00'),
-      user: 'admin@company.com',
-      action: 'OU Created',
-      category: 'ou-management',
-      target: 'Marketing West',
-      details: 'Created new organizational unit for West Coast Marketing',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '8',
-      timestamp: new Date('2024-01-15T13:55:00'),
-      user: 'admin@company.com',
-      action: 'OU Rules Updated',
-      category: 'ou-management',
-      target: 'Sales Department',
-      details: 'Updated chat permissions for frontline users',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    // Global Config logs
-    {
-      id: '9',
-      timestamp: new Date('2024-01-15T13:50:00'),
-      user: 'admin@company.com',
-      action: 'Global Config Updated',
-      category: 'global-config',
-      details: 'Updated default chat retention policy to 365 days',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    {
-      id: '10',
-      timestamp: new Date('2024-01-15T13:45:00'),
-      user: 'admin@company.com',
-      action: 'Security Policy Updated',
-      category: 'global-config',
-      details: 'Updated password policy requirements',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'high',
-      success: true
+  // Load audit logs from API
+  const loadLogs = async () => {
+    loading = true;
+    error = null;
+    
+    try {
+      const params = {
+        page: currentPage,
+        limit: pageLimit,
+        category: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery.trim() || undefined
+      };
+      
+      logsData = await AuditLogAPI.getLogs(params);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load audit logs';
+      console.error('Error loading logs:', err);
+    } finally {
+      loading = false;
     }
-  ];
+  };
+
+  // Reactive loading when filters change
+  $effect(() => {
+    // Reset to first page when filters change
+    if (activeTab || searchQuery) {
+      currentPage = 1;
+    }
+    loadLogs();
+  });
+
+  // Load logs on component mount
+  onMount(() => {
+    loadLogs();
+  });
 
   // Computed values
-  const filteredLogs = $derived(() => {
-    let filtered = logs;
-
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(log =>
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (log.target && log.target.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-
-    // Tab filter
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(log => log.category === activeTab);
-    }
-
-    // Create a copy before sorting to avoid mutating the original array
-    return [...filtered].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  const logs = $derived(logsData?.logs || []);
+  const tabCounts = $derived(logsData?.categoryCounts || {
+    all: 0,
+    chat: 0,
+    broadcast: 0,
+    'user-management': 0,
+    'ou-management': 0,
+    'global-config': 0
   });
+  const pagination = $derived(logsData?.pagination);
 
-  const tabCounts = $derived(() => {
-    return {
-      all: logs.length,
-      chat: logs.filter(log => log.category === 'chat').length,
-      broadcast: logs.filter(log => log.category === 'broadcast').length,
-      'user-management': logs.filter(log => log.category === 'user-management').length,
-      'ou-management': logs.filter(log => log.category === 'ou-management').length,
-      'global-config': logs.filter(log => log.category === 'global-config').length,
-    };
-  });
+  // Handle search with debouncing
+  let searchTimeout: number;
+  const handleSearch = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      searchQuery = target.value;
+    }, 300);
+  };
 
-  // Additional mock data for demonstration
-  const additionalMockData = [
-    {
-      id: '100',
-      timestamp: new Date('2024-01-15T13:30:00'),
-      user: 'system',
-      action: 'Daily Backup',
-    },
-    {
-      id: '4',
-      timestamp: new Date('2024-01-15T14:15:00'),
-      user: 'manager@company.com',
-      action: 'User Role Change',
-      category: 'user',
-      target: 'jane.smith@company.com',
-      details: 'Changed user role from Support to Supervisor',
-      ipAddress: '192.168.1.150',
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    {
-      id: '5',
-      timestamp: new Date('2024-01-15T14:10:00'),
-      user: 'admin@company.com',
-      action: 'Failed Login Attempt',
-      category: 'security',
-      target: 'unknown_user@company.com',
-      details: 'Multiple failed login attempts detected from same IP',
-      ipAddress: '203.0.113.42',
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-      severity: 'high',
-      success: false
-    },
-    {
-      id: '6',
-      timestamp: new Date('2024-01-15T14:05:00'),
-      user: 'admin@company.com',
-      action: 'Broadcast Deletion',
-      category: 'data',
-      target: 'Weekly Team Update #47',
-      details: 'Deleted archived broadcast message',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '7',
-      timestamp: new Date('2024-01-15T14:00:00'),
-      user: 'system',
-      action: 'Configuration Change',
-      category: 'configuration',
-      details: 'Session timeout changed from 8 hours to 6 hours',
-      ipAddress: '127.0.0.1',
-      userAgent: 'System/1.0',
-      severity: 'medium',
-      success: true
-    },
-    {
-      id: '8',
-      timestamp: new Date('2024-01-15T13:55:00'),
-      user: 'admin@company.com',
-      action: 'User Suspension',
-      category: 'user',
-      target: 'temp.contractor@company.com',
-      details: 'Suspended user account due to policy violation',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'high',
-      success: true
-    }
-  ];
+  // Handle tab change
+  const handleTabChange = (tab: typeof activeTab) => {
+    activeTab = tab;
+  };
 
-  let logs = $state(mockLogs);
-  let selectedLog = $state<AdminLog | null>(null);
-  let showLogDetails = $state(false);
-  
-  // Filter logs based on search and filters (moved to derived above)
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    currentPage = page;
+    loadLogs();
+  };
 
   const formatTimestamp = (date: Date) => {
     return date.toLocaleString('en-US', {
@@ -285,22 +97,26 @@
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'user': return User;
+      case 'chat': return MessageSquare;
+      case 'broadcast': return Radio;
+      case 'user-management': return Users;
+      case 'ou-management': return Building2;
+      case 'global-config': return Settings;
       case 'security': return Shield;
       case 'system': return Activity;
-      case 'data': return Database;
-      case 'configuration': return FileText;
       default: return Activity;
     }
   };
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'user': return 'text-blue-600 bg-blue-50';
+      case 'chat': return 'text-blue-600 bg-blue-50';
+      case 'broadcast': return 'text-purple-600 bg-purple-50';
+      case 'user-management': return 'text-green-600 bg-green-50';
+      case 'ou-management': return 'text-orange-600 bg-orange-50';
+      case 'global-config': return 'text-gray-600 bg-gray-50';
       case 'security': return 'text-red-600 bg-red-50';
-      case 'system': return 'text-green-600 bg-green-50';
-      case 'data': return 'text-purple-600 bg-purple-50';
-      case 'configuration': return 'text-indigo-600 bg-indigo-50';
+      case 'system': return 'text-indigo-600 bg-indigo-50';
       default: return 'text-gray-600 bg-gray-50';
     }
   };
@@ -315,34 +131,40 @@
     }
   };
 
-  const exportLogs = () => {
-    const csvContent = [
-      ['Timestamp', 'User', 'Action', 'Category', 'Target', 'Details', 'IP Address', 'Severity', 'Success'].join(','),
-      ...filteredLogs().map(log => [
-        formatTimestamp(log.timestamp),
-        log.user,
-        log.action,
-        log.category,
-        log.target || '',
-        `"${log.details}"`,
-        log.ipAddress,
-        log.severity,
-        log.success ? 'Yes' : 'No'
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `admin-logs-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportLogs = async () => {
+    try {
+      loading = true;
+      const params = {
+        format: 'csv' as const,
+        category: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery.trim() || undefined
+      };
+      
+      const blob = await AuditLogAPI.exportLogs(params);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-logs-${activeTab}-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to export logs';
+      console.error('Error exporting logs:', err);
+    } finally {
+      loading = false;
+    }
   };
 
-  const viewLogDetails = (log: AdminLog) => {
-    selectedLog = log;
-    showLogDetails = true;
+  const viewLogDetails = async (log: AuditLog) => {
+    try {
+      // Fetch full log details if needed
+      const fullLog = await AuditLogAPI.getLogById(log.id);
+      selectedLog = fullLog;
+      showLogDetails = true;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load log details';
+      console.error('Error loading log details:', err);
+    }
   };
 </script>
 
@@ -368,10 +190,11 @@
 						<div class="relative">
 							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
 							<input
-								bind:value={searchQuery}
+								oninput={handleSearch}
 								type="text"
 								placeholder="Search logs by action, user, or details..."
 								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								disabled={loading}
 							/>
 						</div>
 					</div>
@@ -381,10 +204,11 @@
 						<!-- Export Button -->
 						<button
 							onclick={exportLogs}
-							class="px-4 py-2.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors font-medium text-sm flex items-center space-x-2 whitespace-nowrap"
+							disabled={loading}
+							class="px-4 py-2.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors font-medium text-sm flex items-center space-x-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Download class="w-4 h-4" />
-							<span>Export</span>
+							<span>{loading ? 'Exporting...' : 'Export'}</span>
 						</button>
 					</div>
 				</div>
@@ -394,91 +218,118 @@
 			<div class="border-b border-gray-200">
 				<nav class="flex space-x-6 px-4">
 					<button
-						onclick={() => activeTab = 'all'}
+						onclick={() => handleTabChange('all')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'all' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Activity class="w-4 h-4" />
 							<span>All Logs</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().all}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.all}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'chat'}
+						onclick={() => handleTabChange('chat')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'chat' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<MessageSquare class="w-4 h-4" />
 							<span>Chat</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().chat}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.chat}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'broadcast'}
+						onclick={() => handleTabChange('broadcast')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'broadcast' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Radio class="w-4 h-4" />
 							<span>Broadcast</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().broadcast}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.broadcast}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'user-management'}
+						onclick={() => handleTabChange('user-management')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'user-management' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Users class="w-4 h-4" />
 							<span>Users</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['user-management']}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts['user-management']}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'ou-management'}
+						onclick={() => handleTabChange('ou-management')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'ou-management' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Building2 class="w-4 h-4" />
 							<span>OU</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['ou-management']}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts['ou-management']}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'global-config'}
+						onclick={() => handleTabChange('global-config')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'global-config' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Settings class="w-4 h-4" />
 							<span>Config</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['global-config']}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts['global-config']}</span>
 						</div>
 					</button>
 				</nav>
 			</div>
 
-			<!-- Table Container -->
-			<div class="flex-1 min-h-0 overflow-hidden flex flex-col">
-				<div class="flex-1 overflow-auto">
-					<table class="w-full">
-						<thead class="bg-gray-50 sticky top-0">
-							<tr>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-								{#if activeTab === 'broadcast'}
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-								{/if}
+			<!-- Error State -->
+			{#if error}
+				<div class="p-4 bg-red-50 border-l-4 border-red-400">
+					<div class="flex">
+						<AlertTriangle class="w-5 h-5 text-red-400" />
+						<div class="ml-3">
+							<p class="text-sm text-red-700">{error}</p>
+							<button
+								onclick={loadLogs}
+								class="mt-2 text-sm text-red-600 hover:text-red-800 font-medium"
+							>
+								Try again
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Loading State -->
+			{#if loading}
+				<div class="flex-1 flex items-center justify-center p-8">
+					<div class="flex items-center space-x-2">
+						<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#01c0a4]"></div>
+						<span class="text-gray-600">Loading audit logs...</span>
+					</div>
+				</div>
+			{:else}
+				<!-- Table Container -->
+				<div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+					<div class="flex-1 overflow-auto">
+						<table class="w-full">
+							<thead class="bg-gray-50 sticky top-0">
+								<tr>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+									{#if activeTab === 'broadcast'}
+										<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+									{/if}
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
-							{#each filteredLogs() as log (log.id)}
+							{#each logs as log (log.id)}
 								<tr class="hover:bg-gray-50">
 									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
 										{formatTimestamp(log.timestamp)}
@@ -537,7 +388,7 @@
 					</table>
 
 					<!-- Empty State -->
-					{#if filteredLogs().length === 0}
+					{#if logs.length === 0}
 						<div class="text-center py-12">
 							<FileText class="mx-auto h-12 w-12 text-gray-400" />
 							<h3 class="mt-2 text-sm font-medium text-gray-900">No logs found</h3>
@@ -545,7 +396,82 @@
 						</div>
 					{/if}
 				</div>
+
+				<!-- Pagination -->
+				{#if pagination && pagination.totalPages > 1}
+					<div class="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+						<div class="flex-1 flex justify-between sm:hidden">
+							<button
+								onclick={() => handlePageChange(currentPage - 1)}
+								disabled={!pagination.hasPrevPage}
+								class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Previous
+							</button>
+							<button
+								onclick={() => handlePageChange(currentPage + 1)}
+								disabled={!pagination.hasNextPage}
+								class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Next
+							</button>
+						</div>
+						<div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+							<div>
+								<p class="text-sm text-gray-700">
+									Showing
+									<span class="font-medium">{(currentPage - 1) * pageLimit + 1}</span>
+									to
+									<span class="font-medium">{Math.min(currentPage * pageLimit, pagination.totalCount)}</span>
+									of
+									<span class="font-medium">{pagination.totalCount}</span>
+									results
+								</p>
+							</div>
+							<div>
+								<nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+									<button
+										onclick={() => handlePageChange(currentPage - 1)}
+										disabled={!pagination.hasPrevPage}
+										class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<span class="sr-only">Previous</span>
+										<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+										</svg>
+									</button>
+									
+									{#each Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+										const start = Math.max(1, currentPage - 2);
+										return start + i;
+									}) as page}
+										{#if page <= pagination.totalPages}
+											<button
+												onclick={() => handlePageChange(page)}
+												class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {page === currentPage ? 'z-10 bg-[#01c0a4] border-[#01c0a4] text-white' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}"
+											>
+												{page}
+											</button>
+										{/if}
+									{/each}
+									
+									<button
+										onclick={() => handlePageChange(currentPage + 1)}
+										disabled={!pagination.hasNextPage}
+										class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<span class="sr-only">Next</span>
+										<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+										</svg>
+									</button>
+								</nav>
+							</div>
+						</div>
+					</div>
+				{/if}
 			</div>
+		{/if}
 		</div>
 	</div>
 </div>

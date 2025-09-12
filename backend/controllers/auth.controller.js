@@ -10,6 +10,52 @@ async function login(req, res, next) {
   }
 }
 
+async function demoLogin(req, res, next) {
+  try {
+    const jwt = require('jsonwebtoken');
+    const { env } = require('../config');
+    
+    // Create a demo user token for testing
+    const demoUser = {
+      id: '1',
+      username: 'admin',
+      email: 'admin@company.com',
+      role: 'admin'
+    };
+    
+    const token = jwt.sign(demoUser, env.JWT_SECRET, { expiresIn: '24h' });
+    
+    res.status(200).json({
+      success: true,
+      token,
+      user: demoUser,
+      message: 'Demo login successful'
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  login,
+  verifyOtp,
+  firstTimeSetup,
+  changePassword,
+  setSecurityQuestions,
+  forgotPassword,
+  sendResetLink,
+  answerSecurityQuestions,
+  demoLogin
+}
+  try {
+    const { username, password } = req.body;
+    const result = await authService.login({ username, password });
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function verifyOtp(req, res, next) {
   try {
     const { username, otp } = req.body;
@@ -82,6 +128,32 @@ async function answerSecurityQuestions(req, res, next) {
   }
 }
 
+async function demoLogin(req, res, next) {
+  try {
+    const jwt = require('jsonwebtoken');
+    const { env } = require('../config');
+    
+    // Create a demo user token for testing
+    const demoUser = {
+      id: '1',
+      username: 'admin',
+      email: 'admin@company.com',
+      role: 'admin'
+    };
+    
+    const token = jwt.sign(demoUser, env.JWT_SECRET, { expiresIn: '24h' });
+    
+    res.status(200).json({
+      success: true,
+      token,
+      user: demoUser,
+      message: 'Demo login successful'
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   verifyOtp,
@@ -91,5 +163,6 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  demoLogin
 };
 
