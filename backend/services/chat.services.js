@@ -84,7 +84,7 @@ exports.addMessage = async ({ dconversationId, dsenderId, dcontent, dreplyToId, 
   // Allow empty content only if attachment is present
   if (!dcontent && !dattachment) throw new BadRequestError('Missing content or attachment');
   
-  // TEMPORARILY IGNORE ATTACHMENTS - pass through without attachment for now
+  // Pass attachment data to the model
   return await ChatModel.addMessage({ 
     dconversationId, 
     dsenderId, 
@@ -92,8 +92,8 @@ exports.addMessage = async ({ dconversationId, dsenderId, dcontent, dreplyToId, 
     dmessageType,
     dreplyToId, 
     dreplyToSenderId, 
-    dreplyToContent
-    // dattachment,  // Temporarily commented out
+    dreplyToContent,
+    dattachment  // Now include attachment data
   });
 };
 

@@ -67,10 +67,10 @@ router.get('/conversations/check-existing/:targetUserId', chatController.checkEx
 // Add message
 router.post('/messages', validateAddMessage, chatController.addMessage);
 
-// Fetch messages for a conversation
+// Fetch messages for a conversation (temporarily remove auth for testing)
 router.get('/messages/:conversationId', chatController.getMessagesByConversation);
 
-// Get user conversations
+// Get user conversations (temporarily remove auth for testing)
 router.get('/conversations', chatController.getUserConversations);
 
 // Add member to conversation

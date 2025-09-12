@@ -157,16 +157,16 @@ static async addMember(conversationId, userId) {
   }
 }
 
-static async getMessagesWithMetadata(conversationId, userId) {
+static async getMessagesWithMetadata(conversationId, userId, offset = 0, limit = 50) {
   try {
-    console.log(`Fetching messages for conversation ${conversationId}`);
+    console.log(`Fetching messages for conversation ${conversationId} with offset ${offset}, limit ${limit}`);
     
     const result = await query(`
       SELECT 
         m.*,
         u.dusername,
-        u.firstname,
-        u.lastname,
+        u.dfirstname,
+        u.dlastname,
         u.avatar,
         CASE WHEN rs.duserid IS NOT NULL THEN true ELSE false END as "isRead",
         COALESCE(
@@ -177,15 +177,16 @@ static async getMessagesWithMetadata(conversationId, userId) {
               'timestamp', mr.tcreatedat
             )
           )
-          FROM tblmessagesreactions mr 
+          FROM tblmessagereactions mr 
           WHERE mr.dmessageid = m.did), '[]'
         ) as reactions
       FROM tblmessages m
       JOIN tblusers u ON m.dsenderid = u.did
       LEFT JOIN tblreadstatus rs ON m.did = rs.dmessageid AND rs.duserid = $2
       WHERE m.dconversationid = $1
-      ORDER BY m.tcreatedat ASC`,
-      [conversationId, userId]
+      ORDER BY m.tcreatedat ASC
+      LIMIT $3 OFFSET $4`,
+      [conversationId, userId, limit, offset]
     );
     
     console.log(`Found ${result.rows.length} messages`);
@@ -225,16 +226,55 @@ static async markMessageAsRead(messageId, userId) {
 }
 static async toggleReaction(messageId, userId, emoji) {
   try {
+    console.log('🔍 toggleReaction called with:', { messageId, userId, emoji });
+    
+    // First, let's check what tables actually exist
+    console.log('🔍 Checking available tables...');
+    const tablesResult = await query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      ORDER BY table_name
+    `);
+    
+    console.log('📋 Available tables:', tablesResult.rows.map(r => r.table_name));
+    
+    // Check specifically for reactions table (try different possible names)
+    const reactionsTableCheck = await query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name ILIKE '%reaction%'
+    `);
+    
+    console.log('🎯 Reaction-related tables:', reactionsTableCheck.rows.map(r => r.table_name));
+    
+    // If the exact table doesn't exist, throw a more helpful error
+    const exactTableCheck = await query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'tblmessagereactions'
+    `);
+    
+    if (exactTableCheck.rows.length === 0) {
+      throw new Error(`Table 'tblmessagereactions' does not exist. Available tables: ${tablesResult.rows.map(r => r.table_name).join(', ')}`);
+    }
+    
+    console.log('🔍 About to query tblmessagereactions table...');
+    
     // Check if reaction already exists
     const checkResult = await query(
-      'SELECT * FROM tblmessagesreactions WHERE dmessageid = $1 AND duserid = $2 AND demoji = $3',
+      'SELECT * FROM tblmessagereactions WHERE dmessageid = $1 AND duserid = $2 AND demoji = $3',
       [messageId, userId, emoji]
     );
+    
+    console.log('🔍 Check query result:', checkResult.rows.length, 'rows found');
     
     // If reaction exists, remove it
     if (checkResult.rows.length > 0) {
       await query(
-        'DELETE FROM tblmessagesreactions WHERE dmessageid = $1 AND duserid = $2 AND demoji = $3',
+        'DELETE FROM tblmessagereactions WHERE dmessageid = $1 AND duserid = $2 AND demoji = $3',
         [messageId, userId, emoji]
       );
       
@@ -244,7 +284,7 @@ static async toggleReaction(messageId, userId, emoji) {
     
     // Otherwise add the reaction
     const result = await query(
-      `INSERT INTO tblmessagesreactions 
+      `INSERT INTO tblmessagereactions 
         (dmessageid, duserid, demoji, tcreatedat)
        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
        RETURNING *`,

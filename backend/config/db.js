@@ -10,6 +10,7 @@ let pool = null;
 function getPool() {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
+    console.log('🔍 Creating DB pool with connection string:', connectionString ? 'Present' : 'Missing');
     
     pool = new Pool({ 
       connectionString,

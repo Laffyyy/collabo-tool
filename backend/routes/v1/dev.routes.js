@@ -371,7 +371,7 @@ router.get('/test-user/:username', devOnly, async (req, res) => {
 /**
  * Development reaction endpoints that bypass authentication
  */
-router.post('/messages/:messageId/reactions', devOnly, async (req, res) => {
+router.post('/messages/:messageId/reactions', devOnly, async (req, res, next) => {
   try {
     console.log('🧪 DEV: Adding reaction without auth', { messageId: req.params.messageId, body: req.body });
     
@@ -379,7 +379,7 @@ router.post('/messages/:messageId/reactions', devOnly, async (req, res) => {
     req.user = { id: 'dev-user-123', username: 'devuser', role: 'admin' };
     
     const chatController = require('../../controllers/chat.controller');
-    await chatController.addReaction(req, res);
+    await chatController.addReaction(req, res, next);
   } catch (error) {
     console.error('❌ Dev reaction add error:', error);
     res.status(500).json({
@@ -390,7 +390,7 @@ router.post('/messages/:messageId/reactions', devOnly, async (req, res) => {
   }
 });
 
-router.delete('/messages/:messageId/reactions/:emoji', devOnly, async (req, res) => {
+router.delete('/messages/:messageId/reactions/:emoji', devOnly, async (req, res, next) => {
   try {
     console.log('🧪 DEV: Removing reaction without auth', { messageId: req.params.messageId, emoji: req.params.emoji });
     
@@ -398,7 +398,7 @@ router.delete('/messages/:messageId/reactions/:emoji', devOnly, async (req, res)
     req.user = { id: 'dev-user-123', username: 'devuser', role: 'admin' };
     
     const chatController = require('../../controllers/chat.controller');
-    await chatController.removeReaction(req, res);
+    await chatController.removeReaction(req, res, next);
   } catch (error) {
     console.error('❌ Dev reaction remove error:', error);
     res.status(500).json({
@@ -409,7 +409,7 @@ router.delete('/messages/:messageId/reactions/:emoji', devOnly, async (req, res)
   }
 });
 
-router.get('/messages/:messageId/reactions', devOnly, async (req, res) => {
+router.get('/messages/:messageId/reactions', devOnly, async (req, res, next) => {
   try {
     console.log('🧪 DEV: Getting reactions without auth', { messageId: req.params.messageId });
     
@@ -417,7 +417,7 @@ router.get('/messages/:messageId/reactions', devOnly, async (req, res) => {
     req.user = { id: 'dev-user-123', username: 'devuser', role: 'admin' };
     
     const chatController = require('../../controllers/chat.controller');
-    await chatController.getMessageReactions(req, res);
+    await chatController.getMessageReactions(req, res, next);
   } catch (error) {
     console.error('❌ Dev reaction get error:', error);
     res.status(500).json({

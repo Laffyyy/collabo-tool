@@ -138,9 +138,20 @@ class AuthStore {
     return false;
   }
 
-  updateOnlineStatus(status: "online" | "away" | "idle" | "offline") {
-    if (this.user) {
-      this.user.onlineStatus = status;
+  async updateOnlineStatus(status: "online" | "away" | "idle" | "offline") {
+    try {
+      // Import the function dynamically to avoid circular dependency
+      const { updateUserStatus } = await import('$lib/services/userStatusService');
+      const success = await updateUserStatus(status);
+      
+      if (success && this.user) {
+        this.user.onlineStatus = status;
+        console.log('✅ Status updated successfully to:', status);
+      } else {
+        console.error('❌ Failed to update status on backend');
+      }
+    } catch (error) {
+      console.error('Error updating online status:', error);
     }
   }
 

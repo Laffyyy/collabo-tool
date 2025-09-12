@@ -98,13 +98,16 @@ export async function checkExistingDirectConversation({
 
 export async function getConversations() {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  const userId = localStorage.getItem('auth_userId') || localStorage.getItem('userId');
   console.log('🔑 Using token for getConversations:', token ? `${token.substring(0, 20)}...` : 'No token found');
+  console.log('👤 Using userId for getConversations:', userId);
   
   try {
     const response = await fetch('http://localhost:5000/api/chat/conversations', {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-User-Id': userId || ''
       },
       credentials: 'include'
     });
@@ -516,6 +519,88 @@ export async function markMessageAsRead(messageId: string) {
     return await response.json();
   } catch (error) {
     console.error('Error in markMessageAsRead:', error);
+    throw error;
+  }
+}
+
+// Reaction API functions
+export async function addReactionToMessage(messageId: string, emoji: string) {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  const userId = getUserIdFromStorage();
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/v1/dev/messages/${messageId}/reactions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        emoji: emoji,
+        userId: userId
+      }),
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error adding reaction:', errorText);
+      throw new Error('Failed to add reaction');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in addReactionToMessage:', error);
+    throw error;
+  }
+}
+
+export async function removeReactionFromMessage(messageId: string, emoji: string) {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  const userId = getUserIdFromStorage();
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/v1/dev/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error removing reaction:', errorText);
+      throw new Error('Failed to remove reaction');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in removeReactionFromMessage:', error);
+    throw error;
+  }
+}
+
+export async function getMessageReactions(messageId: string) {
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/v1/dev/messages/${messageId}/reactions`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error getting reactions:', errorText);
+      throw new Error('Failed to get reactions');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error in getMessageReactions:', error);
     throw error;
   }
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
 	//import {goto} from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { getConversations, getAllUsers, createConversation, findOrCreateDirectConversation, checkExistingDirectConversation, addMemberToConversation, getMessagesForConversation, sendMessageToApi } from '$lib/services/chatServices';
+	import { get } from 'svelte/store';
+	import { getConversations, getAllUsers, createConversation, findOrCreateDirectConversation, checkExistingDirectConversation, addMemberToConversation, getMessagesForConversation, sendMessageToApi, addReactionToMessage, removeReactionFromMessage, getMessageReactions } from '$lib/services/chatServices';
 	import { initializeUserStatus, getAllUsersWithStatus, usersWithStatus, currentUserStatus, type UserStatus } from '$lib/services/userStatusService';
 	import Navigation from '$lib/components/Navigation.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
@@ -239,37 +240,37 @@ if (typeof window !== 'undefined') {
 }
 
 onMount(async () => {
-// Load user authentication data
-function loadUserIdFromAuth() {
-  if (typeof window !== 'undefined') {
-    // Try different possible token keys
-    jwtToken = localStorage.getItem('jwt') || 
-               localStorage.getItem('auth_token') || 
-               localStorage.getItem('token');
-    
-    // Try different possible user ID keys
-    currentUserId = localStorage.getItem('auth_userId') || 
-                    localStorage.getItem('userId');
-    
-    // If we have a user object in storage, extract the ID
-    const userStr = localStorage.getItem('auth_user');
-    if (userStr && !currentUserId) {
-      try {
-        const user = JSON.parse(userStr);
-        currentUserId = user.id || user._id || user.userId;
-      } catch (e) {
-        console.error('Failed to parse user object:', e);
+  // Load user authentication data
+  function loadUserIdFromAuth() {
+    if (typeof window !== 'undefined') {
+      // Try different possible token keys
+      jwtToken = localStorage.getItem('jwt') || 
+                 localStorage.getItem('auth_token') || 
+                 localStorage.getItem('token');
+      
+      // Try different possible user ID keys
+      currentUserId = localStorage.getItem('auth_userId') || 
+                      localStorage.getItem('userId');
+      
+      // If we have a user object in storage, extract the ID
+      const userStr = localStorage.getItem('auth_user');
+      if (userStr && !currentUserId) {
+        try {
+          const user = JSON.parse(userStr);
+          currentUserId = user.id || user._id || user.userId;
+        } catch (e) {
+          console.error('Failed to parse user object:', e);
+        }
       }
+      
+      console.log('Auth state:', { 
+        jwtToken: jwtToken ? 'Present' : 'Missing',
+        currentUserId
+      });
     }
-    
-    console.log('Auth state:', { 
-      jwtToken: jwtToken ? 'Present' : 'Missing',
-      currentUserId
-    });
   }
-}
 
- try {
+  try {
     console.log('Loading conversations and users from backend...');
     loadUserIdFromAuth();
     
@@ -285,6 +286,12 @@ function loadUserIdFromAuth() {
       try {
         const messages = await getMessagesForConversation(conversation.id);
         if (messages && messages.length > 0) {
+          // Ensure all messages have reactions array initialized
+          messages.forEach(message => {
+            if (!message.reactions) {
+              message.reactions = [];
+            }
+          });
           conversation.messages = messages;
           // Update conversation properties based on last message
           conversation.lastMessage = messages[messages.length - 1].content;
@@ -434,8 +441,16 @@ function loadUserIdFromAuth() {
     try {
       const messages = await getMessagesForConversation(conversationId);
       if (messages.length > currentConversation.messages.length) {
+        // Ensure all messages have reactions array initialized
+        messages.forEach(message => {
+          if (!message.reactions) {
+            message.reactions = [];
+          }
+        });
         // Update messages only if there are new ones
+        const hadNewMessages = messages.length > currentConversation.messages.length;
         currentConversation.messages = messages;
+        
         // Update last message info
         if (messages.length > 0) {
           const lastMsg = messages[messages.length - 1];
@@ -507,10 +522,13 @@ const loadMoreMessages = async () => {
 // Function to scroll to bottom (for initial load and new messages)
 const scrollToBottom = (smooth = false) => {
   if (messagesContainer) {
-    const scrollOptions = smooth 
-      ? { top: messagesContainer.scrollHeight, behavior: 'smooth' as ScrollBehavior }
-      : { top: messagesContainer.scrollHeight };
-    messagesContainer.scrollTo(scrollOptions);
+    // Use requestAnimationFrame to ensure DOM is updated
+    requestAnimationFrame(() => {
+      const scrollOptions = smooth 
+        ? { top: messagesContainer.scrollHeight, behavior: 'smooth' as ScrollBehavior }
+        : { top: messagesContainer.scrollHeight };
+      messagesContainer.scrollTo(scrollOptions);
+    });
   }
 };
 
@@ -545,6 +563,14 @@ const selectConversation = async (conversation: Conversation) => {
     
     // Load initial batch of messages (most recent)
     const messages = await getMessagesForConversation(conversation.id, 0, messagesPerPage);
+    // Ensure all messages have reactions array initialized
+    if (messages && messages.length > 0) {
+      messages.forEach(message => {
+        if (!message.reactions) {
+          message.reactions = [];
+        }
+      });
+    }
     currentConversation.messages = messages || [];
     
     // Set pagination state
@@ -666,7 +692,7 @@ onDestroy(() => {
     currentConversation.lastMessage = msgContent;
     currentConversation.lastMessageTime = new Date();
     
-    // Scroll to bottom after sending message
+    // Always scroll to bottom after sending message (user action)
     setTimeout(() => scrollToBottom(true), 100);
     
     // Also update the conversation in the sidebar lists
@@ -762,76 +788,30 @@ const markConversationAsSeen = (conversationId?: string) => {
 		replyingTo = null;
 	};
 
-	const addReaction = (messageId: string, emoji: string) => {
+	const addReaction = async (messageId: string, emoji: string) => {
   if (!currentConversation) return;
-  const message = currentConversation.messages.find(m => m.id === messageId);
-  if (!message) return;
-
-  // Get the current user ID
-  const userId = currentUserId || '1';
   
-  // Find if the user has already reacted to this message
-  const userReactionIndex = message.reactions.findIndex(r => r.users.includes(userId));
+  console.log('🎯 Frontend: Adding reaction', { messageId, emoji });
   
-  if (userReactionIndex !== -1) {
-    // User has already reacted to this message
-    const existingReaction = message.reactions[userReactionIndex];
+  try {
+    // Call the backend API
+    const result = await addReactionToMessage(messageId, emoji);
+    console.log('🎯 Backend response:', result);
     
-    // If the user is clicking the same emoji, remove it (toggle behavior)
-    if (existingReaction.emoji === emoji) {
-      // Remove user from this reaction
-      existingReaction.users = existingReaction.users.filter(u => u !== userId);
-      existingReaction.count--;
-      
-      // If no users left with this reaction, remove the reaction entirely
-      if (existingReaction.count === 0) {
-        message.reactions = message.reactions.filter(r => r.emoji !== emoji);
-      }
-    } else {
-      // User is changing their reaction to a different emoji
-      // First, remove user from their old reaction
-      existingReaction.users = existingReaction.users.filter(u => u !== userId);
-      existingReaction.count--;
-      
-      // If no users left with this reaction, remove the reaction entirely
-      if (existingReaction.count === 0) {
-        message.reactions = message.reactions.filter(r => r.emoji !== existingReaction.emoji);
-      }
-      
-      // Then add user to the new emoji reaction
-      const newReaction = message.reactions.find(r => r.emoji === emoji);
-      if (newReaction) {
-        // Add to existing emoji reaction
-        newReaction.users.push(userId);
-        newReaction.count++;
-        newReaction.timestamp = new Date();
-      } else {
-        // Create new reaction with this emoji
-        message.reactions.push({ 
-          emoji, 
-          users: [userId], 
-          count: 1, 
-          timestamp: new Date() 
-        });
-      }
-    }
-  } else {
-    // User hasn't reacted to this message yet
-    const existingReaction = message.reactions.find(r => r.emoji === emoji);
-    if (existingReaction) {
-      // Add user to existing emoji reaction
-      existingReaction.users.push(userId);
-      existingReaction.count++;
-      existingReaction.timestamp = new Date();
-    } else {
-      // Create new reaction with this emoji
-      message.reactions.push({ 
-        emoji, 
-        users: [userId], 
-        count: 1, 
-        timestamp: new Date() 
+    // Refresh the conversation messages to get updated reactions
+    const updatedMessages = await getMessagesForConversation(currentConversation.id);
+    if (updatedMessages) {
+      // Ensure all messages have reactions array initialized
+      updatedMessages.forEach(message => {
+        if (!message.reactions) {
+          message.reactions = [];
+        }
       });
+      currentConversation.messages = updatedMessages;
     }
+    
+  } catch (error) {
+    console.error('🚨 Error adding reaction:', error);
   }
 };
 
@@ -2221,6 +2201,10 @@ async function enrichMemberData(members) {
     'e5d2c8f1-4a9b-6c3e-8f7d-2a1b3c4d5e6f': { role: 'Frontline', department: 'Sales' }
   };
   
+  // Get fresh status data for all users
+  await getAllUsersWithStatus();
+  const currentUsersWithStatus = get(usersWithStatus);
+  
   // For each member, set enriched data
   for (const member of members) {
     try {
@@ -2233,6 +2217,13 @@ async function enrichMemberData(members) {
         (u.firstName && u.lastName && member.name && 
          `${u.firstName} ${u.lastName}` === member.name)
       );
+
+      // Also look for status data from the user status service
+      const statusUser = currentUsersWithStatus.find(u => 
+        u.id === member.userId || 
+        u.id === member.id || 
+        u.id === member.did
+      );
       
       if (cachedUser && cachedUser.role && cachedUser.role !== 'Not specified') {
         member.roleName = cachedUser.role;
@@ -2240,6 +2231,28 @@ async function enrichMemberData(members) {
         member.role = member.roleName;
         member.department = member.departmentName;
         console.log(`✅ Enriched ${member.name} from cache:`, { role: member.role, department: member.department });
+      }
+      
+      // Update status from status service data if available
+      if (statusUser) {
+        member.onlineStatus = statusUser.onlineStatus || 'offline';
+        member.isOnline = statusUser.onlineStatus === 'online';
+        member.lastActivity = statusUser.lastActivity;
+        console.log(`✅ Updated status for ${member.name}:`, { status: member.onlineStatus, isOnline: member.isOnline });
+      } else {
+        // Fallback to cached user status if available
+        if (cachedUser && cachedUser.onlineStatus) {
+          member.onlineStatus = cachedUser.onlineStatus;
+          member.isOnline = cachedUser.onlineStatus === 'online';
+        } else {
+          // Default to offline if no status data available
+          member.onlineStatus = 'offline';
+          member.isOnline = false;
+        }
+      }
+      
+      // If we already have role/department data, continue to next member
+      if (member.roleName && member.departmentName) {
         continue;
       }
       
@@ -2329,6 +2342,9 @@ async function enrichMemberData(members) {
       member.departmentName = 'General';
       member.role = member.roleName;
       member.department = member.departmentName;
+      // Default to offline status
+      member.onlineStatus = 'offline';
+      member.isOnline = false;
     }
   }
   
@@ -2623,6 +2639,8 @@ const groupedMessages = $derived(() => {
 					
 					{#if shouldShowConversations}
 						{#each filteredDirectConversations as conversation (conversation.id)}
+							{@const actualUser = availableUsers.find(u => u.name === conversation.name || u.id === conversation.otherUserId)}
+							{@const userWithStatus = $usersWithStatus.find(u => u.name === conversation.name || u.id === conversation.otherUserId)}
 							<button
 								onclick={(e) => {
 									// Check if the click was on the avatar
@@ -2653,8 +2671,8 @@ const groupedMessages = $derived(() => {
 										<ProfileAvatar 
 											user={enhanceUserObject({ name: conversation.name, profilePhoto: conversation.avatar })} 
 											size="sm" 
-											showOnlineStatus={conversation.isOnline}
-											onlineStatus={conversation.isOnline ? 'online' : 'offline'}
+											showOnlineStatus={true}
+											onlineStatus={userWithStatus?.onlineStatus || actualUser?.onlineStatus || 'offline'}
 										/>
 									</div>
 								</div>
@@ -3117,36 +3135,6 @@ const groupedMessages = $derived(() => {
 										</div>
 									{/if}
 									</div>
-									
-													
-													<!-- Reactions -->
-													{#if message.reactions && message.reactions.length > 0}
-														<div class="flex items-center space-x-1 mt-1">
-															{#each message.reactions as reaction}
-																<button
-																	onclick={() => addReaction(message.id, reaction.emoji)}
-																	class="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200 transition-colors {reaction.users.includes(currentUserId || '1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
-																	aria-label={`Toggle ${reaction.emoji} reaction`}
-																	title={`${reaction.emoji} ${reaction.count}`}
-																>
-																	<span>{reaction.emoji}</span>
-																	<span>{reaction.count}</span>
-																</button>
-															{/each}
-															<!-- Show all reactions button -->
-															<button
-																onclick={() => openReactionModal(message)}
-																class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded-full transition-colors"
-																title="See all reactions"
-															>
-																See all
-															</button>
-														</div>
-														<!-- Reaction timestamp -->
-														<div class="text-xs text-gray-400 mt-1">
-															{formatTime(message.timestamp)}
-														</div>
-													{/if}
 
 													<!-- Seen indicators for sent messages -->
 													{#if message.senderId === currentUserId && message.seenBy && message.seenBy.length > 0}
@@ -3251,6 +3239,33 @@ const groupedMessages = $derived(() => {
 											<div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
 										</div>
 									</div>
+									
+									<!-- Reactions - positioned outside the message wrapper to avoid width constraints -->
+									{#if message.reactions && message.reactions.length > 0}
+										<div class="flex items-center gap-0.5 mt-1 flex-wrap {message.senderId === currentUserId ? 'justify-end' : 'justify-start'}">
+											{#each message.reactions as reaction}
+												<button
+													onclick={() => addReaction(message.id, reaction.emoji)}
+													class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-xs transition-all duration-150 hover:scale-105 border {reaction.users.includes(currentUserId || '1') ? 'bg-[#01c0a4]/15 border-[#01c0a4]/30 text-[#01c0a4]' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}"
+													aria-label={`Toggle ${reaction.emoji} reaction`}
+													title={`${reaction.emoji} ${reaction.count} ${reaction.count === 1 ? 'reaction' : 'reactions'}`}
+												>
+													<span class="text-xs leading-none">{reaction.emoji}</span>
+													<span class="text-xs leading-none font-medium">{reaction.count}</span>
+												</button>
+											{/each}
+											{#if message.reactions.length > 3}
+											<!-- Show all reactions button for more than 3 reactions -->
+											<button
+												onclick={() => openReactionModal(message)}
+												class="inline-flex items-center px-1 py-0.5 text-xs text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-50 transition-colors"
+												title="See all reactions"
+											>
+												+{message.reactions.reduce((sum, r) => sum + r.count, 0) - 3}
+											</button>
+											{/if}
+										</div>
+									{/if}
 								</div>
 							</div>
 						{/each}
@@ -3516,8 +3531,8 @@ const groupedMessages = $derived(() => {
 							<ProfileAvatar 
 								user={getUserForAvatar(member)} 
 								size="md" 
-								showOnlineStatus={member.isOnline}
-								onlineStatus={member.isOnline ? 'online' : 'offline'}
+								showOnlineStatus={true}
+								onlineStatus={member.onlineStatus || (member.isOnline ? 'online' : 'offline')}
 								isCurrentUser={(member.id || member.userId) === currentUserId}
 							/>
 							</button>
@@ -3567,8 +3582,16 @@ const groupedMessages = $derived(() => {
 							
 							<!-- Status info -->
 							<p class="text-xs text-gray-400 mt-1 flex items-center">
-								<span class={`inline-block w-2 h-2 rounded-full mr-2 ${member.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-								{member.isOnline ? 'Online' : 'Offline'}
+								<span class={`inline-block w-2 h-2 rounded-full mr-2 ${
+									member.onlineStatus === 'online' ? 'bg-green-500' :
+									member.onlineStatus === 'away' ? 'bg-yellow-500' :
+									member.onlineStatus === 'idle' ? 'bg-orange-500' :
+									'bg-gray-400'
+								}`}></span>
+								{member.onlineStatus ? 
+									(member.onlineStatus.charAt(0).toUpperCase() + member.onlineStatus.slice(1)) : 
+									(member.isOnline ? 'Online' : 'Offline')
+								}
 								{#if member.isMuted}
 								<span class="text-red-500 ml-2 flex items-center">
 									<VolumeX class="w-3 h-3 mr-1" /> Muted
