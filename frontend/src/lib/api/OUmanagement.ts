@@ -56,6 +56,7 @@ interface CreateOURequest {
   OrgName: string;
   Description: string;
   Location: string;
+  ParentId?: string;
   Settings: OUSettings;
 }
 
@@ -348,17 +349,19 @@ export const reactivateOUs = async (ids: string[]): Promise<APIResponse> => {
 /**
  * Transform frontend OU data to backend API format
  * @param frontendOU - Frontend OU object
- * @param includeSettings - Which settings to include ('chat', 'broadcast', or 'both')
+ * @param includeSettings - Which settings to include ('chat' or 'broadcast' - only one allowed)
+ * @param parentId - Optional parent OU ID for creating child OUs
  * @returns Backend API formatted object
  */
 export const transformOUDataForAPI = (
   frontendOU: FrontendOU, 
-  includeSettings: 'chat' | 'broadcast' | 'both' = 'both'
+  includeSettings: 'chat' | 'broadcast' = 'chat',
+  parentId?: string
 ): CreateOURequest => {
   const settings: any = {};
 
-  // Include chat settings if specified
-  if (includeSettings === 'chat' || includeSettings === 'both') {
+  // Include ONLY the specified settings type (backend requirement: only one type allowed)
+  if (includeSettings === 'chat') {
     settings.Chat = {
       General: {
         FileSharing: frontendOU.rules.chat.allowFileSharing,
@@ -385,10 +388,7 @@ export const transformOUDataForAPI = (
         ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
       }
     };
-  }
-
-  // Include broadcast settings if specified
-  if (includeSettings === 'broadcast' || includeSettings === 'both') {
+  } else if (includeSettings === 'broadcast') {
     settings.broadcast = {
       General: {
         ApprovalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
@@ -410,12 +410,19 @@ export const transformOUDataForAPI = (
     };
   }
 
-  return {
+  const request: CreateOURequest = {
     OrgName: frontendOU.name,
     Description: frontendOU.description,
     Location: frontendOU.location,
     Settings: settings
   };
+
+  // Add ParentId if provided
+  if (parentId) {
+    request.ParentId = parentId;
+  }
+
+  return request;
 };
 
 export default {

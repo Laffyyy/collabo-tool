@@ -69,23 +69,25 @@ function transformSettingsToOUSettings(settings) {
         if (settings.broadcast) {
             const broadcast = settings.broadcast;
             
-            // Broadcast General settings
-            if (broadcast.General) {
+            // Broadcast General settings (support both General and general)
+            const generalBroadcast = broadcast.General || broadcast.general;
+            if (generalBroadcast) {
                 OUsettings.push({
                     settingstype: 'broadcast.general',
-                    approvalforBroadcast: !!broadcast.General.ApprovalforBroadcast,
-                    scheduleBroadcast: !!broadcast.General.ScheduleBroadcast,
-                    priorityBroadcast: !!broadcast.General.PriorityBroadcast,
-                    retention: broadcast.General.Retention ? parseInt(broadcast.General.Retention) : null
+                    approvalforBroadcast: !!(generalBroadcast.ApprovalforBroadcast || generalBroadcast.approvalforBroadcast),
+                    scheduleBroadcast: !!(generalBroadcast.ScheduleBroadcast || generalBroadcast.scheduleBroadcast),
+                    priorityBroadcast: !!(generalBroadcast.PriorityBroadcast || generalBroadcast.priorityBroadcast),
+                    retention: (generalBroadcast.Retention || generalBroadcast.retention) ? parseInt(generalBroadcast.Retention || generalBroadcast.retention) : null
                 });
             }
             
-            // Broadcast Frontline settings
-            if (broadcast.Frontline) {
+            // Broadcast Frontline settings (support both Frontline and frontline)
+            const frontlineBroadcast = broadcast.Frontline || broadcast.frontline;
+            if (frontlineBroadcast) {
                 OUsettings.push({
                     settingstype: 'broadcast.frontline',
-                    createBroadcasts: !!broadcast.Frontline.CreateBroadcasts,
-                    replyToBroadcasts: !!broadcast.Frontline.ReplyToBroadcasts
+                    createBroadcasts: !!(frontlineBroadcast.CreateBroadcasts || frontlineBroadcast.createBroadcasts),
+                    replyToBroadcasts: !!(frontlineBroadcast.ReplyToBroadcasts || frontlineBroadcast.replyToBroadcasts)
                 });
             }
 
@@ -93,8 +95,8 @@ function transformSettingsToOUSettings(settings) {
             if (broadcast.support) {
                 OUsettings.push({
                     settingstype: 'broadcast.support',
-                    createBroadcasts: !!broadcast.support.CreateBroadcasts,
-                    replyToBroadcasts: !!broadcast.support.ReplyToBroadcasts
+                    createBroadcasts: !!(broadcast.support.CreateBroadcasts || broadcast.support.createBroadcasts),
+                    replyToBroadcasts: !!(broadcast.support.ReplyToBroadcasts || broadcast.support.replyToBroadcasts)
                 });
             }
 
@@ -102,7 +104,7 @@ function transformSettingsToOUSettings(settings) {
             if (broadcast.supervisor) {
                 OUsettings.push({
                     settingstype: 'broadcast.supervisor',
-                    createBroadcasts: !!broadcast.supervisor.CreateBroadcasts
+                    createBroadcasts: !!(broadcast.supervisor.CreateBroadcasts || broadcast.supervisor.createBroadcasts)
                 });
             }
         }
@@ -217,14 +219,20 @@ function validateSettings(settings) {
         return result;
     }
 
-    // Validate Chat settings structure
-    if (settings.Chat && typeof settings.Chat !== 'object') {
+    // Require Chat settings to be present and be an object
+    if (!settings.Chat) {
+        result.isValid = false;
+        result.errors.push('Settings.Chat is required');
+    } else if (typeof settings.Chat !== 'object') {
         result.isValid = false;
         result.errors.push('Settings.Chat must be an object');
     }
 
-    // Validate broadcast settings structure
-    if (settings.broadcast && typeof settings.broadcast !== 'object') {
+    // Require broadcast settings to be present and be an object
+    if (!settings.broadcast) {
+        result.isValid = false;
+        result.errors.push('Settings.broadcast is required');
+    } else if (typeof settings.broadcast !== 'object') {
         result.isValid = false;
         result.errors.push('Settings.broadcast must be an object');
     }
@@ -303,33 +311,35 @@ function transformSettingsToJSSettings(settings) {
             // Add supervisor settings
             if (settings.broadcast.supervisor) {
                 broadcastSettings.broadcast.supervisor = {
-                    createBroadcasts: !!settings.broadcast.supervisor.CreateBroadcasts
+                    createBroadcasts: !!(settings.broadcast.supervisor.CreateBroadcasts || settings.broadcast.supervisor.createBroadcasts)
                 };
             }
 
             // Add support settings
             if (settings.broadcast.support) {
                 broadcastSettings.broadcast.support = {
-                    createBroadcasts: !!settings.broadcast.support.CreateBroadcasts,
-                    replyToBroadcasts: !!settings.broadcast.support.ReplyToBroadcasts
+                    createBroadcasts: !!(settings.broadcast.support.CreateBroadcasts || settings.broadcast.support.createBroadcasts),
+                    replyToBroadcasts: !!(settings.broadcast.support.ReplyToBroadcasts || settings.broadcast.support.replyToBroadcasts)
                 };
             }
 
-            // Add frontline settings
-            if (settings.broadcast.Frontline) {
+            // Add frontline settings (support both Frontline and frontline)
+            const frontlineBroadcast = settings.broadcast.Frontline || settings.broadcast.frontline;
+            if (frontlineBroadcast) {
                 broadcastSettings.broadcast.frontline = {
-                    createBroadcasts: !!settings.broadcast.Frontline.CreateBroadcasts,
-                    replyToBroadcasts: !!settings.broadcast.Frontline.ReplyToBroadcasts
+                    createBroadcasts: !!(frontlineBroadcast.CreateBroadcasts || frontlineBroadcast.createBroadcasts),
+                    replyToBroadcasts: !!(frontlineBroadcast.ReplyToBroadcasts || frontlineBroadcast.replyToBroadcasts)
                 };
             }
 
-            // Add general settings
-            if (settings.broadcast.General) {
+            // Add general settings (support both General and general)
+            const generalBroadcast = settings.broadcast.General || settings.broadcast.general;
+            if (generalBroadcast) {
                 broadcastSettings.broadcast.general = {
-                    approvalforBroadcast: !!settings.broadcast.General.ApprovalforBroadcast,
-                    scheduleBroadcast: !!settings.broadcast.General.ScheduleBroadcast,
-                    priorityBroadcast: !!settings.broadcast.General.PriorityBroadcast,
-                    retention: settings.broadcast.General.Retention ? parseInt(settings.broadcast.General.Retention) : null
+                    approvalforBroadcast: !!(generalBroadcast.ApprovalforBroadcast || generalBroadcast.approvalforBroadcast),
+                    scheduleBroadcast: !!(generalBroadcast.ScheduleBroadcast || generalBroadcast.scheduleBroadcast),
+                    priorityBroadcast: !!(generalBroadcast.PriorityBroadcast || generalBroadcast.priorityBroadcast),
+                    retention: (generalBroadcast.Retention || generalBroadcast.retention) ? parseInt(generalBroadcast.Retention || generalBroadcast.retention) : null
                 };
             }
 

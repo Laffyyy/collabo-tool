@@ -251,7 +251,7 @@
     return base;
   };
 
-  const mapBackendToOU = (row: any): OrganizationUnit => {
+  const mapBackendToOU = (row: any): OrganizationUnit & { children?: OrganizationUnit[] } => {
     const created = row?.tcreatedat ? new Date(row.tcreatedat) : new Date();
     const isActive = row?.bisActive !== undefined ? !!row.bisActive : true;
     
@@ -260,12 +260,13 @@
       name: row?.dname,
       jsSettings: row?.jsSettings,
       membercount: row?.membercount,
-      bisActive: row?.bisActive
+      bisActive: row?.bisActive,
+      children: row?.children
     });
     
     const rules = parseJsSettingsToRules(row?.jsSettings);
     
-    const mappedOU: OrganizationUnit = {
+    const mappedOU: OrganizationUnit & { children?: OrganizationUnit[] } = {
       id: String(row?.ouid || row?.did || Date.now()),
       name: row?.dname || 'Unknown',
       description: row?.ddescription || '',
@@ -277,7 +278,11 @@
       status: isActive ? 'active' : 'inactive',
       rules,
       // Store original jsSettings for tab determination
-      _originalJsSettings: row?.jsSettings
+      _originalJsSettings: row?.jsSettings,
+      // Map children recursively if they exist
+      children: row?.children && Array.isArray(row.children) 
+        ? row.children.map(mapBackendToOU)
+        : []
     };
     
     console.log('Mapped OU result:', mappedOU);
@@ -390,41 +395,43 @@
     };
   });
 
-  // Build hierarchical structure
+  // Build hierarchical structure - now uses children from API
   const hierarchicalOUs = $derived.by(() => {
     const currentList = currentTab === 'active' ? activeList : inactiveList;
-    let filtered = currentList;
-
-    // Filter by search
+    
+    // Filter by search if needed
     if (searchQuery) {
-      filtered = currentList.filter(ou =>
-        ou.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ou.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ou.location.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const searchLower = searchQuery.toLowerCase();
+      
+      // Recursive function to filter OUs and their children
+      const filterOUWithChildren = (ou: OrganizationUnit & { children?: OrganizationUnit[] }): (OrganizationUnit & { children?: OrganizationUnit[] }) | null => {
+        const matchesSearch = ou.name.toLowerCase().includes(searchLower) ||
+          ou.description.toLowerCase().includes(searchLower) ||
+          ou.location.toLowerCase().includes(searchLower);
+        
+        // Filter children recursively
+        const filteredChildren = ou.children?.map(filterOUWithChildren).filter((child): child is OrganizationUnit & { children?: OrganizationUnit[] } => child !== null) || [];
+        
+        // Include OU if it matches search OR if any of its children match
+        if (matchesSearch || filteredChildren.length > 0) {
+          return {
+            ...ou,
+            children: filteredChildren
+          };
+        }
+        
+        return null;
+      };
+      
+      // Only return root nodes (those without parentId) and filter them
+      return currentList
+        .filter(ou => !ou.parentId) // Only root nodes
+        .map(filterOUWithChildren)
+        .filter((ou): ou is OrganizationUnit & { children?: OrganizationUnit[] } => ou !== null);
     }
 
-    // Build hierarchy
-    const rootNodes: (OrganizationUnit & { children?: OrganizationUnit[] })[] = [];
-    const nodeMap = new Map<string, OrganizationUnit & { children?: OrganizationUnit[] }>();
-
-    // First pass: create nodes
-    filtered.forEach(ou => {
-      nodeMap.set(ou.id, { ...ou, children: [] });
-    });
-
-    // Second pass: build hierarchy
-    filtered.forEach(ou => {
-      const node = nodeMap.get(ou.id)!;
-      if (ou.parentId && nodeMap.has(ou.parentId)) {
-        const parent = nodeMap.get(ou.parentId)!;
-        parent.children!.push(node);
-      } else {
-        rootNodes.push(node);
-      }
-    });
-
-    return rootNodes;
+    // No search - return only root nodes with their children intact
+    return currentList.filter(ou => !ou.parentId) as (OrganizationUnit & { children?: OrganizationUnit[] })[];
   });
 
   // Functions
@@ -437,42 +444,27 @@
 
       try {
         // Transform frontend data to backend API format
-        // Only send settings for the currently active tab
-        const apiData = transformOUDataForAPI(newOU, activeRulesTab);
+        // Only send settings for the currently active tab (chat OR broadcast, not both)
+        const apiData = transformOUDataForAPI(
+          newOU, 
+          activeRulesTab,
+          parentOUForNewChild?.id // Pass parent ID if creating a child OU
+        );
         
-        // Add parent ID if creating a child OU
-        if (parentOUForNewChild) {
-          // Note: parentId is handled by the backend, not in the CreateOURequest
-          // The backend will need to be updated to handle parent-child relationships
-        }
+        console.log('Sending API data:', apiData);
         
         // Call the API
         const result = await createOUAPI(apiData);
         
         if (result.success) {
-          // Create local OU object for immediate UI update
-          const ou: OrganizationUnit = {
-            id: result.data?.id || Date.now().toString(),
-            name: newOU.name.trim(),
-            description: newOU.description.trim(),
-            parentId: parentOUForNewChild?.id || null,
-            memberCount: 0,
-            location: newOU.location.trim(),
-            createdAt: new Date(),
-            modifiedAt: new Date(),
-            status: 'active',
-            rules: newOU.rules
-          };
-
-          // Update the local state
-          activeList = [ou, ...activeList];
-          organizationUnits = currentTab === 'active' ? activeList : inactiveList;
-          
           // Show success message
           apiSuccess = result.message || 'Organization Unit created successfully!';
           
           // Reset form
           resetNewOUForm();
+          
+          // Reload the data to get the updated hierarchy with the new OU
+          await loadLists();
           
           // Close modal after a short delay to show success message
           setTimeout(() => {
@@ -852,26 +844,28 @@
 
 <!-- Tree Node Component -->
 {#snippet ouTreeNode(ou: OrganizationUnit & { children?: OrganizationUnit[] }, depth: number)}
-  <div class="w-full">
+  <div class="w-full relative">
     <div 
       class="flex items-center py-2 px-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors {selectedOU?.id === ou.id ? 'bg-blue-50 border-l-4 border-[#01c0a4]' : ''}"
       style="margin-left: {depth * 16}px"
       onclick={() => selectOU(ou)}
     >
-      <!-- Expand/Collapse Button -->
+      <!-- Dropdown Arrow for Parent OUs -->
       {#if ou.children && ou.children.length > 0}
         <button
           onclick={(e) => { e.stopPropagation(); toggleExpand(ou.id); }}
-          class="mr-1 p-1 rounded hover:bg-gray-200 transition-colors"
+          class="mr-2 p-1 rounded hover:bg-gray-200 transition-all duration-200 flex items-center justify-center"
+          title={expandedNodes.has(ou.id) ? 'Collapse children' : 'Expand children'}
+          aria-label={expandedNodes.has(ou.id) ? 'Collapse children' : 'Expand children'}
         >
-          {#if expandedNodes.has(ou.id)}
-            <ChevronDown class="w-4 h-4 text-gray-500" />
-          {:else}
-            <ChevronRight class="w-4 h-4 text-gray-500" />
-          {/if}
+          <div class="transform transition-transform duration-200 {expandedNodes.has(ou.id) ? 'rotate-90' : 'rotate-0'}">
+            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </div>
         </button>
       {:else}
-        <div class="w-6 h-6 mr-1"></div>
+        <div class="w-6 h-6 mr-2"></div>
       {/if}
 
       <!-- OU Icon and Info -->
@@ -880,22 +874,47 @@
           <Building2 class="w-3 h-3 text-white" />
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium text-gray-900 truncate">{ou.name}</div>
+          <div class="text-sm font-medium text-gray-900 truncate flex items-center">
+            {ou.name}
+            {#if ou.children && ou.children.length > 0}
+              <span class="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                {ou.children.length} {ou.children.length === 1 ? 'child' : 'children'}
+              </span>
+            {/if}
+          </div>
           {#if ou.memberCount > 0}
             <div class="text-xs text-gray-500">{ou.memberCount} members</div>
           {/if}
         </div>
-        <div class="flex-shrink-0">
+        <div class="flex-shrink-0 flex items-center space-x-2">
+          <!-- Status Indicator -->
           <span class="w-2 h-2 rounded-full {ou.status === 'active' ? 'bg-green-400' : 'bg-red-400'}"></span>
+          
+          <!-- Additional Dropdown Indicator for Parent OUs -->
+          {#if ou.children && ou.children.length > 0}
+            <div class="text-xs text-gray-400 font-medium">
+              {expandedNodes.has(ou.id) ? 'Expanded' : 'Collapsed'}
+            </div>
+          {/if}
         </div>
       </div>
     </div>
 
-    <!-- Children -->
-    {#if ou.children && ou.children.length > 0 && expandedNodes.has(ou.id)}
-      {#each ou.children as child}
-        {@render ouTreeNode(child, depth + 1)}
-      {/each}
+    <!-- Dropdown Children Container -->
+    {#if ou.children && ou.children.length > 0}
+      <div class="transition-all duration-300 ease-in-out overflow-hidden {expandedNodes.has(ou.id) ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'}">
+        <div class="border-l-2 border-gray-200 ml-4" style="margin-left: {depth * 16 + 16}px">
+          {#each ou.children as child}
+            <div class="relative">
+              <!-- Connection line -->
+              <div class="absolute left-0 top-0 w-4 h-6 border-b-2 border-gray-200"></div>
+              <div class="pl-6">
+                {@render ouTreeNode(child, depth + 1)}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
     {/if}
   </div>
 {/snippet}
@@ -1006,7 +1025,7 @@
         {#if selectedOU}
           <!-- Check if this OU has children to determine view type -->
           {@const currentList = currentTab === 'active' ? activeList : inactiveList}
-          {@const hasChildren = selectedOU ? currentList.some(ou => ou.parentId === selectedOU.id) : false}
+          {@const hasChildren = selectedOU ? currentList.some(ou => ou.parentId === selectedOU!.id) : false}
           
           <!-- OU Header -->
           <div class="p-6 border-b border-gray-200 bg-gray-50">
@@ -1194,7 +1213,7 @@
                 <div class="border-t border-gray-200 pt-6">
                   <div class="flex justify-end gap-3">
                     <button
-                      onclick={() => confirmDeleteOU(selectedOU)}
+                      onclick={() => selectedOU && confirmDeleteOU(selectedOU)}
                       class="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <Trash2 class="w-4 h-4" />
@@ -1211,7 +1230,7 @@
                       </button>
                     {:else}
                       <button
-                        onclick={() => reactivateOU(selectedOU.id)}
+                        onclick={() => selectedOU && reactivateOU(selectedOU.id)}
                         class="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                       >
                         <UserCheck class="w-4 h-4" />
