@@ -100,7 +100,11 @@
     acknowledgments: Acknowledgment[];
     isActive: boolean;
     status?: string;
-    
+    isRecurring?: boolean;
+    recurrencePattern?: 'daily' | 'weekly' | 'monthly';
+    recurrenceDays?: string[];
+    recurrenceTimes?: string[];
+    monthlyDay?: number;
   }
 
   interface BroadcastTemplate {
@@ -145,6 +149,11 @@
     targets?: BroadcastTarget[]; // <-- use the correct type here
     creatorFirstName?: string;
     creatorLastName?: string;
+    isRecurring?: boolean;
+    recurrencePattern?: 'daily' | 'weekly' | 'monthly';
+    recurrenceDays?: string[];
+    recurrenceTimes?: string[];
+    monthlyDay?: number;
   }
 
 
@@ -279,7 +288,6 @@ let newBroadcast = $state({
             title: broadcast.title,
             content: broadcast.content,
             priority: broadcast.priority as 'low' | 'medium' | 'high',
-            // Use the names that are returned from the API instead of the IDs
             targetRoles: Array.isArray(broadcast.targetRoles) ? broadcast.targetRoles : [],
             targetOUs: Array.isArray(broadcast.targetOUs) ? broadcast.targetOUs : [],
             createdBy: broadcast.createdBy,
@@ -292,7 +300,13 @@ let newBroadcast = $state({
             endDate: broadcast.endDate ? new Date(broadcast.endDate) : undefined,
             acknowledgments: broadcast.acknowledgments || [],
             isActive: broadcast.isActive !== false,
-            status: broadcast.status 
+            status: broadcast.status,
+            // Add these missing recurrence fields:
+            isRecurring: broadcast.isRecurring || false,
+            recurrencePattern: broadcast.recurrencePattern,
+            recurrenceDays: broadcast.recurrenceDays || [],
+            recurrenceTimes: broadcast.recurrenceTimes || [],
+            monthlyDay: broadcast.monthlyDay
           };
         });
 
@@ -455,7 +469,12 @@ let newBroadcast = $state({
         targetOUs,   // Use the extracted target OUs
         createdAt: new Date(b.createdAt),
         scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : undefined,
-        eventDate: b.eventDate ? new Date(b.eventDate) : undefined
+        eventDate: b.eventDate ? new Date(b.eventDate) : undefined,
+        isRecurring: b.isRecurring || false, 
+        recurrencePattern: b.recurrencePattern,
+        recurrenceDays: b.recurrenceDays || [],
+        recurrenceTimes: b.recurrenceTimes || [],
+        monthlyDay: b.monthlyDay
       };
     });
 
@@ -1347,7 +1366,8 @@ const loadTemplate = (templateId: string) => {
       isRecurring: false,
       recurrencePattern: 'daily',
       recurrenceTimes: [''],
-      recurrenceDays: [] // Initialize empty recurrence days array
+      recurrenceDays: [],
+      monthlyDay: 1
     };
   }
 };
@@ -1405,7 +1425,8 @@ const saveAsTemplate = async () => {
             isRecurring: false,
             recurrencePattern: 'daily',
             recurrenceTimes: [''],
-            recurrenceDays: []
+            recurrenceDays: [],
+            monthlyDay: 1
           };
           
           $toastStore.success('Template saved successfully!');
@@ -1465,7 +1486,8 @@ const saveAsTemplate = async () => {
           isRecurring: false,
           recurrencePattern: 'daily',
           recurrenceTimes: [''],
-          recurrenceDays: []
+          recurrenceDays: [],
+          monthlyDay: 1
         };
         $toastStore.success('Template deleted successfully!');
       } else {
@@ -1756,6 +1778,33 @@ const loadTemplates = async () => {
     reportResponses = [];
   };
 
+  // Add this helper function for formatting recurring times with AM/PM
+const formatRecurringTime = (timeString: string): string => {
+  if (!timeString) return '';
+  
+  try {
+    // Parse the 24-hour time format (HH:MM)
+    const [hours, minutes] = timeString.split(':').map(Number);
+    
+    if (isNaN(hours) || isNaN(minutes)) return timeString;
+    
+    // Convert to 12-hour format with AM/PM
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+    
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  } catch (error) {
+    console.error('Error formatting recurring time:', error);
+    return timeString;
+  }
+};
+
+// Add function to format an array of recurring times
+const formatRecurringTimes = (times: string[]): string => {
+  if (!Array.isArray(times) || times.length === 0) return '';
+  return times.map(time => formatRecurringTime(time)).join(', ');
+};
+
 </script>
 
 <svelte:head>
@@ -1845,7 +1894,8 @@ const loadTemplates = async () => {
                             isRecurring: false,
                             recurrencePattern: 'daily',
                             recurrenceTimes: [''],
-                            recurrenceDays: []
+                            recurrenceDays: [],
+                            monthlyDay: 1
                           };
                         }
                       }}
@@ -1879,7 +1929,8 @@ const loadTemplates = async () => {
                               isRecurring: false,
                               recurrencePattern: 'daily',
                               recurrenceTimes: [''],
-                              recurrenceDays: []
+                              recurrenceDays: [],
+                              monthlyDay: 1
                             };
                           }}
                           class="secondary-button whitespace-nowrap"
@@ -2745,27 +2796,19 @@ const loadTemplates = async () => {
             onclick={() => openBroadcastDetails(broadcast)}
             onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBroadcastDetails(broadcast); } }}
           >
-            {#if !broadcast.isActive}
-              <div class="absolute top-2 right-2">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  DONE
-                </span>
-              </div>
-            {:else if isNewBroadcast}
-              <div class="absolute top-2 right-2">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  NEW
-                </span>
-              </div>
-            {/if}
-            {#if broadcast.isRecurring && broadcast.recurrencePattern}
-              <div class="absolute top-2 {broadcast.isActive || isNewBroadcast ? 'right-24' : 'right-2'}">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  <Clock class="w-3 h-3 mr-1" />
-                  RECURRING {broadcast.recurrencePattern.toUpperCase()}
-                </span>
-              </div>
-            {/if}
+          {#if !broadcast.isActive}
+            <div class="absolute top-2 right-2">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                DONE
+              </span>
+            </div>
+          {:else if isNewBroadcast}
+            <div class="absolute top-2 right-2">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                NEW
+              </span>
+            </div>
+          {/if}
             
             <div class="flex items-start justify-between">
               <div class="flex-1 min-w-0">
@@ -2804,6 +2847,22 @@ const loadTemplates = async () => {
                     <div class="flex items-center space-x-1">
                       <Clock class="w-4 h-4 flex-shrink-0" />
                       <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
+                    </div>
+                  {/if}
+
+                  {#if broadcast.isRecurring && broadcast.recurrencePattern}
+                    <div class="flex items-center space-x-1 text-purple-600">
+                      <Clock class="w-4 h-4 flex-shrink-0" />
+                      <span class="whitespace-nowrap">
+                        Recurs: {broadcast.recurrencePattern === 'daily' ? 'Daily' : 
+                          broadcast.recurrencePattern === 'weekly' && Array.isArray(broadcast.recurrenceDays) ? 
+                          `Weekly (${broadcast.recurrenceDays.slice(0, 2).join(', ')}${broadcast.recurrenceDays.length > 2 ? '...' : ''})` : 
+                          broadcast.recurrencePattern === 'monthly' && broadcast.monthlyDay ? 
+                          `Monthly (Day ${broadcast.monthlyDay})` : 'Recurring'}
+                        {#if Array.isArray(broadcast.recurrenceTimes) && broadcast.recurrenceTimes.length > 0}
+                          at {formatRecurringTimes(broadcast.recurrenceTimes)}
+                        {/if}
+                      </span>
                     </div>
                   {/if}
                 </div>
@@ -2971,6 +3030,21 @@ const loadTemplates = async () => {
                   <span class="whitespace-nowrap">Event: {formatDate(broadcast.eventDate)}</span>
                 </div>
               {/if}
+              {#if broadcast.isRecurring && broadcast.recurrencePattern}
+                <div class="flex items-center space-x-1 text-purple-600">
+                  <Clock class="w-4 h-4 flex-shrink-0" />
+                  <span class="whitespace-nowrap">
+                    Recurs: {broadcast.recurrencePattern === 'daily' ? 'Daily' : 
+                      broadcast.recurrencePattern === 'weekly' && Array.isArray(broadcast.recurrenceDays) ? 
+                      `Weekly (${broadcast.recurrenceDays.slice(0, 2).join(', ')}${broadcast.recurrenceDays.length > 2 ? '...' : ''})` : 
+                      broadcast.recurrencePattern === 'monthly' && broadcast.monthlyDay ? 
+                      `Monthly (Day ${broadcast.monthlyDay})` : 'Recurring'}
+                      {#if Array.isArray(broadcast.recurrenceTimes) && broadcast.recurrenceTimes.length > 0}
+                        at {formatRecurringTimes(broadcast.recurrenceTimes)}
+                      {/if}
+                  </span>
+                </div>
+              {/if}
             </div>
           </div>
         </div>
@@ -3021,6 +3095,48 @@ const loadTemplates = async () => {
 
           <div class="mb-6 p-4 bg-gray-50 rounded-lg">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {#if selectedBroadcast.isRecurring && selectedBroadcast.recurrencePattern}
+                <div class="sm:col-span-2">
+                  <div class="bg-purple-50 border border-purple-100 rounded-lg p-3">
+                    <div class="flex items-center mb-2">
+                      <Clock class="w-4 h-4 text-purple-600 mr-2" />
+                      <span class="text-sm font-medium text-purple-700">Recurring Broadcast</span>
+                    </div>
+                    
+                    <div class="space-y-2 text-sm text-purple-800">
+                      <!-- Pattern -->
+                      <div>
+                        <span class="font-medium">Pattern:</span> 
+                        {selectedBroadcast.recurrencePattern.charAt(0).toUpperCase() + selectedBroadcast.recurrencePattern.slice(1)}
+                      </div>
+                      
+                      <!-- Days (for weekly pattern) -->
+                      {#if selectedBroadcast.recurrencePattern === 'weekly' && Array.isArray(selectedBroadcast.recurrenceDays) && selectedBroadcast.recurrenceDays.length > 0}
+                        <div>
+                          <span class="font-medium">Days:</span> 
+                          {selectedBroadcast.recurrenceDays.join(', ')}
+                        </div>
+                      {/if}
+                      
+                      <!-- Monthly day -->
+                      {#if selectedBroadcast.recurrencePattern === 'monthly' && selectedBroadcast.monthlyDay}
+                        <div>
+                          <span class="font-medium">Day of month:</span> 
+                          {selectedBroadcast.monthlyDay}{selectedBroadcast.monthlyDay === 1 ? 'st' : selectedBroadcast.monthlyDay === 2 ? 'nd' : selectedBroadcast.monthlyDay === 3 ? 'rd' : 'th'}
+                        </div>
+                      {/if}
+                      
+                      <!-- Recurrence times -->
+                      {#if Array.isArray(selectedBroadcast.recurrenceTimes) && selectedBroadcast.recurrenceTimes.length > 0}
+                        <div>
+                          <span class="font-medium">Times:</span> 
+                          {formatRecurringTimes(selectedBroadcast.recurrenceTimes)}
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+              {/if}
               <div class="flex items-center space-x-2 text-sm text-gray-600">
                 <Calendar class="w-4 h-4 flex-shrink-0" />
                 <span class="break-words">Created: {formatDate(selectedBroadcast.createdAt)}</span>
