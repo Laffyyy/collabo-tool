@@ -35,28 +35,28 @@
 		}
 	};
 
-	// Load security questions from backend - MOVED BEFORE onMount
-    const loadSecurityQuestions = async () => {
-        try {
-            const response = await apiClient.get<{
-                ok: boolean;
-                questions: { id: string; text: string; createdAt: string }[];
-            }>(API_CONFIG.endpoints.securityQuestions.getAll);
+	// Load security questions from backend - FIXED ENDPOINT
+	const loadSecurityQuestions = async () => {
+		try {
+			const response = await apiClient.get<{
+				ok: boolean;
+				questions: { id: string; text: string; createdAt: string }[];
+			}>(API_CONFIG.endpoints.securityQuestions.questions); // Changed from .getAll to .questions
 
-            if (response.ok && response.questions) {
-                firstTimeSecurityQuestions = response.questions.map(q => ({
-                    id: q.id,
-                    text: q.text
-                }));
-                console.log('Loaded security questions:', firstTimeSecurityQuestions);
-            } else {
-                error = 'Failed to load security questions';
-            }
-        } catch (err: any) {
-            console.error('Error loading security questions:', err);
-            error = 'Failed to load security questions';
-        }
-    };
+			if (response.ok && response.questions) {
+				firstTimeSecurityQuestions = response.questions.map(q => ({
+					id: q.id,
+					text: q.text
+				}));
+				console.log('Loaded security questions:', firstTimeSecurityQuestions);
+			} else {
+				error = 'Failed to load security questions';
+			}
+		} catch (err: any) {
+			console.error('Error loading security questions:', err);
+			error = 'Failed to load security questions';
+		}
+	};
 	
 	onMount(() => {
 		// Get stored user data from OTP verification

@@ -9,17 +9,18 @@ class UserSecurityAnswersModel {
         DELETE FROM tblusersecurityanswers 
         WHERE duserid = ${userId}
       `;
-
+  
       // Insert new answers one by one
       for (const qa of questionAnswers) {
-        const answerHash = await bcrypt.hash(qa.answer.toLowerCase().trim(), 10);
+        // Remove .toLowerCase() to make answers case-sensitive
+        const answerHash = await bcrypt.hash(qa.answer.trim(), 10);
         
         await sql`
           INSERT INTO tblusersecurityanswers (duserid, dsecurityquestionid, danswerhash)
           VALUES (${userId}, ${qa.questionId}, ${answerHash})
         `;
       }
-
+  
       return { success: true, message: 'Security answers saved successfully' };
     } catch (error) {
       console.error('Error saving security answers:', error);
@@ -53,13 +54,14 @@ class UserSecurityAnswersModel {
         FROM tblusersecurityanswers
         WHERE duserid = ${userId} AND dsecurityquestionid = ${questionId}
       `;
-
+  
       if (!result[0]) {
         return false;
       }
-
+  
+      // Remove .toLowerCase() to make verification case-sensitive
       const isValid = await bcrypt.compare(
-        providedAnswer.toLowerCase().trim(), 
+        providedAnswer.trim(), 
         result[0].danswerhash
       );
       

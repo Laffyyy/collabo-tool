@@ -171,12 +171,30 @@ async function setSecurityQuestions(req, res, next) {
   }
 }
 
+// Replace the existing forgotPassword function with this
 async function forgotPassword(req, res, next) {
   try {
     const { username } = req.body;
+    console.log(`Forgot password request for: ${username}`);
+    
     const result = await authService.forgotPassword({ username });
-    res.status(200).json({ ok: true, ...result });
+    res.status(200).json(result);
   } catch (err) {
+    console.error('Error in forgotPassword controller:', err);
+    next(err);
+  }
+}
+
+// Add this new function for password reset
+async function resetPassword(req, res, next) {
+  try {
+    const { token, newPassword } = req.body;
+    console.log(`Password reset request with token: ${token?.substring(0, 8)}...`);
+    
+    const result = await authService.resetPassword({ token, newPassword });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('Error in resetPassword controller:', err);
     next(err);
   }
 }
@@ -244,6 +262,19 @@ async function logout(req, res, next) {
   }
 }
 
+// Add this function to validate reset tokens
+async function validateResetToken(req, res, next) {
+  try {
+    const { token } = req.body;
+    console.log(`Validating reset token: ${token?.substring(0, 8)}...`);
+    
+    const result = await authService.validateResetToken({ token });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('Error in validateResetToken controller:', err);
+    next(err);
+  }
+}
 /**
  * Get session info including expiry time and session timeout configuration
  */
@@ -368,6 +399,7 @@ async function refreshSession(req, res, next) {
   }
 }
 
+// Update the module.exports to include validateResetToken
 module.exports = {
   login,
   verifyOtp,
@@ -378,8 +410,9 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  resetPassword,
+  validateResetToken, // Add this
   logout,
   getSessionInfo,
   refreshSession
 };
-

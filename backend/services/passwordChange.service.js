@@ -67,32 +67,32 @@ class PasswordChangeService {
         FROM tblusersecurityanswers
         WHERE duserid = ${userId}
       `;
-
+  
       if (storedAnswers.length === 0) {
         return { isValid: false, message: 'No security answers found for user' };
       }
-
+  
       // Verify each provided answer
       for (const providedAnswer of securityAnswers) {
         const storedAnswer = storedAnswers.find(
           stored => stored.questionid === providedAnswer.questionId
         );
-
+  
         if (!storedAnswer) {
           return { isValid: false, message: 'Security question not found' };
         }
-
-        // Compare answers (case-insensitive, trimmed)
-        const providedText = providedAnswer.answer.toLowerCase().trim();
-        const storedText = storedAnswer.answer.toLowerCase().trim();
-
+  
+        // Remove .toLowerCase() to make comparison case-sensitive
+        const providedText = providedAnswer.answer.trim();
+        const storedText = storedAnswer.answer.trim();
+  
         if (providedText !== storedText) {
           return { isValid: false, message: 'Security answer incorrect' };
         }
       }
-
+  
       return { isValid: true, message: 'Security answers verified' };
-
+  
     } catch (error) {
       console.error('Security answer verification error:', error);
       return { isValid: false, message: 'Verification failed' };
