@@ -1,5 +1,8 @@
 <script lang="ts">
   import { AlertTriangle, X } from 'lucide-svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
+
+  let isDarkMode = $derived(themeStore.isDarkMode);
 
   interface Props {
     show: boolean;
@@ -61,7 +64,7 @@
 {#if show}
   <!-- Modal Backdrop -->
   <div 
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-opacity-20 backdrop-blur-[2px]"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[2px] {isDarkMode ? 'bg-black/50' : 'bg-black/20'}"
     onclick={onCancel}
     onkeydown={handleKeydown}
     role="dialog"
@@ -74,17 +77,17 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
-      class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all"
+      class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all"
       role="document"
       onclick={(e) => e.stopPropagation()}
     >
       <!-- Header -->
-      <div class="flex items-center justify-between p-6 border-b border-gray-200">
+      <div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
         <div class="flex items-center space-x-3">
           <div class="flex-shrink-0">
             <AlertTriangle class="w-6 h-6 {getIconColor()}" />
           </div>
-          <h2 id="modal-title" class="text-lg font-semibold text-gray-900">
+          <h2 id="modal-title" class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-lg font-semibold transition-colors duration-300">
             {title}
           </h2>
         </div>
@@ -92,16 +95,16 @@
 
       <!-- Content -->
       <div class="p-6">
-        <p id="modal-description" class="text-gray-600 leading-relaxed">
+        <p id="modal-description" class="{isDarkMode ? 'text-gray-300' : 'text-gray-600'} leading-relaxed transition-colors duration-300">
           {message}
         </p>
       </div>
 
       <!-- Footer -->
-      <div class="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+      <div class="{isDarkMode ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'} flex items-center justify-end space-x-3 p-6 border-t rounded-b-xl transition-colors duration-300">
         <button
           onclick={onCancel}
-          class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-200"
+          class="{isDarkMode ? 'text-gray-300 bg-gray-700 border-gray-600 hover:bg-gray-600 focus:ring-gray-600' : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 focus:ring-gray-200'} px-4 py-2 border rounded-lg transition-colors focus:outline-none focus:ring-2"
         >
           {cancelText}
         </button>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { API_CONFIG } from '$lib/api/config';
   import { onMount, onDestroy } from 'svelte';
+    import { themeStore } from '$lib/stores/theme.svelte';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -85,6 +86,9 @@
   let hasChanges = $state(false);
   let savedConfigString = $state('');
   let activeTab = $state<'general' | 'chat' | 'broadcast'>('general');
+  
+  // Theme reactive variable
+  const isDarkMode = $derived(themeStore.isDarkMode);
 
   // Load configuration from backend (without loading overlay)
   const loadConfiguration = async () => {
@@ -279,17 +283,23 @@
   <title>Global Configuration - Admin Controls</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50">
-  <!-- Remove the custom alert container since we're using ToastContainer -->
-  
-  <!-- Rest of your existing template -->
+{#if isLoading}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 flex items-center space-x-3 transition-colors duration-300">
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#01c0a4]"></div>
+      <span class="{isDarkMode ? 'text-gray-200' : 'text-gray-700'} transition-colors duration-300">Loading configuration...</span>
+    </div>
+  </div>
+{/if}
+
+<div class="min-h-screen {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300">
   <div class="max-w-5xl mx-auto px-6 py-8">
     <!-- Header -->
     <div class="mb-8 fade-in">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900 mb-1">Global Configuration</h1>
-          <p class="text-sm text-gray-600">Manage system-wide settings and default policies for organization units</p>
+          <h1 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-2xl font-bold mb-1 transition-colors duration-300">Global Configuration</h1>
+          <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm transition-colors duration-300">Manage system-wide settings and default policies for organization units</p>
         </div>
         <div class="flex space-x-3">
           {#if hasChanges}
@@ -322,26 +332,26 @@
 
     <!-- Main Configuration Panel -->
 <!-- Main Configuration Panel -->
-    <div class="collaboration-card fade-in">
+    <div class="{isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} collaboration-card fade-in transition-colors duration-300">
       <!-- Tab Navigation -->
-      <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">
+      <div class="flex space-x-6 px-6 pt-6 border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
         <button
           onclick={() => activeTab = 'general'}
-          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : isDarkMode ? 'text-gray-300 border-transparent hover:text-white' : 'text-gray-700 border-transparent hover:text-gray-900'}"
         >
           <Globe class="w-5 h-5" />
           <span>General</span>
         </button>
         <button
           onclick={() => activeTab = 'chat'}
-          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'chat' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'chat' ? 'text-[#01c0a4] border-[#01c0a4]' : isDarkMode ? 'text-gray-300 border-transparent hover:text-white' : 'text-gray-700 border-transparent hover:text-gray-900'}"
         >
           <MessageSquare class="w-5 h-5" />
           <span>Chat</span>
         </button>
         <button
           onclick={() => activeTab = 'broadcast'}
-          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'broadcast' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'broadcast' ? 'text-[#01c0a4] border-[#01c0a4]' : isDarkMode ? 'text-gray-300 border-transparent hover:text-white' : 'text-gray-700 border-transparent hover:text-gray-900'}"
         >
           <Radio class="w-5 h-5" />
           <span>Broadcast</span>
@@ -355,22 +365,22 @@
           <div class="space-y-6 max-w-4xl">
             <!-- General Settings -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+              <h3 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-lg font-semibold flex items-center transition-colors duration-300">
                 <Globe class="w-5 h-5 text-[#01c0a4] mr-2" />
                 General Settings
               </h3>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label for="dateFormat" class="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
-                  <select id="dateFormat" bind:value={config.dateFormat} class="input-field">
+                  <label for="dateFormat" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Date Format</label>
+                  <select id="dateFormat" bind:value={config.dateFormat} class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300">
                     <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                     <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                     <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                   </select>
                 </div>
                 <div>
-                  <label for="timeFormat" class="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
-                  <select id="timeFormat" bind:value={config.timeFormat} class="input-field">
+                  <label for="timeFormat" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Time Format</label>
+                  <select id="timeFormat" bind:value={config.timeFormat} class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300">
                     <option value="12h">12 Hour (AM/PM)</option>
                     <option value="24h">24 Hour</option>
                   </select>
@@ -380,33 +390,33 @@
 
             <!-- Security Settings -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+              <h3 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-lg font-semibold flex items-center transition-colors duration-300">
                 <Shield class="w-5 h-5 text-[#01c0a4] mr-2" />
                 Security Settings
               </h3>
-              <div class="bg-gray-50 p-4 rounded-lg">
-                <h4 class="font-semibold text-gray-900 mb-3">Password Policy</h4>
+              <div class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} p-4 rounded-lg transition-colors duration-300">
+                <h4 class="{isDarkMode ? 'text-white' : 'text-gray-900'} font-semibold mb-3 transition-colors duration-300">Password Policy</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label for="minLength" class="block text-sm font-medium text-gray-700 mb-2">Minimum Length</label>
+                    <label for="minLength" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Minimum Length</label>
                     <input
                       id="minLength"
                       type="number"
                       bind:value={config.passwordPolicy.minLength}
                       min="6"
                       max="32"
-                      class="input-field"
+                      class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                     />
                   </div>
                   <div>
-                    <label for="passwordExpiry" class="block text-sm font-medium text-gray-700 mb-2">Password Expiry (Days)</label>
+                    <label for="passwordExpiry" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Password Expiry (Days)</label>
                     <input
                       id="passwordExpiry"
                       type="number"
                       bind:value={config.passwordPolicy.passwordExpiry}
                       min="30"
                       max="365"
-                      class="input-field"
+                      class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                     />
                   </div>
                   <div class="md:col-span-2 space-y-3">
@@ -414,58 +424,58 @@
                       <input
                         type="checkbox"
                         bind:checked={config.passwordPolicy.requireUppercase}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                        class="{isDarkMode ? 'border-gray-500 bg-gray-600' : 'border-gray-300 bg-white'} rounded text-[#01c0a4] focus:ring-[#01c0a4] transition-colors duration-300"
                       />
-                      <span class="text-sm">Require Uppercase Letters</span>
+                      <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Require Uppercase Letters</span>
                     </label>
                     <label class="flex items-center space-x-2">
                       <input
                         type="checkbox"
                         bind:checked={config.passwordPolicy.requireLowercase}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                        class="{isDarkMode ? 'border-gray-500 bg-gray-600' : 'border-gray-300 bg-white'} rounded text-[#01c0a4] focus:ring-[#01c0a4] transition-colors duration-300"
                       />
-                      <span class="text-sm">Require Lowercase Letters</span>
+                      <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Require Lowercase Letters</span>
                     </label>
                     <label class="flex items-center space-x-2">
                       <input
                         type="checkbox"
                         bind:checked={config.passwordPolicy.requireNumbers}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                        class="{isDarkMode ? 'border-gray-500 bg-gray-600' : 'border-gray-300 bg-white'} rounded text-[#01c0a4] focus:ring-[#01c0a4] transition-colors duration-300"
                       />
-                      <span class="text-sm">Require Numbers</span>
+                      <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Require Numbers</span>
                     </label>
                     <label class="flex items-center space-x-2">
                       <input
                         type="checkbox"
                         bind:checked={config.passwordPolicy.requireSpecialChars}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                        class="{isDarkMode ? 'border-gray-500 bg-gray-600' : 'border-gray-300 bg-white'} rounded text-[#01c0a4] focus:ring-[#01c0a4] transition-colors duration-300"
                       />
-                      <span class="text-sm">Require Special Characters</span>
+                      <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Require Special Characters</span>
                     </label>
                   </div>
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label for="sessionTimeout" class="block text-sm font-medium text-gray-700 mb-2">Session Timeout (Minutes)</label>
+                  <label for="sessionTimeout" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Session Timeout (Minutes)</label>
                   <input
                     id="sessionTimeout"
                     type="number"
                     bind:value={config.sessionTimeout}
                     min="15"
                     max="1440"
-                    class="input-field"
+                    class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                   />
                 </div>
                 <div>
-                  <label for="maxLoginAttempts" class="block text-sm font-medium text-gray-700 mb-2">Max Login Attempts</label>
+                  <label for="maxLoginAttempts" class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium mb-2 transition-colors duration-300">Max Login Attempts</label>
                   <input
                     id="maxLoginAttempts"
                     type="number"
                     bind:value={config.maxLoginAttempts}
                     min="3"
                     max="10"
-                    class="input-field"
+                    class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                   />
                 </div>
               </div>
@@ -477,67 +487,67 @@
             {#if activeTab === 'chat'}
               <div class="space-y-4 max-w-5xl">
                 <div class="mb-4">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-2">Default Chat Policies</h3>
-                  <p class="text-gray-600">These settings will be applied as defaults when creating new organization units. Individual OUs can override these settings.</p>
+                  <h3 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-lg font-semibold mb-2 transition-colors duration-300">Default Chat Policies</h3>
+                  <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} transition-colors duration-300">These settings will be applied as defaults when creating new organization units. Individual OUs can override these settings.</p>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="{isDarkMode ? 'text-white' : 'text-gray-900'} font-semibold mb-3 flex items-center transition-colors duration-300">
                     <User class="w-5 h-5 mr-2" />
                     Frontline User Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                      <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Can initiate 1:1 conversations</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'frontlineCanInitiate1v1')}
                         aria-label="Toggle frontline can initiate 1v1 chats"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanInitiate1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanInitiate1v1 ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanInitiate1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create group chats</span>
+                      <span class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Can create group chats</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'frontlineCanCreateGroups')}
                         aria-label="Toggle frontline can create groups"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanCreateGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanCreateGroups ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can join group chats</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can join group chats</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'frontlineCanJoinGroups')}
                         aria-label="Toggle frontline can join groups"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanJoinGroups ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can share files</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can share files</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'frontlineCanShareFiles')}
                         aria-label="Toggle frontline can share files"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanShareFiles ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can forward messages</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'frontlineCanForwardMessages')}
                         aria-label="Toggle frontline can forward messages"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.frontlineCanForwardMessages ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.frontlineCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -545,63 +555,63 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <User class="w-5 h-5 mr-2" />
                     Support User Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can initiate 1:1 conversations</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supportCanInitiate1v1')}
                         aria-label="Toggle support can initiate 1v1 chats"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanInitiate1v1 ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanInitiate1v1 ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanInitiate1v1 ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create group chats</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can create group chats</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supportCanCreateGroups')}
                         aria-label="Toggle support can create groups"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanCreateGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanCreateGroups ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can join group chats</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can join group chats</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supportCanJoinGroups')}
                         aria-label="Toggle support can join groups"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanJoinGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanJoinGroups ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanJoinGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can share files</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can share files</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supportCanShareFiles')}
                         aria-label="Toggle support can share files"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanShareFiles ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can forward messages</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supportCanForwardMessages')}
                         aria-label="Toggle support can forward messages"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supportCanForwardMessages ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supportCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -609,41 +619,41 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <UserCheck class="w-5 h-5 mr-2" />
                     Supervisor Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create group chats</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can create group chats</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supervisorCanCreateGroups')}
                         aria-label="Toggle supervisor can create groups"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanCreateGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanCreateGroups ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supervisorCanCreateGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can share files</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can share files</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supervisorCanShareFiles')}
                         aria-label="Toggle supervisor can share files"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanShareFiles ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supervisorCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can forward messages</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'supervisorCanForwardMessages')}
                         aria-label="Toggle supervisor can forward messages"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.supervisorCanForwardMessages ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.supervisorCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -651,41 +661,41 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <Shield class="w-5 h-5 mr-2" />
                     Manager Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can access all group chats</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can access all group chats</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'managerCanAccessAllGroups')}
                         aria-label="Toggle manager can access all groups"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanAccessAllGroups ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanAccessAllGroups ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.managerCanAccessAllGroups ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can share files</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can share files</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'managerCanShareFiles')}
                         aria-label="Toggle manager can share files"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanShareFiles ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanShareFiles ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.managerCanShareFiles ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can forward messages</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can forward messages</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('chat', 'managerCanForwardMessages')}
                         aria-label="Toggle manager can forward messages"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanForwardMessages ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.managerCanForwardMessages ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.managerCanForwardMessages ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -693,17 +703,17 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-4">General Chat Settings</h4>
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-4">General Chat Settings</h4>
                   <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Allow emojis and reactions</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Allow emojis and reactions</span>
                         <button
                           type="button"
                           onclick={() => toggleRule('chat', 'allowEmojis')}
                           aria-label="Toggle allow emojis and reactions"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.allowEmojis ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.allowEmojis ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.allowEmojis ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
@@ -719,7 +729,7 @@
                           bind:value={config.chat.inactiveGroupArchiveDays}
                           min="1"
                           max="365"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                       <div>
@@ -730,7 +740,7 @@
                           bind:value={config.chat.maxFileSize}
                           min="1"
                           max="100"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                       <div>
@@ -741,7 +751,7 @@
                           bind:value={config.chat.maxGroupSize}
                           min="5"
                           max="500"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                     </div>
@@ -755,7 +765,7 @@
                           bind:value={config.chat.messageEditWindow}
                           min="0"
                           max="60"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                         <p class="text-xs text-gray-500 mt-1">Set to 0 to disable message editing</p>
                       </div>
@@ -765,7 +775,7 @@
                         <input
                           id="allowedFileTypes"
                           bind:value={config.chat.allowedFileTypes}
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                           placeholder="jpg, png, pdf, doc, docx"
                         />
                         <p class="text-xs text-gray-500 mt-1">Currently: {formatFileTypes(config.chat.allowedFileTypes)}</p>
@@ -775,17 +785,17 @@
                 </div>
 
                 <!-- Pinned Messages Settings -->
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-4">Pinned Messages Settings</h4>
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-4">Pinned Messages Settings</h4>
                   <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Enable pinned messages</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Enable pinned messages</span>
                         <button
                           type="button"
                           onclick={() => config.chat.pinnedMessages.enabled = !config.chat.pinnedMessages.enabled}
                           aria-label="Toggle pinned messages"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.pinnedMessages.enabled ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.chat.pinnedMessages.enabled ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.chat.pinnedMessages.enabled ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
@@ -798,7 +808,7 @@
                           bind:value={config.chat.pinnedMessages.maxPinnedPerConversation}
                           min="1"
                           max="50"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                     </div>
@@ -811,34 +821,34 @@
             {#if activeTab === 'broadcast'}
               <div class="space-y-4 max-w-5xl">
                 <div class="mb-4">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-2">Default Broadcast Policies</h3>
-                  <p class="text-gray-600">These settings will be applied as defaults when creating new organization units. Individual OUs can override these settings.</p>
+                  <h3 class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-2">Default Broadcast Policies</h3>
+                  <p class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} transition-colors duration-300">These settings will be applied as defaults when creating new organization units. Individual OUs can override these settings.</p>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <User class="w-5 h-5 mr-2" />
                     Frontline User Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create broadcasts</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can create broadcasts</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('broadcast', 'frontlineCanCreateBroadcast')}
                         aria-label="Toggle frontline can create broadcasts"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.frontlineCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.frontlineCanCreateBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.frontlineCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can reply to broadcasts</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can reply to broadcasts</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('broadcast', 'frontlineCanReplyToBroadcast')}
                         aria-label="Toggle frontline can reply to broadcasts"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.frontlineCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.frontlineCanReplyToBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.frontlineCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -846,30 +856,30 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <User class="w-5 h-5 mr-2" />
                     Support User Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create broadcasts</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can create broadcasts</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('broadcast', 'supportCanCreateBroadcast')}
                         aria-label="Toggle support can create broadcasts"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supportCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supportCanCreateBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.supportCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
                     </label>
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can reply to broadcasts</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can reply to broadcasts</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('broadcast', 'supportCanReplyToBroadcast')}
                         aria-label="Toggle support can reply to broadcasts"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supportCanReplyToBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supportCanReplyToBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.supportCanReplyToBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -877,19 +887,19 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <UserCheck class="w-5 h-5 mr-2" />
                     Supervisor Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create broadcasts</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can create broadcasts</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('broadcast', 'supervisorCanCreateBroadcast')}
                         aria-label="Toggle supervisor can create broadcasts"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supervisorCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.supervisorCanCreateBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.supervisorCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -897,19 +907,19 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-3 flex items-center">
                     <Shield class="w-5 h-5 mr-2" />
                     Manager Permissions
                   </h4>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label class="flex items-center justify-between">
-                      <span class="text-sm text-gray-700">Can create broadcasts</span>
+                      <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Can create broadcasts</span>
                       <button
                         type="button"
                         onclick={() => toggleRule('broadcast', 'managerCanCreateBroadcast')}
                         aria-label="Toggle manager can create broadcasts"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.managerCanCreateBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.managerCanCreateBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                       >
                         <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.managerCanCreateBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                       </button>
@@ -917,61 +927,61 @@
                   </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border">
-                  <h4 class="font-semibold text-gray-900 mb-4">General Broadcast Settings</h4>
+                <div class="{isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} p-4 rounded-lg border transition-colors duration-300">
+                  <h4 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300 mb-4">General Broadcast Settings</h4>
                   <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Require approval for broadcasts</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Require approval for broadcasts</span>
                         <button
                           type="button"
                           onclick={() => toggleRule('broadcast', 'requireApprovalForBroadcast')}
                           aria-label="Toggle require approval for broadcasts"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.requireApprovalForBroadcast ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.requireApprovalForBroadcast ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.requireApprovalForBroadcast ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
                       </label>
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Allow scheduled broadcasts</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Allow scheduled broadcasts</span>
                         <button
                           type="button"
                           onclick={() => toggleRule('broadcast', 'allowScheduledBroadcasts')}
                           aria-label="Toggle allow scheduled broadcasts"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.allowScheduledBroadcasts ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.allowScheduledBroadcasts ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.allowScheduledBroadcasts ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
                       </label>
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Allow priority broadcasts</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Allow priority broadcasts</span>
                         <button
                           type="button"
                           onclick={() => toggleRule('broadcast', 'allowPriorityBroadcasts')}
                           aria-label="Toggle allow priority broadcasts"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.allowPriorityBroadcasts ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.allowPriorityBroadcasts ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.allowPriorityBroadcasts ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
                       </label>
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Require acknowledgment by default</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Require acknowledgment by default</span>
                         <button
                           type="button"
                           onclick={() => toggleRule('broadcast', 'requireAcknowledgment')}
                           aria-label="Toggle require acknowledgment by default"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.requireAcknowledgment ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.requireAcknowledgment ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.requireAcknowledgment ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
                       </label>
                       <label class="flex items-center justify-between">
-                        <span class="text-sm text-gray-700">Send acknowledgment reminders</span>
+                        <span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-700'} transition-colors duration-300">Send acknowledgment reminders</span>
                         <button
                           type="button"
                           onclick={() => toggleRule('broadcast', 'acknowledgmentReminders')}
                           aria-label="Toggle send acknowledgment reminders"
-                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.acknowledgmentReminders ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+                          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {config.broadcast.acknowledgmentReminders ? 'bg-[#01c0a4]' : isDarkMode ? 'bg-gray-600' : 'bg-gray-200'}"
                         >
                           <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {config.broadcast.acknowledgmentReminders ? 'translate-x-6' : 'translate-x-1'}"></span>
                         </button>
@@ -987,7 +997,7 @@
                           bind:value={config.broadcast.broadcastRetentionDays}
                           min="1"
                           max="3650"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                       <div>
@@ -998,7 +1008,7 @@
                           bind:value={config.broadcast.reminderInterval}
                           min="1"
                           max="10080"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                       <div>
@@ -1009,7 +1019,7 @@
                           bind:value={config.broadcast.maxBroadcastTargets}
                           min="10"
                           max="10000"
-                          class="input-field"
+                          class="{isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-900'} input-field transition-colors duration-300"
                         />
                       </div>
                     </div>
@@ -1022,18 +1032,15 @@
 
     <!-- Change Warning -->
     {#if hasChanges}
-      <div class="collaboration-card p-4 border-l-4 border-yellow-500 bg-yellow-50 fade-in">
+      <div class="{isDarkMode ? 'bg-yellow-900 border-yellow-600' : 'bg-yellow-50 border-yellow-500'} collaboration-card p-4 border-l-4 fade-in transition-colors duration-300">
         <div class="flex items-center">
           <Clock class="w-5 h-5 text-yellow-600 mr-3" />
           <div>
-            <p class="text-sm font-medium text-yellow-800">Unsaved Changes</p>
-            <p class="text-sm text-yellow-700">You have unsaved configuration changes. These will become the default settings for new organization units.</p>
+            <p class="{isDarkMode ? 'text-yellow-300' : 'text-yellow-800'} text-sm font-medium transition-colors duration-300">Unsaved Changes</p>
+            <p class="{isDarkMode ? 'text-yellow-400' : 'text-yellow-700'} text-sm transition-colors duration-300">You have unsaved configuration changes. These will become the default settings for new organization units.</p>
           </div>
         </div>
       </div>
     {/if}
   </div>
 </div>
-
-<!-- Add ToastContainer at the end like broadcast management -->
-<ToastContainer />

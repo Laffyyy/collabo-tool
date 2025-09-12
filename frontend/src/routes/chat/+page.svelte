@@ -8,6 +8,7 @@
 	import GroupAvatar from '$lib/components/GroupAvatar.svelte';
 	import UserProfileModal from '$lib/components/UserProfileModal.svelte';
 	import LoginBackground from '../login/LoginBackground.svelte';
+	import { themeStore } from '$lib/stores/theme.svelte';
 	import { 
 		Search, Plus, Archive, MessageCircle, Users, Send, Paperclip, 
 		Smile, MoreVertical, Reply, ChevronDown, ChevronRight, X, 
@@ -196,6 +197,9 @@
 		confirmText: string;
 		action: () => void;
 	} | null>(null);
+	
+	// Theme state
+	let isDarkMode = $derived(themeStore.isDarkMode);
 	
 	// Group settings edit state
 	let editingGroupName = $state('');
@@ -1622,21 +1626,21 @@ const groupedMessages = $derived(() => {
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="h-screen flex flex-col bg-gray-50" onclick={() => showEmojiPicker = false}>
+<div class="h-screen flex flex-col {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300" onclick={() => showEmojiPicker = false}>
 	<Navigation />
 	
 	<div class="flex-1 flex overflow-hidden">
 		<!-- Sidebar -->
-		<aside class="w-80 bg-white border-r border-gray-300 flex flex-col">
+		<aside class="w-80 {isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} border-r flex flex-col transition-colors duration-300">
 			<!-- Search and Create -->
-			<div class="p-2 border-b border-gray-200 bg-gray-50">
+			<div class="p-2 border-b {isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'} transition-colors duration-300">
 				<div class="relative mb-2">
 					<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 					<input
 						bind:value={searchInput}
 						type="text"
 						placeholder="Search conversations..."
-						class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+						class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'} transition-colors duration-300"
 					/>
 				</div>
 				
@@ -1652,27 +1656,27 @@ const groupedMessages = $derived(() => {
 			<!-- Conversations List -->
 			<div class="flex-1 overflow-y-auto">
 				<!-- Group Chats Section -->
-				<div class="border-b border-gray-200">
+				<div class="border-b {isDarkMode ? 'border-gray-700' : 'border-gray-200'} transition-colors duration-300">
 					<button
 						onclick={() => showGroups = !showGroups}
-						class="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left"
+						class="w-full flex items-center justify-between px-3 py-2 text-left {isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors duration-300"
 					>
 						<div class="flex items-center space-x-2">
 							{#if showGroups}
-								<ChevronDown class="w-4 h-4 text-gray-500" />
+								<ChevronDown class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							{:else}
-								<ChevronRight class="w-4 h-4 text-gray-500" />
+								<ChevronRight class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							{/if}
-							<span class="font-medium text-gray-700 text-sm">Group Chats</span>
+							<span class="font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} text-sm transition-colors duration-300">Group Chats</span>
 						</div>
-						<span class="text-xs text-gray-500">{groupChats.length}</span>
+						<span class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{groupChats.length}</span>
 					</button>
 					
 					{#if shouldShowGroups}
 						{#each filteredGroupChats as conversation (conversation.id)}
 							<button
 								onclick={() => selectConversation(conversation)}
-								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								class="w-full px-3 py-2 flex items-center space-x-3 border-b text-left transition-colors {isDarkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-50 border-gray-100'} {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
 									{#if conversation.type === 'group'}
@@ -1693,13 +1697,13 @@ const groupedMessages = $derived(() => {
 								
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center justify-between">
-										<h3 class="font-medium truncate flex items-center space-x-1 text-sm {conversation.isRead === false ? 'text-gray-900' : 'text-gray-500'}">
+										<h3 class="font-medium truncate flex items-center space-x-1 text-sm {conversation.isRead === false ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-gray-400' : 'text-gray-500')} transition-colors duration-300">
 											<span>{conversation.name}</span>
-											<Users class="w-3 h-3 text-gray-500" />
+											<Users class="w-3 h-3 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 										</h3>
-										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
+										<span class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+									<p class="text-xs {conversation.isRead === false ? (isDarkMode ? 'text-gray-300' : 'text-gray-600') : (isDarkMode ? 'text-gray-500' : 'text-gray-400')} truncate transition-colors duration-300">
 										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet' && conversation.lastMessage !== 'Group created'}
 											{#if conversation.messages && conversation.messages.length > 0}
 												{#if conversation.messages[conversation.messages.length - 1].senderId === currentUserId}
@@ -1730,17 +1734,17 @@ const groupedMessages = $derived(() => {
 				<div>
 					<button
 						onclick={() => showConversations = !showConversations}
-						class="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 text-left"
+						class="w-full flex items-center justify-between px-3 py-2 text-left {isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors duration-300"
 					>
 						<div class="flex items-center space-x-2">
 							{#if showConversations}
-								<ChevronDown class="w-4 h-4 text-gray-500" />
+								<ChevronDown class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							{:else}
-								<ChevronRight class="w-4 h-4 text-gray-500" />
+								<ChevronRight class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							{/if}
-							<span class="font-medium text-gray-700 text-sm">Direct Messages</span>
+							<span class="font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} text-sm transition-colors duration-300">Direct Messages</span>
 						</div>
-						<span class="text-xs text-gray-500">{directConversations.length}</span>
+						<span class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{directConversations.length}</span>
 					</button>
 					
 					{#if shouldShowConversations}
@@ -1765,7 +1769,7 @@ const groupedMessages = $derived(() => {
 										selectConversation(conversation);
 									}
 								}}
-								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
+								class="w-full px-3 py-2 flex items-center space-x-3 border-b text-left transition-colors {isDarkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-50 border-gray-100'} {currentConversation?.id === conversation.id ? 'bg-[#01c0a4]/5 border-r-2 border-r-[#01c0a4]' : ''}"
 							>
 								<div class="relative flex-shrink-0">
 									<div 
@@ -1783,12 +1787,12 @@ const groupedMessages = $derived(() => {
 								
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center justify-between">
-										<h3 class="font-medium truncate text-sm {conversation.isRead === false ? 'text-gray-900' : 'text-gray-500'}">
+										<h3 class="font-medium truncate text-sm transition-colors duration-300 {conversation.isRead === false ? (isDarkMode ? 'text-white' : 'text-gray-900') : (isDarkMode ? 'text-gray-400' : 'text-gray-500')}">
 											{conversation.name}
 										</h3>
-										<span class="text-xs text-gray-500">{formatTime(conversation.lastMessageTime)}</span>
+										<span class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{formatTime(conversation.lastMessageTime)}</span>
 									</div>
-									<p class="text-xs {conversation.isRead === false ? 'text-gray-600' : 'text-gray-400'} truncate">
+									<p class="text-xs truncate transition-colors duration-300 {conversation.isRead === false ? (isDarkMode ? 'text-gray-300' : 'text-gray-600') : (isDarkMode ? 'text-gray-500' : 'text-gray-400')}">
 										{#if conversation.lastMessage && conversation.lastMessage !== 'No messages yet'}
 											{#if conversation.messages && conversation.messages.length > 0}
 												{@const lastMessage = conversation.messages[conversation.messages.length - 1]}
@@ -1818,18 +1822,18 @@ const groupedMessages = $derived(() => {
 
 				<!-- Start New Conversation Section (only when searching) -->
 				{#if searchInput.trim() && filteredUsers.length > 0}
-					<div class="border-b border-gray-200">
+					<div class="border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
 						<div class="px-3 py-2">
 							<div class="flex items-center space-x-2">
-								<UserPlus class="w-4 h-4 text-gray-500" />
-								<span class="font-medium text-gray-700 text-sm">Start New Conversation</span>
+								<UserPlus class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
+								<span class="font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-700'} text-sm transition-colors duration-300">Start New Conversation</span>
 							</div>
 						</div>
 						
 						{#each filteredUsers as user (user.id)}
 							<button
 								onclick={() => startNewConversation(user)}
-								class="w-full px-3 py-2 flex items-center space-x-3 hover:bg-gray-50 border-b border-gray-100 text-left transition-colors"
+								class="w-full px-3 py-2 flex items-center space-x-3 {isDarkMode ? 'hover:bg-gray-700 border-gray-600' : 'hover:bg-gray-50 border-gray-100'} border-b text-left transition-colors duration-300"
 							>
 								<div class="relative flex-shrink-0">
 									<ProfileAvatar 
@@ -1842,13 +1846,13 @@ const groupedMessages = $derived(() => {
 								
 								<div class="flex-1 min-w-0">
 									<div class="flex items-center justify-between">
-										<h3 class="font-medium text-gray-900 truncate text-sm">
+										<h3 class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} truncate text-sm transition-colors duration-300">
 											{user.name}
 										</h3>
-										<MessageCircle class="w-3 h-3 text-gray-400" />
+										<MessageCircle class="w-3 h-3 {isDarkMode ? 'text-gray-500' : 'text-gray-400'} transition-colors duration-300" />
 									</div>
-									<p class="text-xs text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
-									<p class="text-xs text-gray-400">{user.status === 'online' ? 'Online' : 'Offline'}</p>
+									<p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{user.organizationalUnit || user.department} • {user.role}</p>
+									<p class="text-xs {isDarkMode ? 'text-gray-500' : 'text-gray-400'} transition-colors duration-300">{user.status === 'online' ? 'Online' : 'Offline'}</p>
 								</div>
 							</button>
 						{/each}
@@ -1859,9 +1863,9 @@ const groupedMessages = $derived(() => {
 
 		<!-- Chat Area -->
 		{#if currentConversation}
-			<main class="flex-1 flex flex-col bg-gray-50">
+			<main class="flex-1 flex flex-col {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300">
 				<!-- Chat Header -->
-				<div class="px-4 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
+				<div class="px-4 py-3 border-b flex items-center justify-between {isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-white'} transition-colors duration-300">
 					<div class="flex items-center space-x-3">
 						{#if currentConversation.type === 'group'}
 							<GroupAvatar 
@@ -1901,7 +1905,7 @@ const groupedMessages = $derived(() => {
 							</button>
 						{/if}
 						<div 
-							class="{currentConversation.type === 'direct' ? 'cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors' : ''}"
+							class="{currentConversation.type === 'direct' ? `cursor-pointer rounded-lg p-2 -m-2 transition-colors ${isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}` : ''}"
 							onclick={() => {
 								if (currentConversation && currentConversation.type === 'direct') {
 									const otherUser = currentConversation.members.find(m => m.id !== '1');
@@ -1920,11 +1924,11 @@ const groupedMessages = $derived(() => {
 								}
 							}}
 						>
-							<h2 class="font-semibold text-gray-900 text-sm">{currentConversation.name}</h2>
+							<h2 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} text-sm transition-colors duration-300">{currentConversation.name}</h2>
 							{#if currentConversation.type === 'group'}
-								<p class="text-xs text-gray-500">{currentConversation.members.length} members</p>
+								<p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{currentConversation.members.length} members</p>
 							{:else}
-								<p class="text-xs text-gray-500">
+								<p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
 									{currentConversation.department} • {currentConversation.role}
 									{currentConversation.isOnline ? ' • Online' : ' • Offline'}
 								</p>
@@ -1935,7 +1939,7 @@ const groupedMessages = $derived(() => {
 					<div class="flex items-center space-x-2">
 						<button
 							onclick={() => showSearchInChat = !showSearchInChat}
-							class="p-2 text-gray-600 hover:text-[#01c0a4] hover:bg-gray-100 rounded-lg transition-colors"
+							class="p-2 rounded-lg transition-colors {isDarkMode ? 'text-gray-300 hover:text-[#01c0a4] hover:bg-gray-700' : 'text-gray-600 hover:text-[#01c0a4] hover:bg-gray-100'}"
 						>
 							<Search class="w-5 h-5" />
 						</button>
@@ -1943,14 +1947,14 @@ const groupedMessages = $derived(() => {
 						{#if currentConversation.type === 'group'}
 							<button
 								onclick={toggleMembersPanel}
-								class="p-2 text-gray-600 hover:text-[#01c0a4] hover:bg-gray-100 rounded-lg transition-colors"
+								class="p-2 rounded-lg transition-colors {isDarkMode ? 'text-gray-300 hover:text-[#01c0a4] hover:bg-gray-700' : 'text-gray-600 hover:text-[#01c0a4] hover:bg-gray-100'}"
 							>
 								<Users class="w-5 h-5" />
 							</button>
 							
 							<button
 								onclick={openGroupSettings}
-								class="p-2 text-gray-600 hover:text-[#01c0a4] hover:bg-gray-100 rounded-lg transition-colors"
+								class="p-2 rounded-lg transition-colors {isDarkMode ? 'text-gray-300 hover:text-[#01c0a4] hover:bg-gray-700' : 'text-gray-600 hover:text-[#01c0a4] hover:bg-gray-100'}"
 							>
 								<MoreVertical class="w-5 h-5" />
 							</button>
@@ -1960,17 +1964,17 @@ const groupedMessages = $derived(() => {
 
 				<!-- Pinned Messages Panel -->
 				{#if currentConversation.settings?.allowPinning && currentConversation.pinnedMessages && currentConversation.pinnedMessages.length > 0}
-					<div class="px-4 py-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+					<div class="px-4 py-2 border-b flex items-center justify-between transition-colors duration-300 {isDarkMode ? 'bg-blue-900/50 border-blue-700' : 'bg-blue-50 border-blue-200'}">
 						<div class="flex items-center space-x-2 flex-1">
 							<Pin class="w-4 h-4 text-blue-600" />
-							<div class="flex-1 text-sm text-blue-800 truncate">
+							<div class="flex-1 text-sm truncate transition-colors duration-300 {isDarkMode ? 'text-blue-200' : 'text-blue-800'}">
 								<span class="font-medium">Pinned:</span>
 								{currentConversation.pinnedMessages[currentConversation.pinnedMessages.length - 1].content}
 							</div>
 						</div>
 						<button
 							onclick={() => showPinnedPanel = true}
-							class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+							class="text-sm font-medium transition-colors duration-300 {isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}"
 						>
 							View All ({currentConversation.pinnedMessages.length})
 						</button>
@@ -1979,29 +1983,29 @@ const groupedMessages = $derived(() => {
 
 				<!-- Search in Chat -->
 				{#if showSearchInChat}
-					<div class="px-4 py-2 bg-gray-100 border-b border-gray-300">
+					<div class="px-4 py-2 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300'} border-b transition-colors duration-300">
 						<div class="relative">
-							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+							<Search class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" />
 							<input
 								bind:value={searchInChatQuery}
 								type="text"
 								placeholder="Search in this conversation..."
-								class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								class="w-full pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}"
 							/>
 						</div>
 					</div>
 				{/if}
 
 				<!-- Messages -->
-				<div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+				<div class="flex-1 overflow-y-auto p-4 space-y-4 {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300">
 					{#each groupedMessages() as timeGroup (timeGroup.uniqueKey)}
 						<!-- Time Divider -->
 						<div class="flex items-center space-x-4 my-6">
-							<div class="flex-1 h-px bg-gray-300"></div>
-							<div class="text-xs text-gray-500 font-medium px-3 py-1 bg-white rounded-full border border-gray-200 shadow-sm">
+							<div class="flex-1 h-px {isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} transition-colors duration-300"></div>
+							<div class="text-xs {isDarkMode ? 'text-gray-400 bg-gray-800 border-gray-600' : 'text-gray-500 bg-white border-gray-200'} font-medium px-3 py-1 rounded-full border shadow-sm transition-colors duration-300">
 								{timeGroup.timeLabel}
 							</div>
-							<div class="flex-1 h-px bg-gray-300"></div>
+							<div class="flex-1 h-px {isDarkMode ? 'bg-gray-600' : 'bg-gray-300'} transition-colors duration-300"></div>
 						</div>
 						
 						<!-- Messages in this time group -->
@@ -2044,20 +2048,20 @@ const groupedMessages = $derived(() => {
 										
 										<div class="flex flex-col {message.senderId === currentUserId ? 'items-end' : 'items-start'}">
 											{#if message.senderId !== currentUserId}
-												<div class="text-xs text-gray-500 mb-1">
+												<div class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-1 transition-colors duration-300">
 													{message.senderName}
 												</div>
 											{/if}
 											
 											{#if message.replyTo}
-												<div class="mb-2 p-2 bg-gray-100 rounded-lg border-l-2 border-[#01c0a4] text-sm">
-													<div class="text-xs text-gray-500 mb-1">Replying to {message.replyTo.senderId === currentUserId ? 'Me' : message.replyTo.senderName}</div>
-													<div class="text-gray-700 {message.replyTo.isDeleted ? 'italic text-gray-500' : ''}">{message.replyTo.content}</div>
+												<div class="mb-2 p-2 {isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} rounded-lg border-l-2 border-[#01c0a4] text-sm transition-colors duration-300">
+													<div class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-1 transition-colors duration-300">Replying to {message.replyTo.senderId === currentUserId ? 'Me' : message.replyTo.senderName}</div>
+													<div class="{isDarkMode ? (message.replyTo.isDeleted ? 'italic text-gray-500' : 'text-gray-300') : (message.replyTo.isDeleted ? 'italic text-gray-500' : 'text-gray-700')} transition-colors duration-300">{message.replyTo.content}</div>
 												</div>
 											{/if}
 											
 											<div class="relative">
-												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? 'bg-gray-50 text-gray-500 border border-gray-200' : message.senderId === currentUserId ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : 'bg-gray-100 text-gray-900'}">
+												<div class="px-4 py-2 rounded-2xl {message.isDeleted ? (isDarkMode ? 'bg-gray-800 text-gray-500 border border-gray-600' : 'bg-gray-50 text-gray-500 border border-gray-200') : message.senderId === currentUserId ? 'bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white' : (isDarkMode ? 'bg-gray-700 text-gray-100' : 'bg-gray-100 text-gray-900')} transition-colors duration-300">
 													<p class="whitespace-pre-wrap {message.isDeleted ? 'italic' : ''}">{message.content}</p>
 												</div>
 												
@@ -2066,50 +2070,50 @@ const groupedMessages = $derived(() => {
 											<div class="absolute top-0 {message.senderId === currentUserId ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
 											<button
 												onclick={() => startReply(message)}
-												class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+												class="p-1 {isDarkMode ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border rounded-full shadow-sm transition-colors duration-300"
 												aria-label="Reply to message"
 												title="Reply"
 											>
-												<Reply class="w-3 h-3 text-gray-600" />
+												<Reply class="w-3 h-3 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}" />
 											</button>
 											{#if message.forwardingEnabled && currentConversation.settings?.allowForwarding}
 												<button
 													onclick={() => startForwardMessage(message)}
-													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+													class="p-1 {isDarkMode ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border rounded-full shadow-sm transition-colors duration-300"
 													aria-label="Forward message"
 													title="Forward"
 												>
-													<Share2 class="w-3 h-3 text-gray-600" />
+													<Share2 class="w-3 h-3 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}" />
 												</button>
 											{/if}
 											{#if currentConversation.settings?.allowPinning && message.pinningEnabled}
 												<button
 													onclick={() => togglePinMessage(message.id)}
-													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+													class="p-1 {isDarkMode ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border rounded-full shadow-sm transition-colors duration-300"
 													aria-label={message.isPinned ? "Unpin message" : "Pin message"}
 													title={message.isPinned ? "Unpin" : "Pin"}
 												>
 													{#if message.isPinned}
 														<PinOff class="w-3 h-3 text-blue-600" />
 													{:else}
-														<Pin class="w-3 h-3 text-gray-600" />
+														<Pin class="w-3 h-3 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}" />
 													{/if}
 												</button>
 											{/if}
 											{#if message.senderId === currentUserId}
 												<button
 													onclick={() => startEditMessage(message)}
-													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors"
+													class="p-1 {isDarkMode ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border rounded-full shadow-sm transition-colors duration-300"
 													aria-label="Edit message"
 													title="Edit"
 												>
-													<svg class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<svg class="w-3 h-3 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
 													</svg>
 												</button>
 												<button
 													onclick={() => confirmUnsendMessage(message.id)}
-													class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-red-50 hover:border-red-200 transition-colors"
+													class="p-1 {isDarkMode ? 'bg-gray-800 border-gray-600 hover:bg-gray-700 hover:border-red-600' : 'bg-white border-gray-200 hover:bg-red-50 hover:border-red-200'} border rounded-full shadow-sm transition-colors duration-300"
 													aria-label="Unsend message"
 													title="Unsend"
 												>
@@ -2120,7 +2124,7 @@ const groupedMessages = $derived(() => {
 												{#each quickEmojis as emoji}
 													<button
 														onclick={() => addReaction(message.id, emoji)}
-														class="p-1 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 transition-colors text-sm"
+														class="p-1 {isDarkMode ? 'bg-gray-800 border-gray-600 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} border rounded-full shadow-sm transition-colors text-sm duration-300"
 														aria-label={`Add ${emoji} reaction`}
 													>
 														{emoji}
@@ -2138,7 +2142,7 @@ const groupedMessages = $derived(() => {
 															{#each message.reactions as reaction}
 																<button
 																	onclick={() => addReaction(message.id, reaction.emoji)}
-																	class="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-full text-xs hover:bg-gray-200 transition-colors {reaction.users.includes(currentUserId || '1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
+																	class="flex items-center space-x-1 px-2 py-1 {isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'} rounded-full text-xs transition-colors duration-300 {reaction.users.includes(currentUserId || '1') ? 'bg-[#01c0a4]/10 text-[#01c0a4]' : ''}"
 																	aria-label={`Toggle ${reaction.emoji} reaction`}
 																	title={`${reaction.emoji} ${reaction.count}`}
 																>
@@ -2149,7 +2153,7 @@ const groupedMessages = $derived(() => {
 															<!-- Show all reactions button -->
 															<button
 																onclick={() => openReactionModal(message)}
-																class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 hover:bg-gray-100 rounded-full transition-colors"
+																class="text-xs {isDarkMode ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'} px-2 py-1 rounded-full transition-colors duration-300"
 																title="See all reactions"
 															>
 																See all
@@ -2248,13 +2252,13 @@ const groupedMessages = $derived(() => {
 
 				<!-- Reply Preview -->
 				{#if replyingTo}
-					<div class="px-4 py-2 bg-gray-100 border-t border-gray-300 flex items-center justify-between">
+					<div class="px-4 py-2 {isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} border-t flex items-center justify-between transition-colors duration-300">
 						<div class="flex items-center space-x-2">
-							<Reply class="w-4 h-4 text-gray-500" />
-							<span class="text-sm text-gray-600">Replying to {replyingTo.senderId === currentUserId ? 'Me' : replyingTo.senderName}</span>
-							<span class="text-sm text-gray-500 truncate max-w-xs">{replyingTo.content}</span>
+							<Reply class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
+							<span class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">Replying to {replyingTo.senderId === currentUserId ? 'Me' : replyingTo.senderName}</span>
+							<span class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} truncate max-w-xs transition-colors duration-300">{replyingTo.content}</span>
 						</div>
-						<button onclick={cancelReply} class="text-gray-500 hover:text-gray-700" aria-label="Cancel reply">
+						<button onclick={cancelReply} class="{isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'} transition-colors duration-300" aria-label="Cancel reply">
 							×
 						</button>
 					</div>
@@ -2262,29 +2266,29 @@ const groupedMessages = $derived(() => {
 
 				<!-- Edit Preview -->
 				{#if editingMessage}
-					<div class="px-4 py-2 bg-blue-50 border-t border-blue-200 flex items-center justify-between">
+					<div class="px-4 py-2 {isDarkMode ? 'bg-blue-900/30 border-blue-600' : 'bg-blue-50 border-blue-200'} border-t flex items-center justify-between transition-colors duration-300">
 						<div class="flex items-center space-x-2">
-							<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="w-4 h-4 {isDarkMode ? 'text-blue-400' : 'text-blue-500'} transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
 							</svg>
-							<span class="text-sm text-blue-600">Editing message</span>
+							<span class="text-sm {isDarkMode ? 'text-blue-400' : 'text-blue-600'} transition-colors duration-300">Editing message</span>
 						</div>
-						<button onclick={cancelEdit} class="text-blue-500 hover:text-blue-700" aria-label="Cancel edit">
+						<button onclick={cancelEdit} class="{isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-500 hover:text-blue-700'} transition-colors duration-300" aria-label="Cancel edit">
 							×
 						</button>
 					</div>
 				{/if}
 
 				<!-- Message Input -->
-				<div class="px-4 py-3 border-t border-gray-300 bg-white">
+				<div class="px-4 py-3 {isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'} border-t transition-colors duration-300">
 					<!-- File Preview Section -->
 					{#if selectedFiles.length > 0}
-						<div class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+						<div class="mb-3 p-3 rounded-lg border {isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} transition-colors duration-300">
 							<div class="flex items-center justify-between mb-2">
-								<span class="text-sm font-medium text-gray-700">Files to send ({selectedFiles.length})</span>
+								<span class="text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} transition-colors duration-300">Files to send ({selectedFiles.length})</span>
 								<button 
 									onclick={() => selectedFiles = []}
-									class="text-gray-400 hover:text-gray-600"
+									class="{isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'} transition-colors duration-300"
 									aria-label="Clear all files"
 								>
 									<X class="w-4 h-4" />
@@ -2292,7 +2296,7 @@ const groupedMessages = $derived(() => {
 							</div>
 							<div class="space-y-2 max-h-32 overflow-y-auto">
 								{#each selectedFiles as file, index}
-									<div class="flex items-center justify-between p-2 bg-white rounded border">
+									<div class="flex items-center justify-between p-2 rounded border {isDarkMode ? 'bg-gray-600 border-gray-500' : 'bg-white border-gray-200'} transition-colors duration-300">
 										<div class="flex items-center space-x-2 flex-1 min-w-0">
 											<div class="flex-shrink-0">
 												{#if file.type.startsWith('image/')}
@@ -2300,17 +2304,17 @@ const groupedMessages = $derived(() => {
 												{:else if file.type.startsWith('video/')}
 													<Camera class="w-4 h-4 text-purple-500" />
 												{:else}
-													<FileText class="w-4 h-4 text-gray-500" />
+													<FileText class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} w-4 h-4 transition-colors duration-300" />
 												{/if}
 											</div>
 											<div class="flex-1 min-w-0">
-												<p class="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-												<p class="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+												<p class="text-sm font-medium {isDarkMode ? 'text-gray-100' : 'text-gray-900'} truncate transition-colors duration-300">{file.name}</p>
+												<p class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{formatFileSize(file.size)}</p>
 											</div>
 										</div>
 										<button 
 											onclick={() => removeFile(index)}
-											class="p-1 text-gray-400 hover:text-red-500 transition-colors"
+											class="p-1 {isDarkMode ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'} transition-colors"
 											aria-label="Remove file"
 										>
 											<X class="w-3 h-3" />
@@ -2335,14 +2339,14 @@ const groupedMessages = $derived(() => {
 									onkeypress={handleKeyPress}
 									placeholder={editingMessage ? "Edit your message..." : selectedFiles.length > 0 ? "Add a message with your files..." : "Type a message..."}
 									rows="1"
-									class="w-full px-1 py-2 pr-16 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent resize-none text-sm min-h-[40px]"
+									class="w-full px-1 py-2 pr-16 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent resize-none text-sm min-h-[40px] transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500'}"
 								></textarea>
 								
 								<div class="absolute right-2 bottom-2 flex items-center space-x-1">
 									{#if currentConversation.settings?.allowAttachments !== false}
 										<button 
 											onclick={handleFileSelection}
-											class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors" 
+											class="p-1 {isDarkMode ? 'text-gray-400 hover:text-[#01c0a4]' : 'text-gray-500 hover:text-[#01c0a4]'} transition-colors" 
 											aria-label="Attach file"
 										>
 											<Paperclip class="w-4 h-4" />
@@ -2352,7 +2356,7 @@ const groupedMessages = $derived(() => {
 									{#if currentConversation.settings?.allowEmojis !== false}
 										<button 
 											onclick={(e) => { e.stopPropagation(); showEmojiPicker = !showEmojiPicker; }}
-											class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors" 
+											class="p-1 {isDarkMode ? 'text-gray-400 hover:text-[#01c0a4]' : 'text-gray-500 hover:text-[#01c0a4]'} transition-colors" 
 											aria-label="Add emoji"
 										>
 											<Smile class="w-4 h-4" />
@@ -2374,16 +2378,16 @@ const groupedMessages = $derived(() => {
 								{#if showEmojiPicker}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<div class="absolute bottom-full right-2 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-80 max-h-64 overflow-y-auto z-50" onclick={(e) => e.stopPropagation()}>
+									<div class="absolute bottom-full right-2 mb-2 border rounded-xl shadow-lg p-4 w-80 max-h-64 overflow-y-auto z-50 transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}" onclick={(e) => e.stopPropagation()}>
 										<div class="space-y-3">
 											{#each Object.entries(emojiGroups) as [category, emojis]}
 												<div>
-													<h4 class="text-sm font-medium text-gray-700 mb-2">{category}</h4>
+													<h4 class="text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">{category}</h4>
 													<div class="grid grid-cols-8 gap-2">
 														{#each emojis as emoji}
 															<button
 																onclick={() => addEmojiToMessage(emoji)}
-																class="p-2 hover:bg-gray-100 rounded-lg transition-colors text-lg"
+																class="p-2 {isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-lg transition-colors text-lg"
 																aria-label={`Add ${emoji} emoji`}
 															>
 																{emoji}
@@ -2416,24 +2420,24 @@ const groupedMessages = $derived(() => {
 				</div>
 			</main>
 		{:else}
-			<main class="flex-1 flex items-center justify-center bg-gray-50">
+			<main class="flex-1 flex items-center justify-center {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300">
 				<div class="text-center">
 					<div class="w-16 h-16 bg-gradient-to-r from-[#01c0a4] to-[#00a085] rounded-2xl mx-auto mb-4 flex items-center justify-center">
 						<MessageCircle class="w-8 h-8 text-white" />
 					</div>
-					<h3 class="text-xl font-semibold text-gray-900 mb-2">Select a conversation</h3>
-					<p class="text-gray-600">Choose a conversation from the sidebar to start messaging</p>
+					<h3 class="text-xl font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} mb-2 transition-colors duration-300">Select a conversation</h3>
+					<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} transition-colors duration-300">Choose a conversation from the sidebar to start messaging</p>
 				</div>
 			</main>
 		{/if}
 
 		<!-- Members Panel -->
 		{#if showMembersPanel && currentConversation?.type === 'group'}
-			<aside class="w-80 bg-white border-l border-gray-300 flex flex-col">
+			<aside class="w-80 border-l flex flex-col transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'}">
 				<!-- Header -->
-				<div class="p-4 border-b border-gray-200">
+				<div class="p-4 border-b transition-colors duration-300 {isDarkMode ? 'border-gray-600' : 'border-gray-200'}">
 					<div class="flex items-center justify-between">
-						<h3 class="font-semibold text-gray-900 flex items-center space-x-2">
+						<h3 class="font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center space-x-2 transition-colors duration-300">
 							<Users class="w-5 h-5" />
 							<span>Group Info</span>
 						</h3>
@@ -2443,7 +2447,7 @@ const groupedMessages = $derived(() => {
 							</button>
 							<button
 								onclick={toggleMembersPanel}
-								class="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+								class="p-2 rounded-lg transition-colors {isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}"
 								aria-label="Close members panel"
 							>
 								<X class="w-4 h-4" />
@@ -2453,29 +2457,29 @@ const groupedMessages = $derived(() => {
 				</div>
 
 				<!-- Tabs -->
-				<div class="border-b border-gray-200">
+				<div class="border-b transition-colors duration-300 {isDarkMode ? 'border-gray-600' : 'border-gray-200'}">
 					<nav class="flex">
 						<button
 							onclick={() => currentMembersTab = 'members'}
-							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'members' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'members' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							Members
 						</button>
 						<button
 							onclick={() => currentMembersTab = 'files'}
-							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'files' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'files' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							Files
 						</button>
 						<button
 							onclick={() => currentMembersTab = 'media'}
-							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'media' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'media' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							Media
 						</button>
 						<button
 							onclick={() => currentMembersTab = 'links'}
-							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'links' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+							class="flex-1 py-2 px-3 text-sm font-medium text-center border-b-2 transition-colors {currentMembersTab === 'links' ? 'border-[#01c0a4] text-[#01c0a4]' : (isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-200' : 'border-transparent text-gray-500 hover:text-gray-700')}"
 						>
 							Links
 						</button>
@@ -2487,7 +2491,7 @@ const groupedMessages = $derived(() => {
 					{#if currentMembersTab === 'members'}
 						<!-- Members List -->
 						{#each currentConversation.members as member, index (member.id || member.userId || `member-${index}`)}
-							<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+							<div class="p-4 flex items-center justify-between transition-colors {isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}">
 								<div class="flex items-center space-x-3">
 									<button 
 										type="button"
@@ -2655,17 +2659,17 @@ const groupedMessages = $derived(() => {
 {#if showGroupSettings}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={closeGroupSettings}>
+	<div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 {isDarkMode ? 'bg-black/50' : 'bg-black/25'}" onclick={closeGroupSettings}>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onclick={(e) => e.stopPropagation()}>
+		<div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-md mx-4 transition-colors duration-300" onclick={(e) => e.stopPropagation()}>
 			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-xl font-semibold text-gray-900 flex items-center space-x-2">
+			<div class="{isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex items-center justify-between p-6 border-b transition-colors duration-300">
+				<h2 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-xl font-semibold flex items-center space-x-2 transition-colors duration-300">
 					<Users class="w-5 h-5" />
 					<span>Group Settings</span>
 				</h2>
-				<button onclick={closeGroupSettings} class="p-2 text-gray-500 hover:text-gray-700 transition-colors" aria-label="Close group settings">
+				<button onclick={closeGroupSettings} class="{isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'} p-2 transition-colors" aria-label="Close group settings">
 					<X class="w-5 h-5" />
 				</button>
 			</div>
@@ -2674,7 +2678,7 @@ const groupedMessages = $derived(() => {
 			<div class="p-6 space-y-6">
 				<!-- Group Info - Editable -->
 				<div class="space-y-4">
-					<h4 class="font-medium text-gray-900">Group Information</h4>
+					<h4 class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Group Information</h4>
 					
 					<!-- Group Photo and Name -->
 					<div class="flex items-center space-x-4">
@@ -2697,7 +2701,7 @@ const groupedMessages = $derived(() => {
 							</button>
 						</div>
 						<div class="flex-1">
-							<label for="editGroupName" class="block text-sm font-medium text-gray-700 mb-1">
+							<label for="editGroupName" class="block text-sm font-medium {isDarkMode ? 'text-gray-300' : 'text-gray-700'} mb-1 transition-colors duration-300">
 								Group Name
 							</label>
 							<input
@@ -2705,22 +2709,22 @@ const groupedMessages = $derived(() => {
 								bind:value={editingGroupName}
 								type="text"
 								placeholder="Enter group name..."
-								class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="w-full px-3 py-2 border {isDarkMode ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' : 'border-gray-200 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300"
 							/>
 						</div>
 					</div>
 
 					<div class="space-y-2">
-						<div class="text-sm text-gray-500">
+						<div class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
 							{currentConversation?.members.length} members
 						</div>
 						{#if currentConversation?.department}
-							<div class="text-sm text-gray-600">
+							<div class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">
 								<span class="font-medium">Department:</span> {currentConversation.department}
 							</div>
 						{/if}
 						{#if currentConversation?.role}
-							<div class="text-sm text-gray-600">
+							<div class="text-sm {isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">
 								<span class="font-medium">Role:</span> {currentConversation.role}
 							</div>
 						{/if}
@@ -2729,20 +2733,20 @@ const groupedMessages = $derived(() => {
 
 				<!-- Settings -->
 				<div class="space-y-4">
-					<h4 class="font-medium text-gray-900">Chat Settings</h4>
+					<h4 class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Chat Settings</h4>
 					
 					<!-- Allow Emojis -->
 					<div class="flex items-center justify-between">
 						<div class="flex items-center space-x-3">
-							<Smile class="w-5 h-5 text-gray-500" />
+							<Smile class="w-5 h-5 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							<div>
-								<p class="font-medium text-gray-900">Allow Emojis and Reactions</p>
-								<p class="text-sm text-gray-500">Enable emoji reactions in this group</p>
+								<p class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Allow Emojis and Reactions</p>
+								<p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Enable emoji reactions in this group</p>
 							</div>
 						</div>
 						<button
 							onclick={toggleEmojis}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowEmojis ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowEmojis ? 'bg-[#01c0a4]' : (isDarkMode ? 'bg-gray-600' : 'bg-gray-200')}"
 							aria-label="Toggle emojis"
 						>
 							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowEmojis ? 'translate-x-6' : 'translate-x-1'}"></span>
@@ -2752,15 +2756,15 @@ const groupedMessages = $derived(() => {
 					<!-- Allow Attachments -->
 					<div class="flex items-center justify-between">
 						<div class="flex items-center space-x-3">
-							<Paperclip class="w-5 h-5 text-gray-500" />
+							<Paperclip class="w-5 h-5 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							<div>
-								<p class="font-medium text-gray-900">Allow File Attachments</p>
-								<p class="text-sm text-gray-500">Enable file and image sharing</p>
+								<p class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Allow File Attachments</p>
+								<p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Enable file and image sharing</p>
 							</div>
 						</div>
 						<button
 							onclick={toggleAttachments}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowAttachments ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowAttachments ? 'bg-[#01c0a4]' : (isDarkMode ? 'bg-gray-600' : 'bg-gray-200')}"
 							aria-label="Toggle attachments"
 						>
 							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowAttachments ? 'translate-x-6' : 'translate-x-1'}"></span>
@@ -2770,15 +2774,15 @@ const groupedMessages = $derived(() => {
 					<!-- Allow Forwarding -->
 					<div class="flex items-center justify-between">
 						<div class="flex items-center space-x-3">
-							<Share2 class="w-5 h-5 text-gray-500" />
+							<Share2 class="w-5 h-5 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							<div>
-								<p class="font-medium text-gray-900">Allow Message Forwarding</p>
-								<p class="text-sm text-gray-500">Enable forwarding messages to other chats</p>
+								<p class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Allow Message Forwarding</p>
+								<p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Enable forwarding messages to other chats</p>
 							</div>
 						</div>
 						<button
 							onclick={toggleForwarding}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowForwarding ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowForwarding ? 'bg-[#01c0a4]' : (isDarkMode ? 'bg-gray-600' : 'bg-gray-200')}"
 							aria-label="Toggle forwarding"
 						>
 							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowForwarding ? 'translate-x-6' : 'translate-x-1'}"></span>
@@ -2788,15 +2792,15 @@ const groupedMessages = $derived(() => {
 					<!-- Allow Pinning -->
 					<div class="flex items-center justify-between">
 						<div class="flex items-center space-x-3">
-							<Pin class="w-5 h-5 text-gray-500" />
+							<Pin class="w-5 h-5 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300" />
 							<div>
-								<p class="font-medium text-gray-900">Allow Pinned Messages</p>
-								<p class="text-sm text-gray-500">Enable pinning important messages</p>
+								<p class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Allow Pinned Messages</p>
+								<p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">Enable pinning important messages</p>
 							</div>
 						</div>
 						<button
 							onclick={togglePinning}
-							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowPinning ? 'bg-[#01c0a4]' : 'bg-gray-200'}"
+							class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {currentConversation?.settings?.allowPinning ? 'bg-[#01c0a4]' : (isDarkMode ? 'bg-gray-600' : 'bg-gray-200')}"
 							aria-label="Toggle pinning"
 						>
 							<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {currentConversation?.settings?.allowPinning ? 'translate-x-6' : 'translate-x-1'}"></span>
@@ -2805,10 +2809,10 @@ const groupedMessages = $derived(() => {
 				</div>
 
 				<!-- Actions -->
-				<div class="pt-4 border-t border-gray-200 space-y-3">
+				<div class="pt-4 border-t {isDarkMode ? 'border-gray-600' : 'border-gray-200'} space-y-3 transition-colors duration-300">
 					<button
 						onclick={archiveGroup}
-						class="w-full flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-200 transition-colors"
+						class="w-full flex items-center justify-center space-x-2 {isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} py-3 px-4 rounded-xl transition-colors duration-300"
 						aria-label="Archive group"
 					>
 						<Archive class="w-4 h-4" />
@@ -2818,10 +2822,10 @@ const groupedMessages = $derived(() => {
 			</div>
 
 			<!-- Footer -->
-			<div class="p-6 border-t border-gray-200 flex space-x-3">
+			<div class="p-6 border-t {isDarkMode ? 'border-gray-600' : 'border-gray-200'} flex space-x-3 transition-colors duration-300">
 				<button
 					onclick={closeGroupSettings}
-					class="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+					class="flex-1 py-3 px-4 {isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} rounded-xl transition-colors duration-300"
 					aria-label="Cancel changes"
 				>
 					Cancel
@@ -2846,14 +2850,14 @@ const groupedMessages = $derived(() => {
 	<div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showCreateGroup = false}>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] mx-4 flex flex-col" onclick={(e) => e.stopPropagation()}>
+		<div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] mx-4 flex flex-col transition-colors duration-300" onclick={(e) => e.stopPropagation()}>
 			<!-- Header -->
-			<div class="flex items-center justify-between p-6 border-b border-gray-200">
-				<h2 class="text-xl font-semibold text-gray-900 flex items-center space-x-2">
+			<div class="flex items-center justify-between p-6 border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
+				<h2 class="text-xl font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center space-x-2 transition-colors duration-300">
 					<Users class="w-5 h-5" />
 					<span>Create Group Chat</span>
 				</h2>
-				<button onclick={() => showCreateGroup = false} class="p-2 text-gray-500 hover:text-gray-700 transition-colors" aria-label="Close create group">
+				<button onclick={() => showCreateGroup = false} class="p-2 {isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'} transition-colors" aria-label="Close create group">
 					<X class="w-5 h-5" />
 				</button>
 			</div>
@@ -2864,7 +2868,7 @@ const groupedMessages = $derived(() => {
 				<div class="flex-1 p-6 space-y-6 overflow-y-auto">
 					<!-- Group Name -->
 					<div>
-						<label for="groupName" class="block text-sm font-medium text-gray-700 mb-2">
+						<label for="groupName" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">
 							Group Name
 						</label>
 						<input
@@ -2872,33 +2876,33 @@ const groupedMessages = $derived(() => {
 							bind:value={groupName}
 							type="text"
 							placeholder="Enter group name..."
-							class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+							class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'}"
 						/>
 					</div>
 
 					<!-- Search Users -->
 					<div>
-						<label for="userSearch" class="block text-sm font-medium text-gray-700 mb-2">
+						<label for="userSearch" class="block text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-2 transition-colors duration-300">
 							Search People
 						</label>
 						<div class="relative">
-							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 {isDarkMode ? 'text-gray-500' : 'text-gray-400'} transition-colors duration-300" />
 							<input
 								id="userSearch"
 								bind:value={userSearchQuery}
 								type="text"
 								placeholder="Search by name, department, or role..."
-								class="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								class="w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'}"
 							/>
 						</div>
 					</div>
 
 					<!-- Available Users -->
 					<div>
-						<p class="text-sm font-medium text-gray-700 mb-3">Add Members</p>
-						<div class="max-h-80 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
+						<p class="text-sm font-medium {isDarkMode ? 'text-gray-200' : 'text-gray-700'} mb-3 transition-colors duration-300">Add Members</p>
+						<div class="max-h-80 overflow-y-auto space-y-2 border rounded-lg p-2 scrollbar-thin transition-colors duration-300 {isDarkMode ? 'border-gray-600 scrollbar-thumb-gray-600 scrollbar-track-gray-800' : 'border-gray-200 scrollbar-thumb-gray-400 scrollbar-track-gray-100'}">
 							{#each filteredUsersForGroup as user}
-								<div class="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors {selectedUsers.some(u => u.id === user.id) ? 'bg-[#01c0a4]/5 border border-[#01c0a4]/20' : ''}">
+								<div class="w-full flex items-center space-x-3 p-3 rounded-lg transition-colors {selectedUsers.some(u => u.id === user.id) ? 'bg-[#01c0a4]/5 border border-[#01c0a4]/20' : (isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50')}">
 									<button 
 										type="button"
 										onclick={(event) => {
@@ -2917,15 +2921,15 @@ const groupedMessages = $derived(() => {
 										class="flex-1 text-left"
 										aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
 									>
-										<p class="font-medium text-gray-900">{user.name}</p>
-										<p class="text-sm text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
+										<p class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">{user.name}</p>
+										<p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{user.organizationalUnit || user.department} • {user.role}</p>
 									</button>
 									{#if selectedUsers.some(u => u.id === user.id)}
 										<div class="w-5 h-5 bg-[#01c0a4] rounded-full flex items-center justify-center">
 											<span class="text-white text-xs">✓</span>
 										</div>
 									{:else}
-										<div class="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
+										<div class="w-5 h-5 border-2 rounded-full {isDarkMode ? 'border-gray-500' : 'border-gray-300'} transition-colors duration-300"></div>
 									{/if}
 								</div>
 							{/each}
@@ -2934,9 +2938,9 @@ const groupedMessages = $derived(() => {
 				</div>
 
 				<!-- Right Panel - Selected Users -->
-				<div class="w-80 border-l border-gray-200 flex flex-col">
-					<div class="p-6 border-b border-gray-200">
-						<h3 class="font-medium text-gray-900 flex items-center space-x-2">
+				<div class="w-80 border-l flex flex-col {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
+					<div class="p-6 border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
+						<h3 class="font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center space-x-2 transition-colors duration-300">
 							<Users class="w-4 h-4" />
 							<span>Selected Members ({selectedUsers.length})</span>
 						</h3>
@@ -2946,7 +2950,7 @@ const groupedMessages = $derived(() => {
 						{#if selectedUsers.length > 0}
 							<div class="space-y-3">
 								{#each selectedUsers as user}
-									<div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+									<div class="flex items-center space-x-3 p-3 rounded-lg {isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} transition-colors duration-300">
 										<button 
 											type="button"
 											onclick={(event) => {
@@ -2961,13 +2965,13 @@ const groupedMessages = $derived(() => {
 											<ProfileAvatar user={user} size="sm" showOnlineStatus={false} />
 										</button>
 										<div class="flex-1 min-w-0">
-											<p class="font-medium text-gray-900 text-sm truncate">{user.name}</p>
-											<p class="text-xs text-gray-500 truncate">{user.organizationalUnit || user.department}</p>
-											<p class="text-xs text-gray-400 truncate">{user.role}</p>
+											<p class="font-medium text-sm truncate {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">{user.name}</p>
+											<p class="text-xs truncate {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{user.organizationalUnit || user.department}</p>
+											<p class="text-xs truncate {isDarkMode ? 'text-gray-500' : 'text-gray-400'} transition-colors duration-300">{user.role}</p>
 										</div>
 										<button
 											onclick={() => toggleUser(user)}
-											class="p-1 text-gray-400 hover:text-red-500 transition-colors"
+											class="p-1 {isDarkMode ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'} transition-colors"
 											aria-label={`Remove ${user.name} from group`}
 										>
 											<X class="w-4 h-4" />
@@ -2977,9 +2981,9 @@ const groupedMessages = $derived(() => {
 							</div>
 						{:else}
 							<div class="text-center py-8">
-								<Users class="w-8 h-8 text-gray-300 mx-auto mb-2" />
-								<p class="text-sm text-gray-500">No members selected</p>
-								<p class="text-xs text-gray-400 mt-1">Search and select people to add to your group</p>
+								<Users class="w-8 h-8 {isDarkMode ? 'text-gray-600' : 'text-gray-300'} mx-auto mb-2 transition-colors duration-300" />
+								<p class="text-sm {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">No members selected</p>
+								<p class="text-xs {isDarkMode ? 'text-gray-500' : 'text-gray-400'} mt-1 transition-colors duration-300">Search and select people to add to your group</p>
 							</div>
 						{/if}
 					</div>
@@ -2987,10 +2991,10 @@ const groupedMessages = $derived(() => {
 			</div>
 
 			<!-- Footer -->
-			<div class="p-6 border-t border-gray-200 flex space-x-3">
+			<div class="p-6 border-t flex space-x-3 {isDarkMode ? 'border-gray-600' : 'border-gray-200'} transition-colors duration-300">
 				<button
 					onclick={() => showCreateGroup = false}
-					class="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+					class="flex-1 py-3 px-4 rounded-xl transition-colors {isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
 					aria-label="Cancel create group"
 				>
 					Cancel
@@ -3252,18 +3256,18 @@ const groupedMessages = $derived(() => {
 	>
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div 
-			class="bg-white rounded-lg shadow-xl w-96 max-h-96 overflow-hidden" 
+			class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-xl w-96 max-h-96 overflow-hidden transition-colors duration-300" 
 			role="dialog"
 			tabindex="0"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 		>
-			<div class="border-b border-gray-200 p-4">
+			<div class="border-b {isDarkMode ? 'border-gray-600' : 'border-gray-200'} p-4 transition-colors duration-300">
 				<div class="flex items-center justify-between">
-					<h3 id="reaction-modal-title" class="text-lg font-semibold text-gray-900">Reactions</h3>
+					<h3 id="reaction-modal-title" class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Reactions</h3>
 					<button
 						onclick={closeReactionModal}
-						class="text-gray-400 hover:text-gray-500"
+						class="{isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-400 hover:text-gray-500'} transition-colors duration-300"
 					>
 						<X class="w-5 h-5" />
 					</button>
@@ -3273,14 +3277,14 @@ const groupedMessages = $derived(() => {
 				<div class="flex space-x-1 mt-3">
 					<button
 						onclick={() => reactionModalTab = 'all'}
-						class="px-3 py-1 text-sm rounded-full {reactionModalTab === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}"
+						class="px-3 py-1 text-sm rounded-full transition-colors duration-300 {reactionModalTab === 'all' ? (isDarkMode ? 'bg-[#01c0a4]/20 text-[#01c0a4]' : 'bg-blue-100 text-blue-700') : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100')}"
 					>
 						All {getReactionUsers(reactionModalMessage, 'all').length}
 					</button>
 					{#each reactionModalMessage.reactions || [] as reaction}
 						<button
 							onclick={() => reactionModalTab = reaction.emoji}
-							class="px-3 py-1 text-sm rounded-full flex items-center space-x-1 {reactionModalTab === reaction.emoji ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}"
+							class="px-3 py-1 text-sm rounded-full flex items-center space-x-1 transition-colors duration-300 {reactionModalTab === reaction.emoji ? (isDarkMode ? 'bg-[#01c0a4]/20 text-[#01c0a4]' : 'bg-blue-100 text-blue-700') : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100')}"
 						>
 							<span>{reaction.emoji}</span>
 							<span>{reaction.count}</span>
@@ -3308,14 +3312,14 @@ const groupedMessages = $derived(() => {
 								<ProfileAvatar user={item.user} size="sm" showOnlineStatus={false} />
 							</button>
 							<div class="flex-1">
-								<div class="text-sm font-medium text-gray-900">
+								<div class="text-sm font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">
 									{#if item.user.firstName && item.user.lastName}
 										{item.user.firstName} {item.user.lastName}
 									{:else}
 										{item.user.name || 'Unknown User'}
 									{/if}
 								</div>
-								<div class="text-xs text-gray-500">
+								<div class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
 									@{item.user.username || item.user.name?.toLowerCase().replace(' ', '') || 'unknown'}
 								</div>
 							</div>
@@ -3325,7 +3329,7 @@ const groupedMessages = $derived(() => {
 				{/each}
 				
 				{#if getReactionUsers(reactionModalMessage, reactionModalTab).length === 0}
-					<div class="text-center py-8 text-gray-500">
+					<div class="text-center py-8 {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">
 						<div class="text-2xl mb-2">😊</div>
 						<div class="text-sm">No reactions yet</div>
 					</div>

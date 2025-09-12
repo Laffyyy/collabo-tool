@@ -86,7 +86,7 @@
 	};
 </script>
 
-<header class="sticky top-0 z-50 bg-gray-100 border-b border-gray-300 px-6 py-3 flex items-center justify-between shadow-sm">
+<header class="sticky top-0 z-50 px-6 py-3 flex items-center justify-between shadow-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-b border-gray-700' : 'bg-gray-100 border-b border-gray-300'}">
 	<!-- Logo -->
 	<div class="flex items-center space-x-4">
 		<img 
@@ -94,14 +94,14 @@
 			alt="Collaby Logo" 
 			class="w-10 h-10 object-contain"
 		/>
-		<h1 class="text-xl font-bold text-gray-800">Collaby</h1>
+		<h1 class="text-xl font-bold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-800'}">Collaby</h1>
 	</div>
 
 	<!-- Navigation -->
 	<nav class="hidden md:flex items-center space-x-8">
 		<button 
 			onclick={() => goto('/chat')}
-			class="relative text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/chat') ? 'text-[#01c0a4]' : ''}"
+			class="relative font-medium transition-colors {isActivePage('/chat') ? 'text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:text-[#01c0a4]' : 'text-gray-600 hover:text-[#01c0a4]')}"
 		>
 			Messages
 			{#if isActivePage('/chat')}
@@ -110,7 +110,7 @@
 		</button>
 		<button 
 			onclick={() => goto('/broadcast')}
-			class="relative text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/broadcast') ? 'text-[#01c0a4]' : ''}"
+			class="relative font-medium transition-colors {isActivePage('/broadcast') ? 'text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:text-[#01c0a4]' : 'text-gray-600 hover:text-[#01c0a4]')}"
 		>
 			Broadcast
 			{#if isActivePage('/broadcast')}
@@ -123,7 +123,7 @@
 			<div class="relative">
 				<button 
 					onclick={() => showAdminDropdown = !showAdminDropdown}
-					class="flex items-center space-x-1 text-gray-600 hover:text-[#01c0a4] font-medium transition-colors {isActivePage('/admin') ? 'text-[#01c0a4]' : ''}"
+					class="flex items-center space-x-1 font-medium transition-colors {isActivePage('/admin') ? 'text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:text-[#01c0a4]' : 'text-gray-600 hover:text-[#01c0a4]')}"
 				>
 					<span>Admin Controls</span>
 					<ChevronDown class="w-4 h-4 transition-transform {showAdminDropdown ? 'rotate-180' : ''}" />
@@ -141,74 +141,74 @@
 					onclick={() => showAdminDropdown = false}
 				></div>
 				
-				<div class="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-2">
-					<div class="px-3 py-2 border-b border-gray-100">
-						<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Administration</p>
+				<div class="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-xl border z-50 py-2 transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}">
+					<div class="px-3 py-2 border-b transition-colors duration-300 {isDarkMode ? 'border-gray-700' : 'border-gray-100'}">
+						<p class="text-xs font-semibold uppercase tracking-wider transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Administration</p>
 					</div>
 					
 					<button 
 						onclick={() => navigateToAdminPage('user-management')}
-						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('user-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
+						class="w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors {currentPath.includes('user-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')}"
 					>
 						<UserCog class="w-4 h-4" />
 						<div>
 							<div class="font-medium">User Management</div>
-							<div class="text-xs text-gray-500">Manage user accounts and roles</div>
+							<div class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Manage user accounts and roles</div>
 						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('ou-management')}
-						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('ou-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
+						class="w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors {currentPath.includes('ou-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')}"
 					>
 						<Building2 class="w-4 h-4" />
 						<div>
 							<div class="font-medium">OU Management</div>
-							<div class="text-xs text-gray-500">Organizational unit management</div>
+							<div class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Organizational unit management</div>
 						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('chat-management')}
-						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('chat-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
+						class="w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors {currentPath.includes('chat-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')}"
 					>
 						<MessageSquare class="w-4 h-4" />
 						<div>
 							<div class="font-medium">Chat Management</div>
-							<div class="text-xs text-gray-500">Monitor chat communications</div>
+							<div class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Monitor chat communications</div>
 						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('broadcast-management')}
-						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('broadcast-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
+						class="w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors {currentPath.includes('broadcast-management') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')}"
 					>
 						<Radio class="w-4 h-4" />
 						<div>
 							<div class="font-medium">Broadcast Management</div>
-							<div class="text-xs text-gray-500">Monitor broadcasts</div>
+							<div class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Monitor broadcasts</div>
 						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('global-configuration')}
-						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('global-configuration') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
+						class="w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors {currentPath.includes('global-configuration') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')}"
 					>
 						<Globe class="w-4 h-4" />
 						<div>
 							<div class="font-medium">Global Configuration</div>
-							<div class="text-xs text-gray-500">System-wide settings</div>
+							<div class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">System-wide settings</div>
 						</div>
 					</button>
 					
 					<button 
 						onclick={() => navigateToAdminPage('admin-logs')}
-						class="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors {currentPath.includes('admin-logs') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : ''}"
+						class="w-full px-4 py-3 text-left flex items-center space-x-3 transition-colors {currentPath.includes('admin-logs') ? 'bg-[#01c0a4]/5 text-[#01c0a4]' : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')}"
 					>
 						<FileText class="w-4 h-4" />
 						<div>
 							<div class="font-medium">Admin Logs</div>
-							<div class="text-xs text-gray-500">View administrative actions</div>
+							<div class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">View administrative actions</div>
 						</div>
 					</button>
 				</div>
@@ -220,7 +220,7 @@
 	<!-- Right side actions -->
 	<div class="flex items-center space-x-4">
 		<!-- Search -->
-		<button class="p-2 text-gray-600 hover:text-[#01c0a4] hover:bg-gray-200 rounded-lg transition-colors">
+		<button class="p-2 rounded-lg transition-colors {isDarkMode ? 'text-gray-300 hover:text-[#01c0a4] hover:bg-gray-700' : 'text-gray-600 hover:text-[#01c0a4] hover:bg-gray-200'}">
 			<Search class="w-5 h-5" />
 		</button>
 
@@ -228,7 +228,7 @@
 		<div class="relative">
 			<button 
 				onclick={() => showNotifications = !showNotifications}
-				class="p-2 text-gray-600 hover:text-[#01c0a4] hover:bg-gray-200 rounded-lg transition-colors relative"
+				class="p-2 rounded-lg transition-colors relative {isDarkMode ? 'text-gray-300 hover:text-[#01c0a4] hover:bg-gray-700' : 'text-gray-600 hover:text-[#01c0a4] hover:bg-gray-200'}"
 			>
 				<Bell class="w-5 h-5" />
 				{#if hasUnreadBroadcasts}
@@ -245,13 +245,13 @@
 					onclick={() => showNotifications = false}
 				></div>
 				
-				<div class="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-hidden">
+				<div class="absolute right-0 top-full mt-2 w-80 rounded-lg shadow-xl border z-50 max-h-96 overflow-hidden transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}">
 					<!-- Header -->
-					<div class="px-4 py-3 border-b border-gray-100 bg-gray-50">
+					<div class="px-4 py-3 border-b transition-colors duration-300 {isDarkMode ? 'border-gray-700 bg-gray-700' : 'border-gray-100 bg-gray-50'}">
 						<div class="flex items-center justify-between">
-							<h3 class="font-semibold text-gray-800">Notifications</h3>
+							<h3 class="font-semibold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-800'}">Notifications</h3>
 							{#if hasUnreadBroadcasts}
-								<span class="text-xs text-gray-500">{broadcasts.length} new</span>
+								<span class="text-xs transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">{broadcasts.length} new</span>
 							{/if}
 						</div>
 					</div>
@@ -263,7 +263,7 @@
 								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<!-- svelte-ignore a11y_no_static_element_interactions -->
 								<div 
-									class="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors"
+									class="px-4 py-3 cursor-pointer border-b transition-colors {isDarkMode ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-50 border-gray-100'}"
 									onclick={navigateToBroadcast}
 								>
 									<div class="flex items-start space-x-3">
@@ -283,14 +283,14 @@
 										<!-- Content -->
 										<div class="flex-1 min-w-0">
 											<div class="flex items-start justify-between">
-												<p class="text-sm font-medium text-gray-900 truncate">
+												<p class="text-sm font-medium truncate transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
 													{broadcast.title}
 												</p>
-												<span class="text-xs text-gray-500 flex-shrink-0 ml-2">
+												<span class="text-xs flex-shrink-0 ml-2 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">
 													{formatTimeAgo(broadcast.createdAt)}
 												</span>
 											</div>
-											<p class="text-sm text-gray-600 mt-1 line-clamp-2">
+											<p class="text-sm mt-1 line-clamp-2 transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}">
 												{broadcast.content}
 											</p>
 											
@@ -312,7 +312,7 @@
 							{/each}
 							
 							<!-- View All Button -->
-							<div class="px-4 py-3 bg-gray-50 border-t border-gray-100">
+							<div class="px-4 py-3 border-t transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-100'}">
 								<button 
 									onclick={navigateToBroadcast}
 									class="w-full text-center text-sm font-medium text-[#01c0a4] hover:text-[#00a085] transition-colors"
@@ -322,8 +322,8 @@
 							</div>
 						{:else}
 							<div class="px-4 py-8 text-center">
-								<Megaphone class="w-8 h-8 text-gray-300 mx-auto mb-3" />
-								<p class="text-sm text-gray-500">No new broadcasts</p>
+								<Megaphone class="w-8 h-8 mx-auto mb-3 transition-colors duration-300 {isDarkMode ? 'text-gray-600' : 'text-gray-300'}" />
+								<p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">No new broadcasts</p>
 							</div>
 						{/if}
 					</div>
@@ -335,7 +335,7 @@
 		<div class="relative">
 			<button 
 				onclick={() => showProfile = !showProfile}
-				class="flex items-center space-x-2 p-2 hover:bg-gray-200 rounded-lg transition-colors"
+				class="flex items-center space-x-2 p-2 rounded-lg transition-colors {isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}"
 			>
 				<ProfileAvatar 
 					user={user} 
@@ -346,8 +346,8 @@
 			</button>
 
 			{#if showProfile}
-				<div class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-					<div class="px-4 py-3 border-b border-gray-200">
+				<div class="absolute right-0 mt-2 w-64 rounded-lg shadow-lg border py-2 z-50 transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}">
+					<div class="px-4 py-3 border-b transition-colors duration-300 {isDarkMode ? 'border-gray-700' : 'border-gray-200'}">
 						<div class="flex items-center space-x-3">
 							<ProfileAvatar 
 								user={user} 
@@ -356,45 +356,45 @@
 								onlineStatus={user?.onlineStatus || 'offline'} 
 							/>
 							<div>
-								<p class="text-sm font-medium text-gray-900">
+								<p class="text-sm font-medium transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
 									{user?.firstName && user?.lastName 
 									? `${user.firstName} ${user.lastName}` 
 									: user?.username || 'Loading...'}
 								</p>
-								<p class="text-xs text-gray-500 capitalize">{user?.role || 'Loading...'}</p>
-								<p class="text-xs text-gray-400 capitalize">{user?.onlineStatus || 'offline'}</p>
+								<p class="text-xs capitalize transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">{user?.role || 'Loading...'}</p>
+								<p class="text-xs capitalize transition-colors duration-300 {isDarkMode ? 'text-gray-500' : 'text-gray-400'}">{user?.onlineStatus || 'offline'}</p>
 							</div>
 						</div>
 					</div>
 					
 					<!-- Online Status Controls -->
-					<div class="px-4 py-2 border-b border-gray-200">
-						<p class="text-xs font-medium text-gray-700 mb-2">Set Status</p>
+					<div class="px-4 py-2 border-b transition-colors duration-300 {isDarkMode ? 'border-gray-700' : 'border-gray-200'}">
+						<p class="text-xs font-medium mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Set Status</p>
 						<div class="space-y-1">
 							<button 
 								onclick={() => $authStore.updateOnlineStatus('online')}
-								class="w-full flex items-center space-x-2 px-2 py-1 text-left hover:bg-gray-50 rounded transition-colors {user?.onlineStatus === 'online' ? 'bg-green-50' : ''}"
+								class="w-full flex items-center space-x-2 px-2 py-1 text-left rounded transition-colors {user?.onlineStatus === 'online' ? (isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-gray-900') : (isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-50 text-gray-900')}"
 							>
 								<div class="w-2 h-2 bg-green-500 rounded-full"></div>
 								<span class="text-sm">Online</span>
 							</button>
 							<button 
 								onclick={() => $authStore.updateOnlineStatus('away')}
-								class="w-full flex items-center space-x-2 px-2 py-1 text-left hover:bg-gray-50 rounded transition-colors {user?.onlineStatus === 'away' ? 'bg-yellow-50' : ''}"
+								class="w-full flex items-center space-x-2 px-2 py-1 text-left rounded transition-colors {user?.onlineStatus === 'away' ? (isDarkMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-gray-900') : (isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-50 text-gray-900')}"
 							>
 								<div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
 								<span class="text-sm">Away</span>
 							</button>
 							<button 
 								onclick={() => $authStore.updateOnlineStatus('idle')}
-								class="w-full flex items-center space-x-2 px-2 py-1 text-left hover:bg-gray-50 rounded transition-colors {user?.onlineStatus === 'idle' ? 'bg-orange-50' : ''}"
+								class="w-full flex items-center space-x-2 px-2 py-1 text-left rounded transition-colors {user?.onlineStatus === 'idle' ? (isDarkMode ? 'bg-orange-900/30 text-orange-300' : 'bg-orange-50 text-gray-900') : (isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-50 text-gray-900')}"
 							>
 								<div class="w-2 h-2 bg-orange-500 rounded-full"></div>
 								<span class="text-sm">Idle</span>
 							</button>
 							<button 
 								onclick={() => $authStore.updateOnlineStatus('offline')}
-								class="w-full flex items-center space-x-2 px-2 py-1 text-left hover:bg-gray-50 rounded transition-colors {user?.onlineStatus === 'offline' ? 'bg-gray-50' : ''}"
+								class="w-full flex items-center space-x-2 px-2 py-1 text-left rounded transition-colors {user?.onlineStatus === 'offline' ? (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-50 text-gray-900') : (isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-50 text-gray-900')}"
 							>
 								<div class="w-2 h-2 bg-gray-500 rounded-full"></div>
 								<span class="text-sm">Offline</span>
@@ -404,7 +404,7 @@
 					
 					<button 
 						onclick={() => { showProfile = false; goto('/profile'); }}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-2 text-left flex items-center space-x-3 transition-colors {isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 					>
 						<User class="w-4 h-4" />
 						<span>View Profile</span>
@@ -412,16 +412,16 @@
 					
 					<button 
 						onclick={() => { showProfile = false; goto('/settings'); }}
-						class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+						class="w-full px-4 py-2 text-left flex items-center space-x-3 transition-colors {isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 					>
 						<Settings class="w-4 h-4" />
 						<span>Settings</span>
 					</button>
 					
-					<div class="border-t border-gray-200 mt-2 pt-2">
+					<div class="border-t mt-2 pt-2 transition-colors duration-300 {isDarkMode ? 'border-gray-700' : 'border-gray-200'}">
 						<button 
 							onclick={handleLogout}
-							class="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-colors"
+							class="w-full px-4 py-2 text-left flex items-center space-x-3 transition-colors {isDarkMode ? 'text-red-400 hover:bg-gray-700 hover:text-red-400' : 'text-red-600 hover:bg-red-50 hover:text-red-600'}"
 						>
 							<LogOut class="w-4 h-4" />
 							<span>Sign Out</span>
