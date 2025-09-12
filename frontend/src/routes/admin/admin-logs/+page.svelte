@@ -1,13 +1,13 @@
 <script lang="ts">
   import { FileText, Search, Filter, Download, Eye, AlertTriangle, User, Activity, Shield, Database, Calendar, MessageSquare, Radio, Users, Building2, Settings } from 'lucide-svelte';
   import { AuditLogAPI, type AuditLog, type AuditLogsData } from '$lib/api/auditlog';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   let activeTab = $state<'all' | 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config'>('all');
   let searchQuery = $state('');
   let searchValidationError = $state<string | null>(null);
   let currentPage = $state(1);
-  let pageLimit = $state(50);
+  let pageLimit = $state(20); // Changed to 20 rows per page
   
   // Data state
   let logsData = $state<AuditLogsData | null>(null);
@@ -16,21 +16,78 @@
   let error = $state<string | null>(null);
   let selectedLog = $state<AuditLog | null>(null);
   let showLogDetails = $state(false);
+  
+  // Pagination cache and prefetching state
+  let pageCache = $state<Map<string, { logs: AuditLog[], pagination: any, categoryCounts: any, timestamp: number }>>(new Map());
+  let lastTotalCount = $state(0);
+  let refreshInterval: number;
 
-  // Load audit logs from API
-  const loadLogs = async () => {
+  // Helper function to generate cache key
+  const getCacheKey = (page: number, category: string, search: string) => {
+    return `${category}-${search}-${page}`;
+  };
+
+  // Helper function to check if cache entry is fresh (within 30 seconds)
+  const isCacheFresh = (timestamp: number) => {
+    return Date.now() - timestamp < 30000;
+  };
+
+  // Load audit logs from API with smart caching
+  const loadLogs = async (targetPage?: number, skipCache = false) => {
+    const page = targetPage || currentPage;
     loading = true;
     error = null;
     
     try {
       const params = {
-        page: currentPage,
+        page: page,
         limit: pageLimit,
         category: activeTab === 'all' ? undefined : activeTab,
         search: searchQuery.trim() || undefined
       };
       
-      logsData = await AuditLogAPI.getLogs(params);
+      const cacheKey = getCacheKey(page, activeTab, searchQuery);
+      
+      // Check cache first unless we're skipping it
+      if (!skipCache && pageCache.has(cacheKey)) {
+        const cached = pageCache.get(cacheKey)!;
+        if (isCacheFresh(cached.timestamp)) {
+          // Use cached data with all information
+          logsData = {
+            logs: cached.logs,
+            pagination: cached.pagination,
+            categoryCounts: cached.categoryCounts
+          };
+          loading = false;
+          return;
+        } else {
+          // Remove stale cache entry
+          pageCache.delete(cacheKey);
+        }
+      }
+      
+      // Fetch fresh data
+      const data = await AuditLogAPI.getLogs(params);
+      logsData = data;
+      
+      // Cache the complete data for this page
+      pageCache.set(cacheKey, {
+        logs: data.logs,
+        pagination: data.pagination,
+        categoryCounts: data.categoryCounts,
+        timestamp: Date.now()
+      });
+      
+      // Prefetch adjacent pages if we're on page 1 or 2
+      if (page <= 2 && !skipCache) {
+        prefetchAdjacentPages(page);
+      }
+      
+      // Update total count for dynamic refresh detection
+      if (data.pagination) {
+        lastTotalCount = data.pagination.totalCount;
+      }
+      
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load audit logs';
       console.error('Error loading logs:', err);
@@ -39,18 +96,141 @@
     }
   };
 
-  // Reactive loading when filters change
-  $effect(() => {
-    // Reset to first page when filters change
-    if (activeTab || searchQuery) {
-      currentPage = 1;
+  // Prefetch adjacent pages
+  const prefetchAdjacentPages = async (currentPageNum: number) => {
+    if (!pagination) return;
+    
+    const pagesToPrefetch = [];
+    
+    // For page 1, prefetch page 2
+    if (currentPageNum === 1 && pagination.totalPages >= 2) {
+      pagesToPrefetch.push(2);
     }
-    loadLogs();
+    // For page 2, prefetch page 1 (if not cached) and page 3
+    else if (currentPageNum === 2) {
+      const page1Key = getCacheKey(1, activeTab, searchQuery);
+      if (!pageCache.has(page1Key)) {
+        pagesToPrefetch.push(1);
+      }
+      if (pagination.totalPages >= 3) {
+        pagesToPrefetch.push(3);
+      }
+    }
+    // For other pages, prefetch previous and next
+    else {
+      if (currentPageNum > 1) {
+        pagesToPrefetch.push(currentPageNum - 1);
+      }
+      if (currentPageNum < pagination.totalPages) {
+        pagesToPrefetch.push(currentPageNum + 1);
+      }
+    }
+    
+    // Prefetch pages in background
+    for (const page of pagesToPrefetch) {
+      if (page >= 1 && page <= pagination.totalPages) {
+        const cacheKey = getCacheKey(page, activeTab, searchQuery);
+        if (!pageCache.has(cacheKey) || !isCacheFresh(pageCache.get(cacheKey)!.timestamp)) {
+          try {
+            const params = {
+              page: page,
+              limit: pageLimit,
+              category: activeTab === 'all' ? undefined : activeTab,
+              search: searchQuery.trim() || undefined
+            };
+            
+            const data = await AuditLogAPI.getLogs(params);
+            pageCache.set(cacheKey, {
+              logs: data.logs,
+              pagination: data.pagination,
+              categoryCounts: data.categoryCounts,
+              timestamp: Date.now()
+            });
+          } catch (err) {
+            console.warn(`Failed to prefetch page ${page}:`, err);
+          }
+        }
+      }
+    }
+  };
+
+  // Check for new entries without disrupting current view
+  const checkForUpdates = async () => {
+    if (loading || exportLoading) return;
+    
+    try {
+      // Only check total count, don't fetch logs
+      const params = {
+        page: 1,
+        limit: 1,
+        category: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery.trim() || undefined
+      };
+      
+      const data = await AuditLogAPI.getLogs(params);
+      
+      if (data.pagination && data.pagination.totalCount !== lastTotalCount) {
+        // New entries detected - clear cache and update counts
+        pageCache.clear();
+        lastTotalCount = data.pagination.totalCount;
+        
+        // Update category counts without changing current page
+        if (logsData) {
+          logsData.categoryCounts = data.categoryCounts;
+          logsData.pagination = {
+            ...logsData.pagination,
+            totalCount: data.pagination.totalCount,
+            totalPages: Math.ceil(data.pagination.totalCount / pageLimit)
+          };
+        }
+        
+        // Only refresh current page data if user is on page 1
+        if (currentPage === 1) {
+          await loadLogs(1, true);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to check for updates:', err);
+    }
+  };
+
+  // Reactive loading when filters change  
+  let lastActiveTab = activeTab;
+  let lastSearchQuery = searchQuery;
+  
+  $effect(() => {
+    // Only reset page and reload if filters actually changed
+    const tabChanged = activeTab !== lastActiveTab;
+    const searchChanged = searchQuery !== lastSearchQuery;
+    
+    if (tabChanged || searchChanged) {
+      // Clear cache when filters change
+      pageCache.clear();
+      
+      // Reset to first page when filters change
+      currentPage = 1;
+      
+      // Update tracked values
+      lastActiveTab = activeTab;
+      lastSearchQuery = searchQuery;
+      
+      loadLogs();
+    }
   });
 
-  // Load logs on component mount
+  // Load logs on component mount and set up refresh interval
   onMount(() => {
     loadLogs();
+    
+    // Set up periodic check for new entries (every 15 seconds)
+    refreshInterval = setInterval(checkForUpdates, 15000);
+  });
+  
+  // Cleanup interval on component destruction
+  onDestroy(() => {
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+    }
   });
 
   // Computed values
@@ -128,10 +308,41 @@
     activeTab = tab;
   };
 
-  // Handle page change
-  const handlePageChange = (page: number) => {
+  // Handle page change with smart loading
+  const handlePageChange = async (page: number) => {
+    if (page === currentPage || !pagination) return;
+    if (page < 1 || page > pagination.totalPages) return;
+    
     currentPage = page;
-    loadLogs();
+    await loadLogs(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = (current: number, total: number) => {
+    const pages = [];
+    const maxPagesToShow = 7;
+    
+    if (total <= maxPagesToShow) {
+      // Show all pages if total is small
+      for (let i = 1; i <= total; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Calculate start and end positions
+      let start = Math.max(1, current - 3);
+      let end = Math.min(total, start + maxPagesToShow - 1);
+      
+      // Adjust start if we're near the end
+      if (end - start < maxPagesToShow - 1) {
+        start = Math.max(1, end - maxPagesToShow + 1);
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    
+    return pages;
   };
 
   const formatTimestamp = (date: Date) => {
@@ -460,8 +671,10 @@
 				</div>
 
 				<!-- Pagination -->
-				{#if pagination && pagination.totalPages > 1}
-					<div class="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+				{#if pagination && (pagination.totalPages > 1 || searchQuery.trim())}
+					<div class="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between"
+					>
+						<!-- Mobile pagination -->
 						<div class="flex-1 flex justify-between sm:hidden">
 							<button
 								onclick={() => handlePageChange(currentPage - 1)}
@@ -478,57 +691,103 @@
 								Next
 							</button>
 						</div>
+						
+						<!-- Desktop pagination -->
 						<div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
 							<div>
 								<p class="text-sm text-gray-700">
+									{#if searchQuery.trim()}
+										<span class="text-[#01c0a4] font-medium">Search results:</span>
+									{/if}
 									Showing
 									<span class="font-medium">{(currentPage - 1) * pageLimit + 1}</span>
 									to
 									<span class="font-medium">{Math.min(currentPage * pageLimit, pagination.totalCount)}</span>
 									of
 									<span class="font-medium">{pagination.totalCount}</span>
-									results
+									{#if searchQuery.trim()}
+										matching "{searchQuery.trim()}"
+									{:else}
+										results
+									{/if}
 								</p>
 							</div>
-							<div>
+							
+							{#if pagination.totalPages > 1}
+								<div class="flex items-center space-x-2">
+									<!-- Previous 5 pages button -->
+									<button
+										onclick={() => handlePageChange(Math.max(1, currentPage - 5))}
+										disabled={currentPage <= 5}
+										class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+										title="Previous 5 pages"
+									>
+										<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M15.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 010 1.414zm-6 0a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 011.414 1.414L5.414 10l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Previous page button -->
+								<button
+									onclick={() => handlePageChange(currentPage - 1)}
+									disabled={!pagination.hasPrevPage}
+									class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+									title="Previous page"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Page numbers -->
 								<nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-									<button
-										onclick={() => handlePageChange(currentPage - 1)}
-										disabled={!pagination.hasPrevPage}
-										class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										<span class="sr-only">Previous</span>
-										<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-											<path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
-										</svg>
-									</button>
-									
-									{#each Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-										const start = Math.max(1, currentPage - 2);
-										return start + i;
-									}) as page}
-										{#if page <= pagination.totalPages}
-											<button
-												onclick={() => handlePageChange(page)}
-												class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {page === currentPage ? 'z-10 bg-[#01c0a4] border-[#01c0a4] text-white' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}"
-											>
-												{page}
-											</button>
-										{/if}
+									{#each getPageNumbers(currentPage, pagination.totalPages) as page}
+										<button
+											onclick={() => handlePageChange(page)}
+											class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {page === currentPage 
+												? 'z-10 bg-[#01c0a4] border-[#01c0a4] text-white' 
+												: 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}"
+										>
+											{page}
+										</button>
 									{/each}
-									
-									<button
-										onclick={() => handlePageChange(currentPage + 1)}
-										disabled={!pagination.hasNextPage}
-										class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										<span class="sr-only">Next</span>
-										<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-											<path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-										</svg>
-									</button>
 								</nav>
+								
+								<!-- Next page button -->
+								<button
+									onclick={() => handlePageChange(currentPage + 1)}
+									disabled={!pagination.hasNextPage}
+									class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+									title="Next page"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Next 5 pages button -->
+								<button
+									onclick={() => handlePageChange(Math.min(pagination.totalPages, currentPage + 5))}
+									disabled={currentPage + 5 > pagination.totalPages}
+									class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+									title="Next 5 pages"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M10.293 15.707a1 1 0 010-1.414L14.586 10l-4.293-4.293a1 1 0 111.414-1.414l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0zm-6 0a1 1 0 010-1.414L8.586 10 4.293 5.707a1 1 0 011.414-1.414l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Page indicator -->
+								<div class="flex items-center ml-4 text-sm text-gray-700">
+									<span class="font-medium">Page {currentPage} of {pagination.totalPages}</span>
+								</div>
 							</div>
+						{:else}
+							<!-- Single page indicator for search results -->
+							<div class="flex items-center text-sm text-gray-700">
+								<span class="font-medium">Page 1 of 1</span>
+							</div>
+						{/if}
 						</div>
 					</div>
 				{/if}
