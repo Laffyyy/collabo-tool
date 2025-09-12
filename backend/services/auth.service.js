@@ -47,6 +47,24 @@ async function login({ username, password, ipAddress = null, userAgent = null })
   try {
     console.log(`[Auth Service] Login attempt for user: ${username}`);
     
+    // Get max login attempts from global settings
+    let maxLoginAttempts = 5; // Default value
+    try {
+      const globalSettings = await GlobalSettingsService.getGeneralSettings();
+      if (globalSettings) {
+        const settings = typeof globalSettings === 'string' 
+          ? JSON.parse(globalSettings) 
+          : globalSettings;
+        
+        if (settings.maxLoginAttempts && settings.maxLoginAttempts > 0) {
+          maxLoginAttempts = parseInt(settings.maxLoginAttempts, 10);
+        }
+      }
+      console.log(`[Auth Service] Max login attempts: ${maxLoginAttempts}`);
+    } catch (error) {
+      console.warn('[Auth Service] Failed to load maxLoginAttempts from global settings:', error);
+    }
+    
     // First check if the user exists in database by email - include sensitive data for auth
     const query = 'SELECT * FROM tblusers WHERE demail = $1';
     const result = await userModel.pool.query(query, [username]);
@@ -63,24 +81,69 @@ async function login({ username, password, ipAddress = null, userAgent = null })
     
     const userData = result.rows[0];
     console.log(`[Auth Service] User found: ${userData.did}, username: ${userData.dusername}`);
+    
+    // Check if account is already locked
+    if (userData.daccountstatus && userData.daccountstatus.toLowerCase() === UserModel.ACCOUNT_STATUS.LOCKED) {
+      console.log(`[Auth Service] Login attempt for locked account: ${username}`);
+      return {
+        step: 'FAILED',
+        exists: true,
+        message: 'Account is locked. Please contact your administrator.',
+        isLocked: true
+      };
+    }
+    
+    // Count failed login attempts for this user in the past 24 hours
+    const failedAttempts = await userModel.countFailedLoginAttempts(userData.did);
+    console.log(`[Auth Service] Previous failed attempts for user ${userData.dusername}: ${failedAttempts}`);
+    
     const passwordHash = userData.dpasswordhash;
     
     // User exists in database - verify password
     if (!passwordHash || !(await bcrypt.compare(password, passwordHash))) {
       console.log(`[Auth Service] Login failed - invalid password for user: ${username}`);
+      
+      // Track this failed login attempt
+      await userModel.trackFailedLoginAttempt(userData.did, ipAddress, userAgent);
+      
+      // Count total failed attempts including this one
+      const totalFailedAttempts = failedAttempts + 1;
+      console.log(`[Auth Service] Total failed attempts: ${totalFailedAttempts}`);
+      
+      // Check if we need to lock the account
+      if (totalFailedAttempts >= maxLoginAttempts) {
+          // Lock the account
+          await userModel.lockAccount(userData.did, 'Too many failed login attempts');
+          console.log(`[Auth Service] Account locked due to too many failed attempts: ${username}`);
+          
+          return {
+              step: 'FAILED',
+              exists: true,
+              message: 'Account has been locked\ndue to too many failed login attempts.\nPlease contact your administrator.',
+              isLocked: true
+          };
+      }
+      
+      // Return remaining attempts for display to the user
+      const attemptsRemaining = maxLoginAttempts - totalFailedAttempts;
       return {
         step: 'FAILED',
         exists: true,
-        message: 'Invalid Email/Password'
+        message: `Invalid Email/Password. ${attemptsRemaining} attempt${attemptsRemaining === 1 ? '' : 's'} remaining.`,
+        attemptsRemaining: attemptsRemaining
       };
     }
     
     console.log(`[Auth Service] Password verified successfully for user: ${username}`);
     
+    // Track successful login - this will also update the last login timestamp
+    await userModel.trackSuccessfulLogin(userData.did, ipAddress, userAgent);
+    
     // Format the user without sensitive data for the response
     const user = userModel.formatUser(userData);
     console.log(`[Auth Service] Formatted user data:`, JSON.stringify(user));
     
+    // Proceed with the rest of the login process as before
     // Get session timeout from database configuration
     const sessionTimeoutMinutes = await getSessionTimeoutMinutes();
     console.log(`[Auth Service] Using session timeout of ${sessionTimeoutMinutes} minutes`);
@@ -211,6 +274,9 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
     // Update last login timestamp
     await userModel.updateLastLogin(userId);
     console.log(`[Auth Service] Last login updated for user: ${userId}`);
+
+    // Check if this is a first-time user (both conditions must be true)
+    const isFirstTimeUser = user.mustChangePassword && user.accountStatus === 'first-time';
     
     // Generate JWT token with user info and role
     const token = signToken({ 
@@ -252,13 +318,14 @@ async function verifyOtp({ userId, otp, ipAddress = null, userAgent = null }) {
       user: {
         ...user,
         role,
+        ouId,
         mustChangePassword: user.mustChangePassword,
-        ouId
+        accountStatus: user.accountStatus
       }
     };
   } catch (error) {
     console.error('[Auth Service] OTP verification error:', error);
-    throw new UnauthorizedError('OTP verification failed');
+    throw new UnauthorizedError('Invalid OTP');
   }
 }
 
