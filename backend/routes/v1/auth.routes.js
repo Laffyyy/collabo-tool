@@ -17,9 +17,20 @@ router.post(
 // OTP Verify
 router.post(
   '/otp',
-  [body('username').isString().notEmpty(), body('otp').isString().isLength({ min: 4, max: 8 })],
+  [
+    body('username').isString().notEmpty(),
+    body('userId').isString().notEmpty(), // Add validation for userId
+    body('otp').isString().isLength({ min: 4, max: 8 })
+  ],
   validate,
   authController.verifyOtp
+);
+
+router.post(
+  '/resend-otp',
+  [body('username').isString().notEmpty()],
+  validate,
+  authController.resendOtp
 );
 
 // First Time Setup
@@ -56,6 +67,27 @@ router.post(
   authController.forgotPassword
 );
 
+// Add this route after the existing forgot-password route
+router.post(
+  '/reset-password',
+  [
+    body('token').isString().notEmpty().withMessage('Reset token is required'),
+    body('newPassword').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+  ],
+  validate,
+  authController.resetPassword
+);
+
+// Add this route after the reset-password route
+router.post(
+  '/validate-reset-token',
+  [
+    body('token').isString().notEmpty().withMessage('Reset token is required')
+  ],
+  validate,
+  authController.validateResetToken
+);
+
 // Send Reset Password Link
 router.post(
   '/send-reset-link',
@@ -72,8 +104,35 @@ router.post(
   authController.answerSecurityQuestions
 );
 
-// Demo login endpoint for frontend testing
-router.post('/demo-login', authController.demoLogin);
+// Logout
+router.post(
+  '/logout',
+  requireAuth,
+  authController.logout
+);
+
+// Validate Session
+router.get(
+  '/validate-session',
+  requireAuth,  // This middleware will check if the session is valid
+  (req, res) => {
+    // If requireAuth passes, session is valid
+    res.status(200).json({ valid: true });
+  }
+);
+
+// Get session info
+router.get(
+  '/session-info',
+  requireAuth,
+  authController.getSessionInfo
+);
+
+// Refresh session
+router.post(
+  '/refresh-session',
+  requireAuth,
+  authController.refreshSession
+);
 
 module.exports = router;
-

@@ -12,6 +12,6 @@
 	</div>
 	
 	<h1 class="text-3xl font-bold text-gray-800 mb-2">Collaby</h1>
-	<p class="text-gray-600">Log in in to access your workspace</p>
+	<p class="text-gray-600">Log in to access your workspace</p>
 </div>
 

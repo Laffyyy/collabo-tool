@@ -2,12 +2,34 @@
 	import { onMount } from 'svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { 
 		Search, Filter, Plus, Download, Upload, Edit, Lock, 
 		Unlock, UserX, User, Shield, X, ChevronLeft, ChevronRight,
 		FileText, AlertCircle, CheckCircle, Eye, EyeOff, Info, Users, ArrowLeft, Key,
 		UserPlus, Activity, Headphones, Crown, LockKeyhole, ArrowUpDown, ArrowUp, ArrowDown
 	} from 'lucide-svelte';
+	
+	// Import API functions
+	import {
+		getUsers,
+		createUser,
+		updateUser,
+		changeUserPassword,
+		toggleUserLock,
+		toggleUserActivation,
+		bulkLockUsers,
+		bulkActivateUsers,
+		bulkCreateUsers,
+		getOrganizationalUnits,
+		getHierarchyOptions,
+		getUserTeam,
+		sendPasswordReset,
+		type CreateUserRequest,
+		type UpdateUserRequest
+	} from '$lib/api/user-management';
+	import type { ApiUser } from '$lib/api/types';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	// TypeScript interfaces
 	interface UserData {
@@ -21,6 +43,8 @@
 		type: 'user' | 'admin';
 		supervisorId?: string;
 		managerId?: string;
+		supervisorName?: string;
+		managerName?: string;
 	}
 
 	interface BulkUserData {
@@ -57,6 +81,18 @@
 	let selectedStatus = $state<string>('all');
 	let currentPage = $state<number>(1);
 	let itemsPerPage = 10;
+	let totalUsers = $state<number>(0);
+	let totalPages = $state<number>(1);
+	let loading = $state<boolean>(false);
+	let error = $state<string>('');
+	let isNavigatingPages = $state<boolean>(false); // Flag to prevent filter effect during page navigation
+	let isDragging = $state<boolean>(false); // Flag to track text selection/drag operations
+	// Previous filter values to track changes
+	let prevSearchQuery = $state<string>('');
+	let prevSelectedOU = $state<string>('all');
+	let prevSelectedRole = $state<string>('all');
+	let prevSelectedStatus = $state<string>('all');
+	let lastNavigationTime = $state<number>(0); // Track when navigation occurred
 	
 	// Sorting states
 	let sortColumn = $state<string>('');
@@ -74,15 +110,52 @@
 	let bulkPreviewTab = $state<string>('valid');
 	let showEditUserModal = $state<boolean>(false);
 	let showConfirmationModal = $state<boolean>(false);
+	let showSuccessModal = $state<boolean>(false);
+	let showErrorModal = $state<boolean>(false);
 	let showTeamModal = $state<boolean>(false);
 	let confirmationAction = $state<string>('');
 	let selectedUser = $state<UserData | null>(null);
 	let teamModalUser = $state<UserData | null>(null);
+	let successMessage = $state<string>('');
+	let errorMessage = $state<string>('');
 	
-	// Team modal navigation
+	// Team modal navigation and data
 	let teamViewStack = $state<UserData[]>([]); // Stack for navigation
 	let currentTeamView = $state<UserData | null>(null);
 	let selectedSupervisorView = $state<UserData | null>(null); // Which supervisor's team we're viewing
+	let teamData = $state<any>(null);
+	
+	// Data caching for performance - tab-specific caching
+	let cachedUsersByTab = $state<Record<string, UserData[]>>({});
+	let cachedPaginationByTab = $state<Record<string, { totalPages: number; totalUsers: number }>>({});
+	let cachedHierarchy = $state<any>(null);
+	let cachedOUs = $state<any[]>([]);
+	let lastFetchTimeByTab = $state<Record<string, number>>({});
+	let lastHierarchyFetchTime = $state<number>(0);
+	let lastOUFetchTime = $state<number>(0);
+	let cacheExpiry = 5 * 60 * 1000; // 5 minutes cache
+
+	// Clear all cached data (used after create/edit/delete operations)
+	function clearAllCache() {
+		cachedUsersByTab = {};
+		cachedPaginationByTab = {};
+		lastFetchTimeByTab = {};
+		cachedHierarchy = null;
+		cachedOUs = [];
+		lastHierarchyFetchTime = 0;
+		lastOUFetchTime = 0;
+	}
+
+	// Loading states
+	let loadingUsers = $state<boolean>(false);
+	let loadingCreate = $state<boolean>(false);
+	let loadingEdit = $state<boolean>(false);
+	let loadingPassword = $state<boolean>(false);
+	let loadingLock = $state<boolean>(false);
+	let loadingBulk = $state<boolean>(false);
+	let loadingTeamData = $state<boolean>(false);
+	let loadingHierarchy = $state<boolean>(false);
+	let loadingOUs = $state<boolean>(false);
 	
 	// Individual add form
 	let individualForm = $state<IndividualFormData>({
@@ -117,18 +190,32 @@
 		confirmPassword: '',
 		requirePasswordChange: false
 	});
+	let passwordErrors = $state({
+		empty: false,
+		length: false,
+		characters: false,
+		mismatch: false
+	});
 	let showPasswordFields = $state<boolean>(false);
 	
 	// Options
-	const ouOptions = [
-		'Engineering',
-		'Marketing', 
-		'Sales',
-		'Support',
-		'HR',
-		'Finance',
-		'IT'
-	];
+	let ouOptions = $state<string[]>([]);
+	let hierarchyOptions = $state<{ supervisors: ApiUser[]; managers: ApiUser[] }>({
+		supervisors: [],
+		managers: []
+	});
+	
+	// Tab counts - loaded independently for each tab
+	let tabCounts = $state({
+		frontline: 0,
+		support: 0,
+		supervisor: 0,
+		manager: 0,
+		admin: 0,
+		deactivated: 0,
+		locked: 0,
+		firstTime: 0
+	});
 	
 	const roleOptions = [
 		'Manager',
@@ -148,308 +235,456 @@
 
 	// Sample data
 	onMount(() => {
-		// Base users
-		const baseUsers: UserData[] = [
-			// Admin
-			{
-				id: '1',
-				employeeId: 'EMP001',
-				name: 'Alice Johnson',
-				email: 'alice.johnson@company.com',
-				ou: 'N/A',
-				role: 'Admin',
-				status: 'Active',
-				type: 'admin'
-			},
-			// Managers
-			{
-				id: '2',
-				employeeId: 'EMP002',
-				name: 'John Doe',
-				email: 'john.doe@company.com',
-				ou: 'Engineering',
-				role: 'Manager',
-				status: 'Active',
-				type: 'user'
-			},
-			{
-				id: '3',
-				employeeId: 'EMP003',
-				name: 'Sarah Wilson',
-				email: 'sarah.wilson@company.com',
-				ou: 'Sales',
-				role: 'Manager',
-				status: 'Active',
-				type: 'user'
-			}
-		];
-
-		// Generate hierarchical users
-		const generatedUsers: UserData[] = [];
-		let currentId = 4;
-		const sampleOUs = ['Engineering', 'Marketing', 'Sales', 'Support', 'HR', 'Finance'];
-		const sampleStatuses = ['Active', 'Active', 'Active', 'Inactive', 'First-time', 'Locked', 'Deactivated']; // Added more variety
-		const frontlineRoles = ['Frontline', 'Support'];
+		loadUsers();
+		loadOUs();
+		loadHierarchyOptions();
+		loadTabCounts();
 		
-		// Names for variety
-		const firstNames = ['Michael', 'Jennifer', 'David', 'Lisa', 'Robert', 'Karen', 'James', 'Susan', 'William', 'Jessica', 
-			'Thomas', 'Nancy', 'Daniel', 'Betty', 'Matthew', 'Helen', 'Anthony', 'Sandra', 'Mark', 'Donna',
-			'Donald', 'Carol', 'Steven', 'Ruth', 'Paul', 'Sharon', 'Andrew', 'Michelle', 'Joshua', 'Laura',
-			'Kenneth', 'Sarah', 'Kevin', 'Kimberly', 'Brian', 'Deborah', 'George', 'Dorothy', 'Edward', 'Lisa',
-			'Ronald', 'Nancy', 'Timothy', 'Karen', 'Jason', 'Betty', 'Jeffrey', 'Helen', 'Ryan', 'Sandra'];
+		// Add global drag detection to prevent modal closure during text selection
+		const handleMouseDown = () => { isDragging = false; };
+		const handleMouseMove = () => { isDragging = true; };
+		const handleMouseUp = () => { 
+			setTimeout(() => { isDragging = false; }, 10); // Small delay to ensure click events see the flag
+		};
 		
-		const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
-			'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
-			'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson',
-			'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores'];
-
-		// Get managers for supervisor assignment
-		const managers = baseUsers.filter(u => u.role === 'Manager');
+		document.addEventListener('mousedown', handleMouseDown);
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
 		
-		// Add some specific locked and deactivated users for demo purposes
-		const lockedAndDeactivatedUsers: UserData[] = [
-			{
-				id: 'locked-1',
-				employeeId: 'EMP900',
-				name: 'Michael Thompson',
-				email: 'michael.thompson@company.com',
-				ou: 'Engineering',
-				role: 'Frontline',
-				status: 'Locked',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[0]?.id
-			},
-			{
-				id: 'locked-2',
-				employeeId: 'EMP901',
-				name: 'Sarah Davis',
-				email: 'sarah.davis@company.com',
-				ou: 'Sales',
-				role: 'Support',
-				status: 'Locked',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[1]?.id
-			},
-			{
-				id: 'deactivated-1',
-				employeeId: 'EMP950',
-				name: 'Robert Johnson',
-				email: 'robert.johnson@company.com',
-				ou: 'Marketing',
-				role: 'Supervisor',
-				status: 'Deactivated',
-				type: 'user',
-				managerId: managers[0]?.id
-			},
-			{
-				id: 'deactivated-2',
-				employeeId: 'EMP951',
-				name: 'Lisa Wilson',
-				email: 'lisa.wilson@company.com',
-				ou: 'HR',
-				role: 'Frontline',
-				status: 'Deactivated',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[0]?.id
-			},
-			{
-				id: 'deactivated-3',
-				employeeId: 'EMP952',
-				name: 'David Brown',
-				email: 'david.brown@company.com',
-				ou: 'Finance',
-				role: 'Support',
-				status: 'Deactivated',
-				type: 'user',
-				supervisorId: undefined,
-				managerId: managers[0]?.id
-			}
-		];
-		
-		generatedUsers.push(...lockedAndDeactivatedUsers);
-		
-		// Generate supervisors (5 per manager)
-		const supervisors: UserData[] = [];
-		managers.forEach((manager, managerIndex) => {
-			for (let i = 0; i < 5; i++) {
-				const firstName = firstNames[currentId % firstNames.length];
-				const lastName = lastNames[(currentId + managerIndex * 5 + i) % lastNames.length];
-				
-				const supervisor: UserData = {
-					id: currentId.toString(),
-					employeeId: `SUP${String(currentId).padStart(3, '0')}`,
-					name: `${firstName} ${lastName}`,
-					email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
-					ou: manager.ou,
-					role: 'Supervisor',
-					status: sampleStatuses[currentId % sampleStatuses.length],
-					type: 'user',
-					managerId: manager.id
-				};
-				
-				supervisors.push(supervisor);
-				generatedUsers.push(supervisor);
-				currentId++;
-			}
-		});
-
-		// Generate frontline/support users (20 per supervisor)
-		supervisors.forEach((supervisor, supervisorIndex) => {
-			for (let i = 0; i < 20; i++) {
-				const firstName = firstNames[(currentId + i) % firstNames.length];
-				const lastName = lastNames[(currentId + supervisorIndex * 20 + i) % lastNames.length];
-				const role = frontlineRoles[i % frontlineRoles.length];
-				
-				const frontlineUser: UserData = {
-					id: currentId.toString(),
-					employeeId: `EMP${String(currentId).padStart(3, '0')}`,
-					name: `${firstName} ${lastName}`,
-					email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
-					ou: supervisor.ou,
-					role: role,
-					status: sampleStatuses[currentId % sampleStatuses.length],
-					type: 'user',
-					supervisorId: supervisor.id,
-					managerId: supervisor.managerId
-				};
-				
-				generatedUsers.push(frontlineUser);
-				currentId++;
-			}
-		});
-
-		// Combine base users with generated users
-		users = [...baseUsers, ...generatedUsers];
-		
-		filterUsers();
+		// Cleanup function
+		return () => {
+			document.removeEventListener('mousedown', handleMouseDown);
+			document.removeEventListener('mousemove', handleMouseMove);
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
 	});
 
-	// Computed values - Dynamic tab counts based on current filters
-	const tabCounts = $derived({
-		frontline: (() => {
-			if (currentTab === 'frontline') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Frontline' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+	// Load all tab counts
+	async function loadTabCounts() {
+		try {
+			// Load counts for each tab by making separate API calls
+			const [
+				frontlineResponse,
+				supportResponse,
+				supervisorResponse,
+				managerResponse,
+				adminResponse,
+				deactivatedResponse,
+				lockedResponse,
+				firstTimeResponse
+			] = await Promise.all([
+				getUsers({ role: 'Frontline', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Support', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Supervisor', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Manager', status: 'active', limit: 1, page: 1 }),
+				getUsers({ role: 'Admin', status: 'active', limit: 1, page: 1 }),
+				getUsers({ status: 'deactivated', limit: 1, page: 1 }),
+				getUsers({ status: 'locked', limit: 1, page: 1 }),
+				getUsers({ status: 'first-time', limit: 1, page: 1 })
+			]);
+
+			// Update tab counts with total user counts from pagination
+			tabCounts.frontline = frontlineResponse.ok ? frontlineResponse.data.pagination.totalUsers : 0;
+			tabCounts.support = supportResponse.ok ? supportResponse.data.pagination.totalUsers : 0;
+			tabCounts.supervisor = supervisorResponse.ok ? supervisorResponse.data.pagination.totalUsers : 0;
+			tabCounts.manager = managerResponse.ok ? managerResponse.data.pagination.totalUsers : 0;
+			tabCounts.admin = adminResponse.ok ? adminResponse.data.pagination.totalUsers : 0;
+			tabCounts.deactivated = deactivatedResponse.ok ? deactivatedResponse.data.pagination.totalUsers : 0;
+			tabCounts.locked = lockedResponse.ok ? lockedResponse.data.pagination.totalUsers : 0;
+			tabCounts.firstTime = firstTimeResponse.ok ? firstTimeResponse.data.pagination.totalUsers : 0;
+		} catch (err) {
+			console.error('Failed to load tab counts:', err);
+		}
+	}
+
+	// Load organizational units with caching
+	async function loadOUs() {
+		try {
+			// Use cached data if available and not expired
+			const now = Date.now();
+			if (cachedOUs.length > 0 && (now - lastOUFetchTime) < cacheExpiry) {
+				ouOptions = cachedOUs;
+				return;
 			}
-			return filtered.length;
-		})(),
-		support: (() => {
-			if (currentTab === 'support') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Support' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+
+			loadingOUs = true;
+			const response = await getOrganizationalUnits();
+			if (response.ok) {
+				console.log('Raw OU data from API:', response.data.ous);
+				ouOptions = response.data.ous.map((ou: any) => ou.name);
+				console.log('OU options after mapping:', ouOptions);
+				cachedOUs = [...ouOptions]; // Cache the data
+				lastOUFetchTime = now;
 			}
-			return filtered.length;
-		})(),
-		supervisor: (() => {
-			if (currentTab === 'supervisor') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Supervisor' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		} catch (err) {
+			console.error('Failed to load organizational units:', err);
+		} finally {
+			loadingOUs = false;
+		}
+	}
+
+	// Load hierarchy options (supervisors and managers) with caching
+	async function loadHierarchyOptions(filters = {}) {
+		try {
+			// Use cached data if available and not expired
+			const now = Date.now();
+			if (cachedHierarchy && (now - lastHierarchyFetchTime) < cacheExpiry && Object.keys(filters).length === 0) {
+				hierarchyOptions = cachedHierarchy;
+				return;
 			}
-			return filtered.length;
-		})(),
-		manager: (() => {
-			if (currentTab === 'manager') return filteredUsers.length;
-			let filtered = users.filter(u => u.role === 'Manager' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+
+			loadingHierarchy = true;
+			const response = await getHierarchyOptions(filters);
+			if (response.ok) {
+				hierarchyOptions = response.data;
+				if (Object.keys(filters).length === 0) {
+					cachedHierarchy = response.data; // Only cache unfiltered data
+					lastHierarchyFetchTime = now;
+				}
 			}
-			return filtered.length;
-		})(),
-		admin: (() => {
-			if (currentTab === 'admin') return filteredUsers.length;
-			let filtered = users.filter(u => u.type === 'admin' && u.status === 'Active');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		} catch (err) {
+			console.error('Failed to load hierarchy options:', err);
+		} finally {
+			loadingHierarchy = false;
+		}
+	}
+
+	// Get available supervisors based on current form role and selected manager (for OU filtering)
+	function getAvailableSupervisors() {
+		if (individualForm.role === 'Frontline' || individualForm.role === 'Support') {
+			// For Frontline/Support, filter supervisors by manager's OUs if manager is selected
+			if (individualForm.managerId) {
+				const selectedManager = hierarchyOptions.managers.find(m => m.id === individualForm.managerId);
+				if (selectedManager) {
+					// Return supervisors that work under this manager
+					return hierarchyOptions.supervisors.filter(s => s.managerId === individualForm.managerId);
+				}
 			}
-			return filtered.length;
-		})(),
-		deactivated: (() => {
-			if (currentTab === 'deactivated') return filteredUsers.length;
-			let filtered = users.filter(u => u.status === 'Deactivated');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+			// If no manager selected, return all supervisors
+			return hierarchyOptions.supervisors;
+		}
+		return [];
+	}
+
+	// Get available managers based on current form role
+	function getAvailableManagers() {
+		if (individualForm.role === 'Supervisor') {
+			return hierarchyOptions.managers;
+		}
+		return [];
+	}
+
+	// Get available OUs based on role and selected supervisor/manager
+	function getAvailableOUs() {
+		if (individualForm.role === 'Manager' || individualForm.role === 'Admin') {
+			// Managers and Admins can select any OU
+			return ouOptions;
+		}
+		
+		if (individualForm.role === 'Supervisor' && individualForm.managerId) {
+			// Supervisors can only select OUs that their manager manages
+			const selectedManager = hierarchyOptions.managers.find(m => m.id === individualForm.managerId);
+			if (selectedManager && selectedManager.ou) {
+				// Return OUs managed by the selected manager (for now, just their OU)
+				return ouOptions.filter(ou => ou === selectedManager.ou);
 			}
-			return filtered.length;
-		})(),
-		locked: (() => {
-			if (currentTab === 'locked') return filteredUsers.length;
-			let filtered = users.filter(u => u.status === 'Locked');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		}
+		
+		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
+			// Frontline/Support can only select OUs that their supervisor manages
+			const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.ou) {
+				return ouOptions.filter(ou => ou === selectedSupervisor.ou);
 			}
-			return filtered.length;
-		})(),
-		firstTime: (() => {
-			if (currentTab === 'first-time') return filteredUsers.length;
-			let filtered = users.filter(u => u.status === 'First-time');
-			if (selectedOU !== 'all') filtered = filtered.filter(u => u.ou === selectedOU);
-			if (selectedRole !== 'all') filtered = filtered.filter(u => u.role === selectedRole);
-			if (selectedStatus !== 'all') filtered = filtered.filter(u => u.status === selectedStatus);
-			if (searchQuery) {
-				filtered = filtered.filter(u => 
-					u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-				);
+		}
+		
+		return ouOptions; // Default to all OUs if no constraints
+	}
+
+	// Handle role change to reset dependent fields and load appropriate options
+	function handleRoleChange() {
+		// Reset dependent fields when role changes
+		individualForm.supervisorId = '';
+		individualForm.managerId = '';
+		individualForm.ou = '';
+		
+		// Load hierarchy options if needed
+		if (individualForm.role === 'Frontline' || individualForm.role === 'Support' || individualForm.role === 'Supervisor') {
+			loadHierarchyOptions();
+		}
+	}
+
+	// Handle manager selection change (for supervisor role)
+	function handleManagerChange() {
+		// Reset OU when manager changes
+		individualForm.ou = '';
+		
+		// Auto-fill OU for Supervisors based on manager's OU
+		if (individualForm.role === 'Supervisor' && individualForm.managerId) {
+			const selectedManager = hierarchyOptions.managers.find(m => m.id === individualForm.managerId);
+			if (selectedManager && selectedManager.ou) {
+				individualForm.ou = selectedManager.ou;
 			}
-			return filtered.length;
-		})()
+		}
+		
+		// For Frontline/Support, reset supervisor when manager changes
+		if (individualForm.role === 'Frontline' || individualForm.role === 'Support') {
+			individualForm.supervisorId = '';
+		}
+	}
+
+	// Handle supervisor selection change (for frontline/support roles)
+	function handleSupervisorChange() {
+		// Reset OU when supervisor changes
+		individualForm.ou = '';
+		
+		// Auto-fill OU for Frontline/Support based on supervisor's OU
+		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.ou) {
+				individualForm.ou = selectedSupervisor.ou;
+			}
+		}
+		
+		// Auto-assign manager based on supervisor selection
+		if (individualForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.managerId) {
+				individualForm.managerId = selectedSupervisor.managerId;
+			}
+		} else {
+			individualForm.managerId = '';
+		}
+	}
+
+	// Similar functions for edit form
+	function getAvailableSupervisorsEdit() {
+		if (editForm.role === 'Frontline' || editForm.role === 'Support') {
+			if (editForm.managerId) {
+				const selectedManager = hierarchyOptions.managers.find(m => m.id === editForm.managerId);
+				if (selectedManager) {
+					return hierarchyOptions.supervisors.filter(s => s.managerId === editForm.managerId);
+				}
+			}
+			return hierarchyOptions.supervisors;
+		}
+		return [];
+	}
+
+	function getAvailableManagersEdit() {
+		if (editForm.role === 'Supervisor') {
+			return hierarchyOptions.managers;
+		}
+		return [];
+	}
+
+	function getAvailableOUsEdit() {
+		if (editForm.role === 'Manager' || editForm.role === 'Admin') {
+			return ouOptions;
+		}
+		
+		if (editForm.role === 'Supervisor' && editForm.managerId) {
+			const selectedManager = hierarchyOptions.managers.find(m => m.id === editForm.managerId);
+			if (selectedManager && selectedManager.ou) {
+				return ouOptions.filter(ou => ou === selectedManager.ou);
+			}
+		}
+		
+		if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisorsEdit().find(s => s.id === editForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.ou) {
+				return ouOptions.filter(ou => ou === selectedSupervisor.ou);
+			}
+		}
+		
+		return ouOptions;
+	}
+
+	function handleRoleChangeEdit() {
+		editForm.supervisorId = '';
+		editForm.managerId = '';
+		editForm.ou = '';
+		
+		if (editForm.role === 'Frontline' || editForm.role === 'Support' || editForm.role === 'Supervisor') {
+			loadHierarchyOptions();
+		}
+	}
+
+	function handleManagerChangeEdit() {
+		editForm.ou = '';
+		if (editForm.role === 'Frontline' || editForm.role === 'Support') {
+			editForm.supervisorId = '';
+		}
+	}
+
+	function handleSupervisorChangeEdit() {
+		editForm.ou = '';
+		if (editForm.supervisorId) {
+			const selectedSupervisor = getAvailableSupervisorsEdit().find(s => s.id === editForm.supervisorId);
+			if (selectedSupervisor && selectedSupervisor.managerId) {
+				editForm.managerId = selectedSupervisor.managerId;
+			}
+		} else {
+			editForm.managerId = '';
+		}
+	}
+
+	// Reactive statements for filters
+	$effect(() => {
+		const timeSinceNavigation = Date.now() - lastNavigationTime;
+		// Check if any filter values have actually changed
+		const filtersChanged = searchQuery !== prevSearchQuery || selectedOU !== prevSelectedOU || selectedRole !== prevSelectedRole || selectedStatus !== prevSelectedStatus;
+		const shouldTrigger = !isNavigatingPages && timeSinceNavigation > 100 && filtersChanged;
+		console.log(`Filter effect triggered - filtersChanged: ${filtersChanged}, isNavigatingPages: ${isNavigatingPages}, timeSinceNavigation: ${timeSinceNavigation}ms, currentPage: ${currentPage}, shouldTrigger: ${shouldTrigger}`); // Debug log
+		
+		if (shouldTrigger) {
+			console.log(`Resetting currentPage from ${currentPage} to 1 due to filter change`); // Debug log
+			currentPage = 1; // Reset to first page when filtering
+			loadUsers();
+		}
+		
+		// Update previous values
+		prevSearchQuery = searchQuery;
+		prevSelectedOU = selectedOU;
+		prevSelectedRole = selectedRole;
+		prevSelectedStatus = selectedStatus;
 	});
+
+
+
+	// Load users from API with tab-specific caching for performance
+	async function loadUsers(forceRefresh = false) {
+		try {
+			console.log(`loadUsers called - forceRefresh: ${forceRefresh}, isNavigatingPages: ${isNavigatingPages}, currentPage: ${currentPage}`); // Enhanced debug log
+			// Create cache key based on current tab and filters (excluding page for status-based filtering)
+			const statusFilter = getStatusFilter();
+			const cacheKey = `${currentTab}_${currentPage}_${itemsPerPage}_${searchQuery}_${selectedOU}_${selectedRole}_${statusFilter}_${sortColumn}_${sortDirection}`;
+			console.log('Cache key:', cacheKey); // Debug log
+			
+			// Check tab-specific cache first
+			const now = Date.now();
+			if (!forceRefresh && 
+				cachedUsersByTab[cacheKey] && 
+				cachedPaginationByTab[cacheKey] &&
+				lastFetchTimeByTab[cacheKey] && 
+				(now - lastFetchTimeByTab[cacheKey]) < cacheExpiry) {
+				console.log('Using cached data for:', cacheKey, 'Users count:', users.length, 'Page:', currentPage); // Debug log
+				users = cachedUsersByTab[cacheKey];
+				const cachedPagination = cachedPaginationByTab[cacheKey];
+				totalPages = cachedPagination.totalPages;
+				totalUsers = cachedPagination.totalUsers;
+				filteredUsers = users;
+				return;
+			}
+
+			console.log('Fetching fresh data for:', cacheKey); // Debug log
+			loadingUsers = true;
+			
+			const params = {
+				page: currentPage,
+				limit: itemsPerPage,
+				search: searchQuery || undefined,
+				ou: selectedOU !== 'all' ? selectedOU : undefined,
+				role: getRoleFilter() || (selectedRole !== 'all' ? selectedRole : undefined),
+				status: getStatusFilter(),
+				sortBy: sortColumn || undefined,
+				sortOrder: sortDirection
+			};
+
+			console.log('Filter params being sent:', params);
+			const response = await getUsers(params);
+			console.log('API response for', params.role, ':', response);
+			
+			if (response.ok) {
+				console.log('Raw API users:', response.data.users);
+				users = response.data.users.map((apiUser: ApiUser) => transformApiUser(apiUser));
+				console.log('Transformed users:', users);
+				// Cache the data with tab-specific key
+				cachedUsersByTab[cacheKey] = [...users];
+				cachedPaginationByTab[cacheKey] = {
+					totalPages: response.data.pagination.totalPages,
+					totalUsers: response.data.pagination.totalUsers
+				};
+				lastFetchTimeByTab[cacheKey] = now;
+				console.log('Fresh data loaded for:', cacheKey, 'Users count:', users.length, 'Page:', currentPage); // Debug log
+				totalPages = response.data.pagination.totalPages;
+				totalUsers = response.data.pagination.totalUsers;
+				filteredUsers = users; // API already filters, so set filtered to all users
+				
+				// If current page is greater than total pages, reset to page 1
+				if (currentPage > totalPages && totalPages > 0) {
+					currentPage = 1;
+					// Re-fetch with corrected page
+					await loadUsers(true);
+					return;
+				}
+			} else {
+				throw new Error('Failed to load users');
+			}
+		} catch (err) {
+			console.error('Failed to load users:', err);
+			error = err instanceof Error ? err.message : 'Failed to load users';
+		} finally {
+			loadingUsers = false;
+		}
+	}
+
+	// Transform API user to frontend user format
+	function transformApiUser(apiUser: ApiUser): UserData {
+		return {
+			id: apiUser.id,
+			employeeId: apiUser.employeeId,
+			name: apiUser.name,
+			email: apiUser.email,
+			ou: apiUser.ou || '',
+			role: apiUser.role,
+			status: apiUser.status,
+			type: (apiUser.type === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+			supervisorId: apiUser.supervisorId || undefined,
+			managerId: apiUser.managerId || undefined,
+			supervisorName: apiUser.supervisorName || '',
+			managerName: apiUser.managerName || ''
+		};
+	}
+
+	// Get status filter based on current tab
+	function getStatusFilter(): string | undefined {
+		switch (currentTab) {
+			case 'first-time':
+				return 'first-time';
+			case 'locked':
+				return 'locked';
+			case 'deactivated':
+				return 'deactivated';
+			case 'frontline':
+			case 'support':
+			case 'supervisor':
+			case 'manager':
+			case 'admin':
+				// For role-based tabs, exclude status-based users (first-time, locked, deactivated)
+				return 'active';
+			default:
+				return selectedStatus !== 'all' ? selectedStatus : undefined;
+		}
+	}
+
+	// Get role filter based on current tab
+	function getRoleFilter(): string | undefined {
+		switch (currentTab) {
+			case 'frontline':
+				return 'Frontline';
+			case 'support':
+				return 'Support';
+			case 'supervisor':
+				return 'Supervisor';
+			case 'manager':
+				return 'Manager';
+			case 'admin':
+				return 'Admin';
+			default:
+				return selectedRole !== 'all' ? selectedRole : undefined;
+		}
+	}
 
 	// Helper functions for hierarchy
 	const getUserById = (id: string) => users.find(u => u.id === id);
@@ -492,66 +727,11 @@
 		return [];
 	};
 
-	const totalPages = () => Math.ceil(filteredUsers.length / itemsPerPage);
-	const paginatedUsers = () => filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+	const paginatedUsers = () => filteredUsers;
 
 	// Functions
-	const filterUsers = () => {
-		let filtered = users;
 
-		// Filter by tab
-		switch (currentTab) {
-			case 'frontline':
-				filtered = filtered.filter(u => u.role === 'Frontline' && u.status === 'Active');
-				break;
-			case 'support':
-				filtered = filtered.filter(u => u.role === 'Support' && u.status === 'Active');
-				break;
-			case 'supervisor':
-				filtered = filtered.filter(u => u.role === 'Supervisor' && u.status === 'Active');
-				break;
-			case 'manager':
-				filtered = filtered.filter(u => u.role === 'Manager' && u.status === 'Active');
-				break;
-			case 'admin':
-				filtered = filtered.filter(u => u.type === 'admin' && u.status === 'Active');
-				break;
-			case 'deactivated':
-				filtered = filtered.filter(u => u.status === 'Deactivated');
-				break;
-			case 'locked':
-				filtered = filtered.filter(u => u.status === 'Locked');
-				break;
-			case 'first-time':
-				filtered = filtered.filter(u => u.status === 'First-time');
-				break;
-		}
-
-		// Apply search
-		if (searchQuery) {
-			filtered = filtered.filter(u => 
-				u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				u.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
-			);
-		}
-
-		// Apply filters
-		if (selectedOU !== 'all') {
-			filtered = filtered.filter(u => u.ou === selectedOU);
-		}
-		if (selectedRole !== 'all') {
-			filtered = filtered.filter(u => u.role === selectedRole);
-		}
-		if (selectedStatus !== 'all') {
-			filtered = filtered.filter(u => u.status === selectedStatus);
-		}
-
-		filteredUsers = filtered;
-		currentPage = 1; // Reset to first page when filtering
-	};
-
-	const handleSort = (column: string) => {
+	const handleSort = async (column: string) => {
 		if (sortColumn === column) {
 			// Three-state toggle: asc → desc → reset
 			if (sortDirection === 'asc') {
@@ -560,7 +740,7 @@
 				// Reset sorting
 				sortColumn = '';
 				sortDirection = 'asc';
-				filterUsers(); // Re-filter to get original order
+				await loadUsers(); // Re-load to get original order
 				return;
 			}
 		} else {
@@ -569,52 +749,7 @@
 			sortDirection = 'asc';
 		}
 		
-		// Sort filteredUsers
-		filteredUsers.sort((a, b) => {
-			let aValue: string | number;
-			let bValue: string | number;
-			
-			switch (column) {
-				case 'employeeId':
-					aValue = a.employeeId;
-					bValue = b.employeeId;
-					break;
-				case 'name':
-					aValue = a.name;
-					bValue = b.name;
-					break;
-				case 'email':
-					aValue = a.email;
-					bValue = b.email;
-					break;
-				case 'ou':
-					aValue = a.ou;
-					bValue = b.ou;
-					break;
-				case 'role':
-					// Custom role hierarchy for sorting
-					const roleOrder = { 'Admin': 5, 'Manager': 4, 'Supervisor': 3, 'Support': 2, 'Frontline': 1 };
-					aValue = roleOrder[a.role as keyof typeof roleOrder] || 0;
-					bValue = roleOrder[b.role as keyof typeof roleOrder] || 0;
-					break;
-				case 'status':
-					aValue = a.status;
-					bValue = b.status;
-					break;
-				default:
-					return 0;
-			}
-			
-			if (typeof aValue === 'string' && typeof bValue === 'string') {
-				const comparison = aValue.localeCompare(bValue);
-				return sortDirection === 'asc' ? comparison : -comparison;
-			} else if (typeof aValue === 'number' && typeof bValue === 'number') {
-				const comparison = aValue - bValue;
-				return sortDirection === 'asc' ? comparison : -comparison;
-			}
-			
-			return 0;
-		});
+		await loadUsers(); // Re-load with new sort
 	};
 
 	// Helper function to get sort icon
@@ -623,8 +758,10 @@
 		return sortDirection === 'asc' ? ArrowUp : ArrowDown;
 	};
 
-	const changeTab = (tab: string) => {
+	const changeTab = async (tab: string) => {
+		console.log(`changeTab called with: ${tab}`);
 		currentTab = tab;
+		currentPage = 1; // Reset to first page when switching tabs
 		// Clear selections when switching tabs
 		selectedRows = new Set();
 		selectAll = false;
@@ -632,59 +769,75 @@
 		// Reset sorting when switching tabs
 		sortColumn = '';
 		sortDirection = 'asc';
-		filterUsers();
+		console.log(`About to load users for tab: ${tab}`);
+		await loadUsers();
+		console.log(`Users loaded for tab ${tab}, count: ${users.length}`);
+		// Refresh tab counts to ensure they're up-to-date
+		await loadTabCounts();
 	};
 
-	const addIndividualUser = () => {
-		// For Admin users, OU is not required
-		const isAdmin = individualForm.role === 'Admin';
-		const requiredFields = isAdmin 
-			? [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.role]
-			: [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.ou, individualForm.role];
-		
-		if (requiredFields.some(field => !field)) {
-			alert('Please fill in all required fields');
-			return;
-		}
-
-		// Auto-assign manager for Frontline/Support based on supervisor selection
-		let finalManagerId = individualForm.managerId;
-		if ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId) {
-			const supervisor = getUserById(individualForm.supervisorId);
-			if (supervisor && supervisor.managerId) {
-				finalManagerId = supervisor.managerId;
+	const addIndividualUser = async () => {
+		try {
+			loadingCreate = true;
+			
+			// For Admin users, OU is not required
+			const isAdmin = individualForm.role === 'Admin';
+			const requiredFields = isAdmin 
+				? [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.role]
+				: [individualForm.employeeId, individualForm.name, individualForm.email, individualForm.ou, individualForm.role];
+			
+			if (requiredFields.some(field => !field)) {
+				alert('Please fill in all required fields');
+				return;
 			}
+
+			// Prepare user data for API
+			const userData = {
+				employeeId: individualForm.employeeId,
+				name: individualForm.name,
+				email: individualForm.email,
+				ou: isAdmin ? undefined : individualForm.ou,
+				role: individualForm.role,
+				supervisorId: individualForm.supervisorId || undefined,
+				managerId: individualForm.managerId || undefined
+			};
+
+			console.log('Sending user data:', userData);
+			console.log('Available managers:', hierarchyOptions.managers);
+
+			// Call API to create user
+			const response = await createUser(userData);
+			
+			if (response.ok) {
+				// Clear cache to ensure fresh data
+				clearAllCache();
+				// Reload users to get the updated list
+				await loadUsers(true); // Force refresh
+				// Reload tab counts to update the numbers
+				await loadTabCounts();
+				
+				// Reset form
+				individualForm = {
+					employeeId: '',
+					name: '',
+					email: '',
+					ou: '',
+					role: '',
+					supervisorId: '',
+					managerId: ''
+				};
+				
+				showAddUserModal = false;
+				alert('User added successfully!');
+			} else {
+				throw new Error(response.message || 'Failed to create user');
+			}
+		} catch (err) {
+			console.error('Failed to add user:', err);
+			alert(err instanceof Error ? err.message : 'Failed to add user');
+		} finally {
+			loadingCreate = false;
 		}
-
-		const newUser: UserData = {
-			id: Date.now().toString(),
-			employeeId: individualForm.employeeId,
-			name: individualForm.name,
-			email: individualForm.email,
-			ou: isAdmin ? 'N/A' : individualForm.ou,
-			role: individualForm.role,
-			status: 'Active',
-			type: individualForm.role === 'Admin' ? 'admin' : 'user',
-			supervisorId: individualForm.supervisorId || undefined,
-			managerId: finalManagerId || undefined
-		};
-
-		users = [...users, newUser];
-		filterUsers();
-		
-		// Reset form
-		individualForm = {
-			employeeId: '',
-			name: '',
-			email: '',
-			ou: '',
-			role: '',
-			supervisorId: '',
-			managerId: ''
-		};
-		
-		showAddUserModal = false;
-		alert('User added successfully!');
 	};
 
 	const handleFileUpload = (event: Event) => {
@@ -694,59 +847,51 @@
 
 		uploadedFile = file;
 		
-		// Simulate file processing
+		// TODO: Replace with actual file upload and processing API
+		// Example:
+		// try {
+		//   const result = await uploadAndProcessFile(file);
+		//   bulkData = result;
+		//   showBulkPreview = true;
+		// } catch (error) {
+		//   console.error('File upload failed:', error);
+		// }
+		
+		// Temporary placeholder - remove when implementing real backend
 		setTimeout(() => {
-			// Mock data for demonstration
-			bulkData = {
-				valid: [
-					{
-						employeeId: 'EMP100',
-						name: 'Test User 1',
-						email: 'test1@company.com',
-						ou: 'Engineering',
-						role: 'Frontline'
-					},
-					{
-						employeeId: 'EMP101',
-						name: 'Test User 2',
-						email: 'test2@company.com',
-						ou: 'Marketing',
-						role: 'Support'
-					}
-				],
-				invalid: [
-					{
-						employeeId: 'EMP102',
-						name: '',
-						email: 'invalid-email',
-						ou: 'Unknown',
-						role: 'Invalid',
-						errors: ['Name is required', 'Invalid email format', 'Unknown OU', 'Invalid role']
-					}
-				]
-			};
+			bulkData = { valid: [], invalid: [] };
 			showBulkPreview = true;
 		}, 1000);
 	};
 
-	const processBulkUpload = () => {
-		// Add valid users
-		const newUsers: UserData[] = bulkData.valid.map(user => ({
-			id: Date.now().toString() + Math.random(),
-			...user,
-			status: 'Active',
-			type: user.role === 'Admin' ? 'admin' : 'user'
-		}));
-
-		users = [...users, ...newUsers];
-		filterUsers();
-		
-		showBulkPreview = false;
-		showAddUserModal = false;
-		uploadedFile = null;
-		bulkData = { valid: [], invalid: [] };
-		
-		alert(`${newUsers.length} users added successfully!`);
+	const processBulkUpload = async () => {
+		try {
+			loadingBulk = true;
+			const result = await bulkCreateUsers(bulkData.valid);
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
+			showBulkPreview = false;
+			showAddUserModal = false;
+			uploadedFile = null;
+			bulkData = { valid: [], invalid: [] };
+			
+			const { successful, failed } = result.data;
+			const successCount = successful.length;
+			const failedCount = failed.length;
+			
+			if (failedCount > 0) {
+				alert(`Bulk upload completed. ${successCount} users created successfully, ${failedCount} failed. Check console for details.`);
+				console.log('Failed users:', failed);
+			} else {
+				alert(`${successCount} users added successfully!`);
+			}
+		} catch (error) {
+			console.error('Bulk upload failed:', error);
+			alert('Failed to upload users. Please try again.');
+		} finally {
+			loadingBulk = false;
+		}
 	};
 
 	const downloadTemplate = () => {
@@ -778,7 +923,8 @@
 			window.URL.revokeObjectURL(url);
 		});
 
-		alert('Four template files have been downloaded:\n• frontline_support_template.csv\n• supervisor_template.csv\n• manager_template.csv\n• admin_template.csv');
+		// Show success toast instead of alert
+    	toastStore.success('Templates Downloaded Successfully');
 	};
 
 	const editUser = (user: UserData) => {
@@ -795,7 +941,7 @@
 		showEditUserModal = true;
 	};
 
-	const saveEditUser = () => {
+	const saveEditUser = async () => {
 		const isAdmin = selectedUser?.type === 'admin';
 		
 		// For admin users, OU is not required and role cannot be changed
@@ -822,32 +968,50 @@
 			return;
 		}
 
-		// Auto-assign manager for Frontline/Support based on supervisor selection
-		let finalManagerId = editForm.managerId;
-		if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
-			const supervisor = getUserById(editForm.supervisorId);
-			if (supervisor && supervisor.managerId) {
-				finalManagerId = supervisor.managerId;
+		try {
+			loadingEdit = true;
+			
+			// Auto-assign manager for Frontline/Support based on supervisor selection
+			let finalManagerId = editForm.managerId;
+			if ((editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId) {
+				const supervisor = getUserById(editForm.supervisorId);
+				if (supervisor && supervisor.managerId) {
+					finalManagerId = supervisor.managerId;
+				}
 			}
-		}
 
-		const updatedUsers = users.map(u => 
-			u.id === selectedUser!.id ? { 
-				...u, 
+			const updateData: UpdateUserRequest = {
 				name: editForm.name,
 				email: editForm.email,
-				ou: isAdmin ? u.ou : editForm.ou, // Keep existing OU for admin users
-				role: isAdmin ? u.role : editForm.role, // Keep existing role for admin users
-				type: (isAdmin ? 'admin' : (editForm.role === 'Admin' ? 'admin' : 'user')) as 'admin' | 'user',
-				supervisorId: isAdmin ? undefined : (editForm.supervisorId || undefined),
-				managerId: isAdmin ? undefined : (finalManagerId || undefined)
-			} : u
-		);
-		users = updatedUsers;
-		filterUsers();
-		showEditUserModal = false;
-		selectedUser = null;
-		alert('User updated successfully!');
+				ou: isAdmin ? undefined : editForm.ou,
+				role: isAdmin ? undefined : editForm.role,
+				supervisorId: isAdmin ? undefined : (editForm.supervisorId || null),
+				managerId: isAdmin ? undefined : (finalManagerId || null)
+			};
+
+			// Remove undefined values and convert empty strings to null
+			Object.keys(updateData).forEach(key => {
+				const value = updateData[key as keyof UpdateUserRequest];
+				if (value === undefined) {
+					delete updateData[key as keyof UpdateUserRequest];
+				} else if (value === '') {
+					updateData[key as keyof UpdateUserRequest] = null as any;
+				}
+			});
+
+			await updateUser(selectedUser.id, updateData);
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
+			showEditUserModal = false;
+			selectedUser = null;
+			alert('User updated successfully!');
+		} catch (error) {
+			console.error('Failed to update user:', error);
+			alert('Failed to update user. Please try again.');
+		} finally {
+			loadingEdit = false;
+		}
 	};
 
 	// Password management functions
@@ -857,7 +1021,14 @@
 			confirmPassword: '',
 			requirePasswordChange: false
 		};
+		passwordErrors = {
+			empty: false,
+			length: false,
+			characters: false,
+			mismatch: false
+		};
 		showPasswordFields = false;
+		showPasswordSection = false;  // Close the password section
 	};
 
 	const togglePasswordSection = () => {
@@ -868,35 +1039,123 @@
 	};
 
 	const validatePassword = () => {
+		// Reset all errors
+		passwordErrors.empty = false;
+		passwordErrors.length = false;
+		passwordErrors.characters = false;
+		passwordErrors.mismatch = false;
+		
+		let isValid = true;
+		
 		if (!passwordForm.newPassword) {
-			alert('Please enter a new password');
-			return false;
+			passwordErrors.empty = true;
+			isValid = false;
 		}
-		if (passwordForm.newPassword.length < 8) {
-			alert('Password must be at least 8 characters long');
-			return false;
+		
+		// New validation rules: 15-20 characters, alphanumeric + specific special chars
+		if (passwordForm.newPassword.length < 15 || passwordForm.newPassword.length > 20) {
+			passwordErrors.length = true;
+			isValid = false;
 		}
+		
+		// Check for allowed characters only: alphanumeric + ! @ - _ &
+		const allowedPattern = /^[a-zA-Z0-9!@\-_&]+$/;
+		if (!allowedPattern.test(passwordForm.newPassword)) {
+			passwordErrors.characters = true;
+			isValid = false;
+		}
+		
 		if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-			alert('Passwords do not match');
-			return false;
+			passwordErrors.mismatch = true;
+			isValid = false;
 		}
-		return true;
+		
+		return isValid;
 	};
 
-	const changePassword = () => {
+	// Helper functions for password validation display
+	const isPasswordLengthValid = (password: string) => {
+		return password.length >= 15 && password.length <= 20;
+	};
+
+	const isPasswordCharactersValid = (password: string) => {
+		const allowedPattern = /^[a-zA-Z0-9!@\-_&]+$/;
+		return allowedPattern.test(password);
+	};
+
+	// Input validation helper functions
+	const validateEmployeeIdInput = (value: string) => {
+		// Employee ID: 10 Characters. AlphaNumeric. Limited Special Characters ("-" and "_")
+		const pattern = /^[a-zA-Z0-9\-_]*$/;
+		return pattern.test(value) && value.length <= 10;
+	};
+
+	const validateFullNameInput = (value: string) => {
+		// Full name: 100 Characters. Alpha Numeric. Limited Special Characters ("-" and "ñ")
+		const pattern = /^[a-zA-Z0-9\-ñ\s]*$/;
+		return pattern.test(value) && value.length <= 100;
+	};
+
+	const validateEmailInput = (value: string) => {
+		// Email: 70 Character Limit. AlphaNumeric. Limited Special Characters ("@", "-", and "_")
+		const pattern = /^[a-zA-Z0-9@\-_.]*$/;
+		return pattern.test(value) && value.length <= 70;
+	};
+
+	const validateSearchInput = (value: string) => {
+		// Search Bar: 70 Characters. AlphaNumeric. Limited Special Characters ("@", "-", "ñ", and "_")
+		const pattern = /^[a-zA-Z0-9@\-ñ_\s]*$/;
+		return pattern.test(value) && value.length <= 70;
+	};
+
+	const validatePasswordInput = (value: string) => {
+		// Passwords: Same as Login and Change Password (alphanumeric + ! @ - _ &)
+		const pattern = /^[a-zA-Z0-9!@\-_&]*$/;
+		return pattern.test(value) && value.length <= 20;
+	};
+
+	// Generic input handler that prevents invalid characters
+	const handleInput = (event: Event, validator: (value: string) => boolean) => {
+		const target = event.target as HTMLInputElement;
+		const newValue = target.value;
+		
+		if (!validator(newValue)) {
+			// Prevent the invalid character by reverting to previous value
+			event.preventDefault();
+			target.value = target.value.slice(0, -1);
+		}
+	};
+
+	const changePassword = async () => {
 		if (!validatePassword()) return;
 		
-		// In a real app, this would make an API call
-		alert(`Password changed successfully for ${selectedUser?.name}${passwordForm.requirePasswordChange ? '. User will be required to change password on next login.' : ''}`);
-		resetPasswordForm();
-		showPasswordSection = false;
+		try {
+			loadingPassword = true;
+			await changeUserPassword(selectedUser!.id, {
+				newPassword: passwordForm.newPassword,
+				requirePasswordChange: passwordForm.requirePasswordChange
+			});
+			alert(`Password changed successfully for ${selectedUser?.name}${passwordForm.requirePasswordChange ? '. User will be required to change password on next login.' : ''}`);
+			resetPasswordForm();
+			showPasswordSection = false;
+		} catch (error) {
+			console.error('Failed to change password:', error);
+			alert('Failed to change password. Please try again.');
+		} finally {
+			loadingPassword = false;
+		}
 	};
 
-	const sendPasswordReset = () => {
+	const handlePasswordReset = async () => {
 		if (!selectedUser) return;
 		
-		// In a real app, this would send a password reset email
-		alert(`Password reset email sent to ${selectedUser.email}`);
+		try {
+			await sendPasswordReset(selectedUser.id);
+			alert(`Password reset email sent to ${selectedUser.email}`);
+		} catch (error) {
+			console.error('Failed to send password reset:', error);
+			alert('Failed to send password reset email. Please try again.');
+		}
 	};
 
 	const confirmAction = (user: UserData, action: string) => {
@@ -905,22 +1164,42 @@
 		showConfirmationModal = true;
 	};
 
-	const showTeamInfo = (user: UserData) => {
+	const showTeamInfo = async (user: UserData) => {
 		teamModalUser = user;
 		currentTeamView = user;
 		selectedSupervisorView = null; // Reset supervisor view
 		teamViewStack = [user]; // Initialize with the root user
 		showTeamModal = true;
+		
+		// Fetch team data from API
+		await loadTeamData(user.id);
+	};
+
+	const loadTeamData = async (userId: string) => {
+		try {
+			loadingTeamData = true;
+			const response = await getUserTeam(userId);
+			teamData = response.data;
+		} catch (error) {
+			console.error('Failed to load team data:', error);
+			alert('Failed to load team information. Please try again.');
+		} finally {
+			loadingTeamData = false;
+		}
 	};
 
 	// Team navigation functions
-	const navigateToSupervisor = (supervisor: UserData) => {
+	const navigateToSupervisor = async (supervisor: UserData) => {
 		selectedSupervisorView = supervisor;
-		// Don't change currentTeamView, keep the manager as the main view
+		// Load supervisor's team data
+		await loadTeamData(supervisor.id);
 	};
 
-	const navigateBack = () => {
+	const navigateBack = async () => {
 		selectedSupervisorView = null; // Go back to manager's overview
+		if (teamModalUser) {
+			await loadTeamData(teamModalUser.id);
+		}
 	};
 
 	const resetToRootView = () => {
@@ -930,45 +1209,85 @@
 		}
 	};
 
-	// Get direct supervisors under a manager
-	const getDirectSupervisors = (managerId: string) => {
-		return users.filter(u => u.managerId === managerId && u.role === 'Supervisor' && u.status === 'Active');
+	// Get direct supervisors under a manager (from API data)
+	const getDirectSupervisors = () => {
+		if (!teamData?.teamMembers) return [];
+		return teamData.teamMembers.filter((member: any) => member.role === 'Supervisor');
 	};
 
-	// Get team members under a supervisor
-	const getSupervisorTeam = (supervisorId: string) => {
-		return users.filter(u => u.supervisorId === supervisorId && (u.role === 'Frontline' || u.role === 'Support') && u.status === 'Active');
+	// Get team members under a supervisor (from API data) 
+	const getSupervisorTeam = () => {
+		if (!teamData?.teamMembers) return [];
+		return teamData.teamMembers.filter((member: any) => member.role === 'Frontline' || member.role === 'Support');
 	};
 
-	const executeConfirmedAction = () => {
-		if (!selectedUser || !confirmationAction) return;
-
-		switch (confirmationAction) {
-			case 'lock':
-			case 'unlock':
-				lockUser(selectedUser);
-				break;
-			case 'activate':
-			case 'deactivate':
-				deactivateUser(selectedUser);
-				break;
-			case 'bulk-lock':
-				bulkLockUsers();
-				break;
-			case 'bulk-deactivate':
-				bulkDeactivateUsers();
-				break;
-			case 'bulk-unlock':
-				bulkUnlockUsers();
-				break;
-			case 'bulk-reactivate':
-				bulkReactivateUsers();
-				break;
-		}
+	const executeConfirmedAction = async () => {
+		console.log('executeConfirmedAction called:', { selectedUser, confirmationAction, selectedRows: selectedRows.size }); // Debug log
 		
-		showConfirmationModal = false;
-		selectedUser = null;
-		confirmationAction = '';
+		// For bulk operations, we don't need selectedUser, just selectedRows
+		if (!confirmationAction) return;
+		if (!confirmationAction.startsWith('bulk-') && !selectedUser) return;
+
+		try {
+			switch (confirmationAction) {
+				case 'lock':
+					if (!selectedUser) return;
+					await toggleUserLock(selectedUser.id, true);
+					await loadTabCounts(); // Refresh tab counts
+					successMessage = `User ${selectedUser.name} has been locked successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'unlock':
+					if (!selectedUser) return;
+					await toggleUserLock(selectedUser.id, false);
+					await loadTabCounts(); // Refresh tab counts
+					successMessage = `User ${selectedUser.name} has been unlocked successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'activate':
+					if (!selectedUser) return;
+					await toggleUserActivation(selectedUser.id, true);
+					await loadTabCounts(); // Refresh tab counts
+					successMessage = `User ${selectedUser.name} has been activated successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'deactivate':
+					if (!selectedUser) return;
+					await toggleUserActivation(selectedUser.id, false);
+					await loadTabCounts(); // Refresh tab counts
+					successMessage = `User ${selectedUser.name} has been deactivated successfully.`;
+					showSuccessModal = true;
+					break;
+				case 'bulk-lock':
+					console.log('Confirmation handler: executing bulk-lock action'); // Debug log
+					await handleBulkLockUsers();
+					break;
+				case 'bulk-deactivate':
+					await handleBulkDeactivateUsers();
+					break;
+				case 'bulk-unlock':
+					await bulkUnlockUsers();
+					break;
+				case 'bulk-reactivate':
+					await bulkReactivateUsers();
+					break;
+			}
+			
+			if (confirmationAction.startsWith('bulk-')) {
+				// Bulk operations handle their own success messages
+			} else {
+				clearAllCache();
+				await loadUsers();
+			}
+		} catch (error) {
+			console.error(`Failed to ${confirmationAction}:`, error);
+			errorMessage = `Failed to ${confirmationAction} user. Please try again.`;
+			showErrorModal = true;
+		} finally {
+			showConfirmationModal = false;
+			selectedUser = null;
+			confirmationAction = '';
+		}
 	};
 
 	const confirmBulkLockUsers = () => {
@@ -985,28 +1304,48 @@
 		showConfirmationModal = true;
 	};
 
-	const bulkLockUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Locked' } : u
-		);
-		users = updatedUsers;
-		filterUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been locked successfully!`);
+	const handleBulkLockUsers = async () => {
+		console.log('handleBulkLockUsers called with selectedRows:', Array.from(selectedRows)); // Debug log
+		try {
+			loadingLock = true;
+			const userIds = Array.from(selectedRows);
+			console.log('About to call bulkLockUsers API with userIds:', userIds); // Debug log
+			const result = await bulkLockUsers(userIds, true);
+			console.log('bulkLockUsers API result:', result); // Debug log
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
+			selectedRows = new Set();
+			selectAll = false;
+			// Use toast store directly
+			toastStore.success(`${userIds.length} users have been locked successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk lock users:', error);
+			toastStore.error(error instanceof Error ? error.message : 'Failed to lock users. Please try again.');
+		} finally {
+			loadingLock = false;
+		}
 	};
 
-	const bulkDeactivateUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Deactivated' } : u
-		);
-		users = updatedUsers;
-		filterUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been deactivated successfully!`);
+	const handleBulkDeactivateUsers = async () => {
+		try {
+			loadingBulk = true;
+			const userIds = Array.from(selectedRows);
+			const result = await bulkActivateUsers(userIds, false);
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
+			selectedRows = new Set();
+			selectAll = false;
+			toastStore.success(`${userIds.length} users have been deactivated successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk deactivate users:', error);
+			toastStore.error(error instanceof Error ? error.message : 'Failed to deactivate users. Please try again.');
+		} finally {
+			loadingBulk = false;
+		}
 	};
 
 	const confirmBulkUnlockUsers = () => {
@@ -1023,28 +1362,44 @@
 		showConfirmationModal = true;
 	};
 
-	const bulkUnlockUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
-		);
-		users = updatedUsers;
-		filterUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been unlocked successfully!`);
+	const bulkUnlockUsers = async () => {
+		try {
+			loadingLock = true;
+			const userIds = Array.from(selectedRows);
+			const result = await bulkLockUsers(userIds, false);
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
+			selectedRows = new Set();
+			selectAll = false;
+			toastStore.success(`${userIds.length} users have been unlocked successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk unlock users:', error);
+			toastStore.error(error instanceof Error ? error.message : 'Failed to unlock users. Please try again.');
+		} finally {
+			loadingLock = false;
+		}
 	};
 
-	const bulkReactivateUsers = () => {
-		const selectedCount = selectedRows.size;
-		const updatedUsers = users.map(u => 
-			selectedRows.has(u.id) ? { ...u, status: 'Active' } : u
-		);
-		users = updatedUsers;
-		filterUsers();
-		selectedRows = new Set();
-		selectAll = false;
-		alert(`${selectedCount} users have been reactivated successfully!`);
+	const bulkReactivateUsers = async () => {
+		try {
+			loadingBulk = true;
+			const userIds = Array.from(selectedRows);
+			const result = await bulkActivateUsers(userIds, true);
+			// Clear cache to ensure fresh data
+			clearAllCache();
+			await loadUsers(true); // Force refresh
+			await loadTabCounts(); // Refresh tab counts
+			selectedRows = new Set();
+			selectAll = false;
+			toastStore.success(`${userIds.length} users have been reactivated successfully!`);
+		} catch (error) {
+			console.error('Failed to bulk reactivate users:', error);
+			toastStore.error(error instanceof Error ? error.message : 'Failed to reactivate users. Please try again.');
+		} finally {
+			loadingBulk = false;
+		}
 	};
 
 	const getConfirmationMessage = () => {
@@ -1072,25 +1427,70 @@
 		}
 	};
 
+	// Modal close protection
+	const isAnyLoading = () => {
+		return loadingUsers || loadingCreate || loadingEdit || loadingPassword || loadingLock || loadingBulk;
+	};
+
+	const closeModal = (modalType: string) => {
+		if (isAnyLoading()) {
+			return; // Prevent closing during loading
+		}
+		
+		switch (modalType) {
+			case 'add':
+				showAddUserModal = false;
+				break;
+			case 'edit':
+				showEditUserModal = false;
+				selectedUser = null;
+				showPasswordSection = false;  // Reset password section
+				resetPasswordForm();  // Reset password form and errors
+				break;
+			case 'team':
+				showTeamModal = false;
+				teamModalUser = null;
+				break;
+			case 'confirmation':
+				showConfirmationModal = false;
+				selectedUser = null;
+				confirmationAction = '';
+				break;
+		}
+	};
+
+	// Keyboard event handler for modal closing
+	const handleKeydown = (event: KeyboardEvent) => {
+		if (event.key === 'Escape' && !isAnyLoading()) {
+			if (showConfirmationModal) closeModal('confirmation');
+			else if (showEditUserModal) closeModal('edit');
+			else if (showTeamModal) closeModal('team');
+			else if (showAddUserModal) closeModal('add');
+		}
+	};
+
+
+
 	const lockUser = (user: UserData) => {
-		const updatedUsers = users.map(u => 
-			u.id === user.id ? { ...u, status: u.status === 'Locked' ? 'Active' : 'Locked' } : u
-		);
-		users = updatedUsers;
-		filterUsers();
+		const isLocked = user.status === 'Locked';
+		confirmAction(user, isLocked ? 'unlock' : 'lock');
 	};
 
 	const deactivateUser = (user: UserData) => {
-		const updatedUsers = users.map(u => 
-			u.id === user.id ? { ...u, status: u.status === 'Deactivated' ? 'Active' : 'Deactivated' } : u
-		);
-		users = updatedUsers;
-		filterUsers();
+		const isActive = user.status === 'Active' || user.status === 'First-time';
+		confirmAction(user, isActive ? 'deactivate' : 'activate');
 	};
 
-	const goToPage = (page: number) => {
-		if (page >= 1 && page <= totalPages()) {
+	const goToPage = async (page: number) => {
+		if (page >= 1 && page <= totalPages) {
+			console.log(`Navigating from page ${currentPage} to page ${page}`); // Debug log
+			isNavigatingPages = true; // Set flag to prevent filter effect
+			lastNavigationTime = Date.now(); // Record navigation time
+			console.log(`Setting currentPage to ${page}`); // Debug log
 			currentPage = page;
+			await loadUsers(true); // Force refresh to ensure new page data is fetched
+			console.log(`Navigation completed, currentPage is now ${currentPage}`); // Debug log
+			isNavigatingPages = false; // Reset flag
 		}
 	};
 
@@ -1152,12 +1552,7 @@
 		selectAll = currentPageUserIds.size > 0 && [...currentPageUserIds].every(id => selectedRows.has(id));
 	});
 
-	// Reactive effect to filter users when dropdown selections change
-	$effect(() => {
-		// This effect runs whenever selectedOU, selectedRole, selectedStatus, or searchQuery changes
-		selectedOU; selectedRole; selectedStatus; searchQuery;
-		filterUsers();
-	});
+
 </script>
 
 <svelte:head>
@@ -1183,7 +1578,9 @@
 								<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 								<input
 									bind:value={searchQuery}
+									oninput={(e) => handleInput(e, validateSearchInput)}
 									type="text"
+									maxlength="70"
 									placeholder="Search by name, email, or employee ID..."
 									class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
 								/>
@@ -1373,19 +1770,29 @@
 								{:else}
 									<button
 										onclick={() => confirmBulkLockUsers()}
-										class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										disabled={loadingLock}
+										class="flex items-center space-x-1 bg-orange-100 text-orange-700 hover:bg-orange-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
 										title="Lock selected users"
 									>
-										<Shield class="w-3.5 h-3.5" />
-										<span>Lock</span>
+										{#if loadingLock}
+											<div class="animate-spin rounded-full h-3 w-3 border-b-2 border-orange-700"></div>
+										{:else}
+											<Shield class="w-3.5 h-3.5" />
+										{/if}
+										<span>{loadingLock ? 'Locking...' : 'Lock'}</span>
 									</button>
 									<button
 										onclick={() => confirmBulkDeactivateUsers()}
-										class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium"
+										disabled={loadingBulk}
+										class="flex items-center space-x-1 bg-red-100 text-red-700 hover:bg-red-200 px-2.5 py-1 rounded-md transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
 										title="Deactivate selected users"
 									>
-										<X class="w-3.5 h-3.5" />
-										<span>Deactivate</span>
+										{#if loadingBulk}
+											<div class="animate-spin rounded-full h-3 w-3 border-b-2 border-red-700"></div>
+										{:else}
+											<X class="w-3.5 h-3.5" />
+										{/if}
+										<span>{loadingBulk ? 'Deactivating...' : 'Deactivate'}</span>
 									</button>
 								{/if}
 							</div>
@@ -1394,7 +1801,17 @@
 				{/if}
 
 				<!-- Table -->
-				<div class="w-full overflow-x-auto flex-1 min-h-0">
+				<div class="w-full overflow-x-auto flex-1 min-h-0 relative">
+					<!-- Loading Overlay -->
+					{#if loadingUsers}
+						<div class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+							<div class="text-center">
+								<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+								<p class="text-gray-500">Loading users...</p>
+							</div>
+						</div>
+					{/if}
+					
 					<div class="h-full overflow-y-auto">
 					<table class="w-full table-fixed min-w-[1400px]">
 						<thead class="bg-gray-50">
@@ -1413,7 +1830,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Employee ID</span>
-										<svelte:component this={getSortIcon('employeeId')} class="w-3 h-3" />
+										{#if sortColumn !== 'employeeId'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-56 px-3 py-3 text-left">
@@ -1422,7 +1845,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Name</span>
-										<svelte:component this={getSortIcon('name')} class="w-3 h-3" />
+										{#if sortColumn !== 'name'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-64 px-3 py-3 text-left">
@@ -1431,7 +1860,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Email</span>
-										<svelte:component this={getSortIcon('email')} class="w-3 h-3" />
+										{#if sortColumn !== 'email'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-36 px-3 py-3 text-left">
@@ -1440,7 +1875,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>OU</span>
-										<svelte:component this={getSortIcon('ou')} class="w-3 h-3" />
+										{#if sortColumn !== 'ou'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-32 px-3 py-3 text-left">
@@ -1449,7 +1890,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Role</span>
-										<svelte:component this={getSortIcon('role')} class="w-3 h-3" />
+										{#if sortColumn !== 'role'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								{#if currentTab === 'frontline' || currentTab === 'support'}
@@ -1464,14 +1911,20 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Status</span>
-										<svelte:component this={getSortIcon('status')} class="w-3 h-3" />
+										{#if sortColumn !== 'status'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
-							{#each paginatedUsers() as user, index (user.id)}
+							{#each paginatedUsers() as user, index (user.id || `user-${index}`)}
 								<tr 
 									class="hover:bg-gray-50 {selectedRows.has(user.id) ? 'bg-blue-50' : ''} cursor-pointer" 
 									onclick={(e) => handleRowSelection(user.id, index, e)}
@@ -1655,10 +2108,10 @@
 				</div>
 
 				<!-- Pagination -->
-				{#if totalPages() > 1}
+				{#if totalPages > 1}
 					<div class="bg-white px-6 py-3 border-t border-gray-200 flex items-center justify-between">
 						<div class="text-sm text-gray-700">
-							Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} results
+							Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalUsers)} of {totalUsers} results
 						</div>
 						<div class="flex items-center space-x-2">
 							<button
@@ -1669,8 +2122,8 @@
 								<ChevronLeft class="w-5 h-5" />
 							</button>
 
-							{#each Array.from({ length: totalPages() }, (_, i) => i + 1) as page}
-								{#if page === 1 || page === totalPages() || (page >= currentPage - 2 && page <= currentPage + 2)}
+							{#each Array.from({ length: totalPages }, (_, i) => i + 1) as page}
+								{#if page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2)}
 									<button
 										onclick={() => goToPage(page)}
 										class="px-3 py-2 text-sm font-medium rounded-lg transition-colors {
@@ -1688,7 +2141,7 @@
 
 							<button
 								onclick={() => goToPage(currentPage + 1)}
-								disabled={currentPage === totalPages()}
+								disabled={currentPage === totalPages}
 								class="p-2 text-gray-500 hover:text-[#01c0a4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
 							>
 								<ChevronRight class="w-5 h-5" />
@@ -1707,8 +2160,23 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showEditUserModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showEditUserModal = false)}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				closeModal('edit');
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				closeModal('edit');
+			}
+		}}
+		onkeydown={(e) => e.key === 'Escape' && closeModal('edit')}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1721,6 +2189,13 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between p-6 border-b border-gray-200">
 				<h2 class="text-xl font-semibold text-gray-900">Edit User</h2>
+				<button
+					onclick={() => closeModal('edit')}
+					class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+					disabled={isAnyLoading()}
+				>
+					<X class="w-5 h-5 text-gray-500" />
+				</button>
 			</div>
 
 			<!-- Content -->
@@ -1745,7 +2220,9 @@
 							<input
 								id="editName"
 								bind:value={editForm.name}
+								oninput={(e) => handleInput(e, validateFullNameInput)}
 								type="text"
+								maxlength="100"
 								placeholder="Enter full name"
 								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 							/>
@@ -1755,7 +2232,9 @@
 							<input
 								id="editEmail"
 								bind:value={editForm.email}
+								oninput={(e) => handleInput(e, validateEmailInput)}
 								type="email"
+								maxlength="70"
 								placeholder="Enter email address"
 								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 							/>
@@ -1763,21 +2242,6 @@
 					</div>
 
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						{#if selectedUser.type !== 'admin'}
-							<div>
-								<label for="editOu" class="block text-sm font-medium text-gray-700 mb-2">Organizational Unit *</label>
-								<select
-									id="editOu"
-									bind:value={editForm.ou}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select OU</option>
-									{#each ouOptions as ou}
-										<option value={ou}>{ou}</option>
-									{/each}
-								</select>
-							</div>
-						{/if}
 						<div>
 							{#if selectedUser.type === 'admin'}
 								<label for="editRole" class="block text-sm font-medium text-gray-700 mb-2">Role</label>
@@ -1790,6 +2254,7 @@
 								<select
 									id="editRole"
 									bind:value={editForm.role}
+									onchange={handleRoleChangeEdit}
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								>
 									<option value="">Select Role</option>
@@ -1802,54 +2267,78 @@
 								<p class="text-xs text-orange-600 mt-1">Non-admin users cannot be changed to Admin role</p>
 							{/if}
 						</div>
-					</div>
 
-					{#if selectedUser.type !== 'admin'}
-						{#if editForm.role === 'Frontline' || editForm.role === 'Support'}
-							<div>
-								<label for="editSupervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
-								<select
-									id="editSupervisor"
-									bind:value={editForm.supervisorId}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select Supervisor</option>
-									{#each users.filter((u: UserData) => u.role === 'Supervisor') as supervisor}
-										<option value={supervisor.id}>{supervisor.name}</option>
-									{/each}
-								</select>
-							</div>
-
-							{#if editForm.supervisorId}
-								{#key editForm.supervisorId}
-									{@const selectedSupervisor = getUserById(editForm.supervisorId)}
-									{#if selectedSupervisor && selectedSupervisor.managerId}
-										<div>
-											<label class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
-												{getManagerName(selectedSupervisor.managerId)}
-											</div>
-										</div>
-									{/if}
-								{/key}
-							{/if}
-						{:else if editForm.role === 'Supervisor'}
+						<!-- Hierarchical Field Selection for Edit Form -->
+						{#if selectedUser.type !== 'admin' && editForm.role === 'Supervisor'}
 							<div>
 								<label for="editManager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
 								<select
 									id="editManager"
 									bind:value={editForm.managerId}
+									onchange={handleManagerChangeEdit}
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								>
 									<option value="">Select Manager</option>
-									{#each users.filter((u: UserData) => u.role === 'Manager') as manager}
-										<option value={manager.id}>{manager.name}</option>
+									{#each getAvailableManagersEdit() as manager}
+										<option value={manager.id}>{manager.name} - {manager.ou}</option>
+									{/each}
+								</select>
+							</div>
+						{:else if selectedUser.type !== 'admin' && (editForm.role === 'Frontline' || editForm.role === 'Support')}
+							<div>
+								<label for="editSupervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+								<select
+									id="editSupervisor"
+									bind:value={editForm.supervisorId}
+									onchange={handleSupervisorChangeEdit}
+									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+								>
+									<option value="">Select Supervisor</option>
+									{#each getAvailableSupervisorsEdit() as supervisor}
+										<option value={supervisor.id}>{supervisor.name} - {supervisor.ou}</option>
 									{/each}
 								</select>
 							</div>
 						{/if}
+					</div>
+
+					{#if selectedUser.type !== 'admin' && editForm.supervisorId && (editForm.role === 'Frontline' || editForm.role === 'Support')}
+						{@const selectedSupervisor = getAvailableSupervisorsEdit().find(s => s.id === editForm.supervisorId)}
+						{#if selectedSupervisor && selectedSupervisor.managerId}
+							{@const selectedManager = hierarchyOptions.managers.find(m => m.id === selectedSupervisor.managerId)}
+							<div>
+								<label class="block text-sm font-medium text-gray-700 mb-2">Manager (Auto-assigned)</label>
+								<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+									{selectedManager ? `${selectedManager.name} - ${selectedManager.ou}` : 'Manager not found'}
+								</div>
+							</div>
+						{/if}
 					{/if}
 
+					{#if selectedUser.type !== 'admin'}
+						<div>
+							<label for="editOu" class="block text-sm font-medium text-gray-700 mb-2">
+								Organizational Unit *
+								{#if editForm.role === 'Supervisor' && editForm.managerId}
+									<span class="text-sm text-gray-500">(Based on Manager's OUs)</span>
+								{:else if (editForm.role === 'Frontline' || editForm.role === 'Support') && editForm.supervisorId}
+									<span class="text-sm text-gray-500">(Based on Supervisor's OU)</span>
+								{/if}
+							</label>
+							<select
+								id="editOu"
+								bind:value={editForm.ou}
+								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+							>
+								<option value="">Select OU</option>
+								{#each getAvailableOUsEdit() as ou}
+									<option value={ou}>{ou}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					<!-- Password Section -->
 					<!-- Current Status Display -->
 					<div>
 						<div class="block text-sm font-medium text-gray-700 mb-2">Current Status</div>
@@ -1868,23 +2357,17 @@
 
 					<!-- Password Management Section -->
 					<div class="border-t border-gray-200 pt-4">
-						<div class="flex items-center justify-between mb-3">
+						<div class="flex items-center mb-3">
 							<div class="flex items-center space-x-2">
 								<Key class="w-5 h-5 text-gray-600" />
 								<span class="text-sm font-medium text-gray-700">Password Management</span>
 							</div>
-							<button
-								onclick={togglePasswordSection}
-								class="text-sm text-[#01c0a4] hover:text-[#00a085] font-medium"
-							>
-								{showPasswordSection ? 'Cancel' : 'Change Password'}
-							</button>
 						</div>
 
 						{#if !showPasswordSection}
 							<div class="flex space-x-3">
 								<button
-									onclick={sendPasswordReset}
+									onclick={handlePasswordReset}
 									class="flex-1 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
 								>
 									Send Reset Email
@@ -1898,14 +2381,36 @@
 							</div>
 						{:else}
 							<div class="space-y-4">
+								<!-- Password Requirements -->
+								<div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+									<h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+										<svg class="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+										</svg>
+										Password Requirements
+									</h4>
+									<div class="space-y-2">
+										<div class="flex items-center text-sm">
+											<div class="w-2 h-2 rounded-full mr-3 {passwordErrors.length || passwordErrors.empty ? 'bg-red-500' : (isPasswordLengthValid(passwordForm.newPassword) ? 'bg-green-500' : 'bg-gray-300')}"></div>
+											<span class="{passwordErrors.length || passwordErrors.empty ? 'text-red-600' : (isPasswordLengthValid(passwordForm.newPassword) ? 'text-green-700 font-medium' : 'text-gray-600')}">15-20 characters long</span>
+										</div>
+										<div class="flex items-center text-sm">
+											<div class="w-2 h-2 rounded-full mr-3 {passwordErrors.characters || passwordErrors.empty ? 'bg-red-500' : (isPasswordCharactersValid(passwordForm.newPassword) ? 'bg-green-500' : 'bg-gray-300')}"></div>
+											<span class="{passwordErrors.characters || passwordErrors.empty ? 'text-red-600' : (isPasswordCharactersValid(passwordForm.newPassword) ? 'text-green-700 font-medium' : 'text-gray-600')}">Letters, numbers, and symbols: ! @ - _ &</span>
+										</div>
+									</div>
+								</div>
+
 								<div>
 									<label for="newPassword" class="block text-sm font-medium text-gray-700 mb-2">New Password *</label>
 									<div class="relative">
 										<input
 											id="newPassword"
 											bind:value={passwordForm.newPassword}
+											oninput={(e) => handleInput(e, validatePasswordInput)}
 											type={showPasswordFields ? 'text' : 'password'}
-											placeholder="Enter new password (min 8 characters)"
+											maxlength="20"
+											placeholder="Enter new password (15-20 characters)"
 											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent pr-12"
 										/>
 										<button
@@ -1927,10 +2432,15 @@
 									<input
 										id="confirmPassword"
 										bind:value={passwordForm.confirmPassword}
+										oninput={(e) => handleInput(e, validatePasswordInput)}
 										type={showPasswordFields ? 'text' : 'password'}
+										maxlength="20"
 										placeholder="Confirm new password"
 										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 									/>
+									{#if passwordErrors.mismatch}
+										<p class="text-red-600 text-sm mt-2">Passwords do not match</p>
+									{/if}
 								</div>
 
 								<div class="flex items-center space-x-2">
@@ -1954,9 +2464,15 @@
 									</button>
 									<button
 										onclick={changePassword}
-										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium"
+										disabled={loadingPassword}
+										class="flex-1 px-4 py-2 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
 									>
-										Update Password
+										{#if loadingPassword}
+											<div class="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+											Updating...
+										{:else}
+											Update Password
+										{/if}
 									</button>
 								</div>
 							</div>
@@ -1966,18 +2482,18 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
-				<button
-					onclick={() => showEditUserModal = false}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Cancel
-				</button>
+			<div class="flex justify-end p-6 border-t border-gray-200">
 				<button
 					onclick={saveEditUser}
-					class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+					disabled={loadingEdit}
+					class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 				>
-					Save Changes
+					{#if loadingEdit}
+						<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+						Saving...
+					{:else}
+						Save Changes
+					{/if}
 				</button>
 			</div>
 		</div>
@@ -2001,7 +2517,7 @@
 				: 'primary'
 		}
 		onConfirm={executeConfirmedAction}
-		onCancel={() => { showConfirmationModal = false; selectedUser = null; confirmationAction = ''; }}
+		onCancel={() => closeModal('confirmation')}
 	/>
 {/if}
 
@@ -2012,8 +2528,23 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showTeamModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showTeamModal = false)}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				closeModal('team');
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				closeModal('team');
+			}
+		}}
+		onkeydown={(e) => e.key === 'Escape' && closeModal('team')}
 	>
 		<div 
 			class="bg-white rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[90vh] overflow-y-auto" 
@@ -2038,22 +2569,39 @@
 						</p>
 					</div>
 				</div>
-				{#if selectedSupervisorView}
+				<div class="flex items-center space-x-2">
+					{#if selectedSupervisorView}
+						<button
+							onclick={navigateBack}
+							class="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+						>
+							<ArrowLeft class="w-4 h-4" />
+							<span>Back to Overview</span>
+						</button>
+					{/if}
 					<button
-						onclick={navigateBack}
-						class="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+						onclick={() => closeModal('team')}
+						class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+						aria-label="Close modal"
 					>
-						<ArrowLeft class="w-4 h-4" />
-						<span>Back to Overview</span>
+						<X class="w-5 h-5 text-gray-500" />
 					</button>
-				{/if}
+				</div>
 			</div>
 
 			<!-- Content -->
 			<div class="p-6">
-				{#if selectedSupervisorView}
+				{#if loadingTeamData}
+					<!-- Loading State -->
+					<div class="flex items-center justify-center py-12">
+						<div class="text-center">
+							<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+							<p class="text-gray-500">Loading team information...</p>
+						</div>
+					</div>
+				{:else if selectedSupervisorView}
 					<!-- Supervisor's Team View -->
-					{@const supervisorTeam = getSupervisorTeam(selectedSupervisorView.id)}
+					{@const supervisorTeam = getSupervisorTeam()}
 					
 					<!-- Supervisor Card -->
 					<div class="mb-6">
@@ -2086,7 +2634,7 @@
 
 							<!-- Team Member Cards -->
 							<div class="flex justify-center">
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+								<div class="grid gap-4 max-w-7xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); justify-content: center;">
 									{#each supervisorTeam as member}
 										<div class="{
 											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
@@ -2116,7 +2664,7 @@
 					{/if}
 				{:else if teamModalUser?.role === 'Supervisor'}
 					<!-- Supervisor's Own Team View (when supervisor is the root user) -->
-					{@const supervisorTeam = getSupervisorTeam(teamModalUser.id)}
+					{@const supervisorTeam = getSupervisorTeam()}
 					
 					<!-- Team Summary at Top -->
 					{#if supervisorTeam.length > 0}
@@ -2124,11 +2672,11 @@
 							<h4 class="font-medium text-gray-900 mb-3 text-center">Team Summary</h4>
 							<div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter(m => m.role === 'Frontline').length}</div>
+									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter((m: any) => m.role === 'Frontline').length}</div>
 									<div class="text-xs text-gray-600">Frontline</div>
 								</div>
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.filter(m => m.role === 'Support').length}</div>
+									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.filter((m: any) => m.role === 'Support').length}</div>
 									<div class="text-xs text-gray-600">Support</div>
 								</div>
 								<div class="bg-white rounded p-3">
@@ -2170,7 +2718,7 @@
 
 							<!-- Team Member Cards -->
 							<div class="flex justify-center">
-								<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-7xl">
+								<div class="grid gap-4 max-w-7xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); justify-content: center;">
 									{#each supervisorTeam as member}
 										<div class="{
 											member.role === 'Frontline' ? 'bg-cyan-100 border-cyan-300' :
@@ -2200,7 +2748,7 @@
 					{/if}
 				{:else}
 					<!-- Manager's Organization Overview -->
-					{@const directSupervisors = getDirectSupervisors(teamModalUser.id)}
+					{@const directSupervisors = getDirectSupervisors()}
 					
 					<!-- Manager Team Summary moved to top -->
 					<div class="mb-8 bg-gray-50 rounded-lg p-4">
@@ -2212,13 +2760,13 @@
 							</div>
 							<div class="bg-white rounded p-3">
 								<div class="text-2xl font-bold text-green-600">
-									{directSupervisors.reduce((total, sup) => total + getSupervisorTeam(sup.id).length, 0)}
+									{teamData?.teamMembers ? teamData.teamMembers.filter((m: any) => m.role === 'Frontline' || m.role === 'Support').length : 0}
 								</div>
 								<div class="text-xs text-gray-600">Team Members</div>
 							</div>
 							<div class="bg-white rounded p-3">
 								<div class="text-2xl font-bold text-purple-600">
-									{directSupervisors.length + directSupervisors.reduce((total, sup) => total + getSupervisorTeam(sup.id).length, 0) + 1}
+									{teamData?.teamMembers ? teamData.teamMembers.length + 1 : 1}
 								</div>
 								<div class="text-xs text-gray-600">Total People</div>
 							</div>
@@ -2255,9 +2803,9 @@
 							<h3 class="text-lg font-medium text-gray-900 text-center">Supervisors ({directSupervisors.length})</h3>
 							
 							<div class="flex justify-center">
-								<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 max-w-6xl">
+								<div class="grid gap-4 max-w-6xl justify-items-center" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); justify-content: center;">
 								{#each directSupervisors as supervisor}
-									{@const supervisorTeamCount = getSupervisorTeam(supervisor.id).length}
+									{@const supervisorTeamCount = teamData?.teamMembers ? teamData.teamMembers.filter((m: any) => m.supervisorId === supervisor.id).length : 0}
 									<button
 										onclick={() => navigateToSupervisor(supervisor)}
 										class="bg-emerald-100 border border-emerald-300 rounded-lg p-3 text-center hover:bg-emerald-200 transition-colors cursor-pointer group min-w-[180px]"
@@ -2291,16 +2839,6 @@
 					{/if}
 				{/if}
 			</div>
-
-			<!-- Footer -->
-			<div class="flex justify-end p-6 border-t border-gray-200">
-				<button
-					onclick={() => showTeamModal = false}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Close
-				</button>
-			</div>
 		</div>
 	</div>
 {/if}
@@ -2312,8 +2850,23 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showAddUserModal = false}
-		onkeydown={(e) => e.key === 'Escape' && (showAddUserModal = false)}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				closeModal('add');
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				closeModal('add');
+			}
+		}}
+		onkeydown={(e) => e.key === 'Escape' && closeModal('add')}
 	>
 		<div 
 			class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" 
@@ -2324,6 +2877,13 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between p-6 border-b border-gray-200">
 				<h2 class="text-xl font-semibold text-gray-900">Add New User</h2>
+				<button
+					onclick={() => closeModal('add')}
+					class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+					aria-label="Close modal"
+				>
+					<X class="w-5 h-5 text-gray-500" />
+				</button>
 			</div>
 
 			<!-- Tabs -->
@@ -2355,7 +2915,9 @@
 								<input
 									id="employeeId"
 									bind:value={individualForm.employeeId}
+									oninput={(e) => handleInput(e, validateEmployeeIdInput)}
 									type="text"
+									maxlength="10"
 									placeholder="Enter employee ID"
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								/>
@@ -2365,7 +2927,9 @@
 								<input
 									id="name"
 									bind:value={individualForm.name}
+									oninput={(e) => handleInput(e, validateFullNameInput)}
 									type="text"
+									maxlength="100"
 									placeholder="Enter full name"
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								/>
@@ -2377,7 +2941,9 @@
 							<input
 								id="email"
 								bind:value={individualForm.email}
+								oninput={(e) => handleInput(e, validateEmailInput)}
 								type="email"
+								maxlength="70"
 								placeholder="Enter email address"
 								class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 							/>
@@ -2389,6 +2955,7 @@
 								<select
 									id="role"
 									bind:value={individualForm.role}
+									onchange={handleRoleChange}
 									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 								>
 									<option value="">Select Role</option>
@@ -2397,81 +2964,107 @@
 									{/each}
 								</select>
 							</div>
-							{#if individualForm.role !== 'Admin'}
+
+							<!-- Hierarchical Field Selection -->
+							{#if individualForm.role === 'Supervisor'}
 								<div>
-									<label for="ou" class="block text-sm font-medium text-gray-700 mb-2">Organizational Unit</label>
+									<label for="manager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
 									<select
-										id="ou"
-										bind:value={individualForm.ou}
+										id="manager"
+										bind:value={individualForm.managerId}
+										onchange={handleManagerChange}
 										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
 									>
-										<option value="">Select OU</option>
-										{#each ouOptions as ou}
-											<option value={ou}>{ou}</option>
+										<option value="">Select Manager</option>
+										{#each getAvailableManagers() as manager}
+											<option value={manager.id}>{manager.name} - {manager.ou}</option>
 										{/each}
 									</select>
+								</div>
+							{:else if individualForm.role === 'Frontline' || individualForm.role === 'Support'}
+								<div>
+									<label for="supervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+									<select
+										id="supervisor"
+										bind:value={individualForm.supervisorId}
+										onchange={handleSupervisorChange}
+										class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+									>
+										<option value="">Select Supervisor</option>
+										{#each getAvailableSupervisors() as supervisor}
+											<option value={supervisor.id}>{supervisor.name} - {supervisor.ou}</option>
+										{/each}
+									</select>
+								</div>
+
+								{#if individualForm.supervisorId}
+									{@const selectedSupervisor = getAvailableSupervisors().find(s => s.id === individualForm.supervisorId)}
+									{#if selectedSupervisor && selectedSupervisor.managerId}
+										{@const selectedManager = hierarchyOptions.managers.find(m => m.id === selectedSupervisor.managerId)}
+										<div>
+											<label class="block text-sm font-medium text-gray-700 mb-2">Manager (Auto-assigned)</label>
+											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+												{selectedManager ? `${selectedManager.name} - ${selectedManager.ou}` : 'Manager not found'}
+											</div>
+										</div>
+									{/if}
+								{/if}
+							{/if}
+
+							{#if individualForm.role !== 'Admin'}
+								<div>
+									<label for="ou" class="block text-sm font-medium text-gray-700 mb-2">
+										Organizational Unit
+										{#if individualForm.role === 'Supervisor' && individualForm.managerId}
+											<span class="text-sm text-gray-500">(Auto-filled based on Manager's OU)</span>
+										{:else if (individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId}
+											<span class="text-sm text-gray-500">(Auto-filled based on Supervisor's OU)</span>
+										{/if}
+									</label>
+									{#if (individualForm.role === 'Supervisor' && individualForm.managerId && individualForm.ou) || ((individualForm.role === 'Frontline' || individualForm.role === 'Support') && individualForm.supervisorId && individualForm.ou)}
+										<!-- Read-only field when auto-determined -->
+										<input
+											id="ou"
+											value={individualForm.ou}
+											readonly
+											class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed"
+											placeholder="Auto-filled based on hierarchy"
+										/>
+										<p class="text-xs text-gray-500 mt-1">OU is automatically determined by your selected {individualForm.role === 'Supervisor' ? 'manager' : 'supervisor'}</p>
+									{:else}
+										<!-- Dropdown for manual selection -->
+										<select
+											id="ou"
+											bind:value={individualForm.ou}
+											class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+										>
+											<option value="">Select OU</option>
+											{#each getAvailableOUs() as ou}
+												<option value={ou}>{ou}</option>
+											{/each}
+										</select>
+									{/if}
 								</div>
 							{/if}
 						</div>
 
-						{#if individualForm.role === 'Frontline' || individualForm.role === 'Support'}
-							<div>
-								<label for="supervisor" class="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
-								<select
-									id="supervisor"
-									bind:value={individualForm.supervisorId}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select Supervisor</option>
-									{#each users.filter((u: UserData) => u.role === 'Supervisor') as supervisor}
-										<option value={supervisor.id}>{supervisor.name}</option>
-									{/each}
-								</select>
-							</div>
-
-							{#if individualForm.supervisorId}
-								{#key individualForm.supervisorId}
-									{@const selectedSupervisor = getUserById(individualForm.supervisorId)}
-									{#if selectedSupervisor && selectedSupervisor.managerId}
-										<div>
-											<label class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-											<div class="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
-												{getManagerName(selectedSupervisor.managerId)}
-											</div>
-										</div>
-									{/if}
-								{/key}
-							{/if}
-						{:else if individualForm.role === 'Supervisor'}
-							<div>
-								<label for="manager" class="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-								<select
-									id="manager"
-									bind:value={individualForm.managerId}
-									class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-								>
-									<option value="">Select Manager</option>
-									{#each users.filter((u: UserData) => u.role === 'Manager') as manager}
-										<option value={manager.id}>{manager.name}</option>
-									{/each}
-								</select>
-							</div>
-						{/if}
+						<!-- Remove old hierarchical sections as they're now integrated above -->
+						<!-- The old sections with manual filtering are replaced by the new functions -->
 					</div>
 
 					<!-- Individual Add Footer -->
-					<div class="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
-						<button
-							onclick={() => showAddUserModal = false}
-							class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-						>
-							Cancel
-						</button>
+					<div class="flex justify-end mt-6 pt-6 border-t border-gray-200">
 						<button
 							onclick={addIndividualUser}
-							class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+							disabled={loadingCreate}
+							class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 						>
-							Add User
+							{#if loadingCreate}
+								<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+								Creating...
+							{:else}
+								Add User
+							{/if}
 						</button>
 					</div>
 				{:else}
@@ -2488,11 +3081,12 @@
 								</button>
 							</div>
 							<div class="text-sm text-gray-600 mb-4 space-y-2">
-								<p class="font-medium">Three template files will be downloaded:</p>
+								<p class="font-medium">Four template files will be downloaded:</p>
 								<div class="text-left max-w-md mx-auto space-y-1">
 									<p><strong>• Frontline/Support:</strong> Includes Supervisor Name and Manager Name columns</p>
 									<p><strong>• Supervisor:</strong> Includes Manager Name column</p>
 									<p><strong>• Manager:</strong> Basic user information only</p>
+									<p><strong>• Admin:</strong> Basic user information only</p>
 								</div>
 								<p class="mt-3">Fill the appropriate template with user data and upload it back.</p>
 							</div>
@@ -2538,7 +3132,22 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showBulkPreview = false}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				showBulkPreview = false;
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				showBulkPreview = false;
+			}
+		}}
 		onkeydown={(e) => e.key === 'Escape' && (showBulkPreview = false)}
 	>
 		<div 
@@ -2620,19 +3229,19 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex justify-end space-x-3 p-6 border-t border-gray-200">
-				<button
-					onclick={() => showBulkPreview = false}
-					class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-				>
-					Cancel
-				</button>
+			<div class="flex justify-end p-6 border-t border-gray-200">
 				{#if bulkData.valid.length > 0}
 					<button
 						onclick={processBulkUpload}
-						class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200"
+						disabled={loadingBulk}
+						class="px-6 py-3 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-lg hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 					>
-						Add {bulkData.valid.length} Valid Users
+						{#if loadingBulk}
+							<div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+							Creating {bulkData.valid.length} Users...
+						{:else}
+							Add {bulkData.valid.length} Valid Users
+						{/if}
 					</button>
 				{/if}
 			</div>
@@ -2640,4 +3249,8 @@
 	</div>
 {/if}
 
+<ToastContainer />
+
 </div>
+
+<svelte:window onkeydown={handleKeydown} />

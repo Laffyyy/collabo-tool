@@ -1,20 +1,23 @@
 <script lang="ts">
-  import { MessageSquare, Search, Eye, Trash2, AlertTriangle, Users, Calendar, Clock, Check, X, Archive, Undo2, Paperclip, Smile } from 'lucide-svelte';
+  import { MessageSquare, MessageCircle, Search, Eye, Trash2, AlertTriangle, Users, Calendar, Clock, Check, X, Archive, Undo2, Paperclip, Smile } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
+  import { AdminChatAPI } from '$lib/api/admin-chat';
+  import { onMount } from 'svelte';
 
   interface ChatMessage {
     id: string;
     conversationId: string;
-    conversationName: string;
+    conversationName?: string;
     sender: string;
+    senderName?: string;
     content: string;
-    timestamp: Date;
+    timestamp: string | Date;
     type: '1v1' | 'group';
     flagged: boolean;
     flagReason?: string;
     flagType?: string;
-    participants: string[];
+    participants?: string[];
     status: 'active' | 'deleted';
   }
 
@@ -23,15 +26,39 @@
     name: string;
     type: '1v1' | 'group';
     participants: string[];
+    participantNames?: string[];
     messageCount: number;
-    lastActivity: Date;
+    lastActivity: string | Date;
     archived: boolean;
-    messages: ChatMessage[];
+    messages?: ChatMessage[];
   }
 
   let activeTab = $state<'conversations' | 'flagged' | 'archived' | 'messages'>('messages');
   let searchQuery = $state('');
   let selectedType = $state<'all' | '1v1' | 'group'>('all');
+  
+  // Tab switching function
+  const switchTab = (tab: 'conversations' | 'flagged' | 'archived' | 'messages') => {
+    activeTab = tab;
+  };
+
+  // Generic load function for retry buttons
+  const loadData = () => {
+    loadAllData();
+  };
+  
+  // Loading states
+  let isLoading = $state(false);
+  let loadingError = $state<string | null>(null);
+
+
+  
+  // Data state
+  let conversations = $state<ChatConversation[]>([]);
+  let archivedConversations = $state<ChatConversation[]>([]);
+  let messages = $state<ChatMessage[]>([]);
+  let flaggedMessages = $state<ChatMessage[]>([]);
+  let chatStatistics = $state<any>(null);
   
   // Modal states
   let showConversationModal = $state(false);
@@ -50,6 +77,152 @@
   
   // Chat modal state
   let messageInput = $state('');
+
+  // Data loading functions - Load all data at once like user management
+  const loadAllData = async () => {
+    isLoading = true;
+    loadingError = null;
+    
+    try {
+      // Load all data simultaneously 
+      await Promise.all([
+        loadConversations(),
+        loadArchivedConversations(), 
+        loadMessages(),
+        loadFlaggedMessages(),
+        loadStatistics()
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      loadingError = error instanceof Error ? error.message : 'Failed to load data';
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  const loadConversations = async () => {
+    try {
+      console.log('Loading conversations with params:', {
+        type: selectedType === 'all' ? undefined : selectedType,
+        search: searchQuery || undefined,
+        status: 'active'
+      });
+      const response = await AdminChatAPI.getAllConversations({
+        type: selectedType === 'all' ? undefined : selectedType,
+        search: searchQuery || undefined,
+        status: 'active'
+      });
+      console.log('Conversations API response:', response);
+      conversations = response.data || [];
+      console.log('Loaded conversations:', conversations);
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      throw error;
+    }
+  };
+
+  const loadArchivedConversations = async () => {
+    try {
+      console.log('Loading archived conversations...');
+      const response = await AdminChatAPI.getArchivedConversations({
+        type: selectedType === 'all' ? undefined : selectedType,
+        search: searchQuery || undefined
+      });
+      console.log('Archived conversations API response:', response);
+      archivedConversations = response.data || [];
+      console.log('Loaded archived conversations:', archivedConversations);
+    } catch (error) {
+      console.error('Error loading archived conversations:', error);
+      throw error;
+    }
+  };
+
+  const loadMessages = async () => {
+    try {
+      const response = await AdminChatAPI.getAllMessages({
+        type: selectedType === 'all' ? undefined : selectedType,
+        search: searchQuery || undefined,
+        flagged: false
+      });
+      messages = response.data || [];
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      throw error;
+    }
+  };
+
+  const loadFlaggedMessages = async () => {
+    try {
+      const response = await AdminChatAPI.getFlaggedMessages({
+        type: selectedType === 'all' ? undefined : selectedType,
+        search: searchQuery || undefined
+      });
+      flaggedMessages = response.data || [];
+    } catch (error) {
+      console.error('Error loading flagged messages:', error);
+      throw error;
+    }
+  };
+
+  const loadStatistics = async () => {
+    try {
+      const response = await AdminChatAPI.getChatStatistics();
+      chatStatistics = response.data || {};
+    } catch (error) {
+      console.error('Error loading statistics:', error);
+    }
+  };
+
+  // Initial load - load all data at once
+  onMount(() => {
+    loadAllData();
+  });
+
+  // Reload data when filters change
+  $effect(() => {
+    // Check if filters have actually changed (not initial load or tab switches)
+    const searchChanged = searchQuery !== previousSearchQuery;
+    const typeChanged = selectedType !== previousSelectedType;
+    
+    if (!isInitialLoad && (searchChanged || typeChanged)) {
+      console.log('Filters changed - reloading data for tab:', activeTab, {
+        searchChanged,
+        typeChanged,
+        searchQuery,
+        selectedType
+      });
+      
+      // Update previous values
+      previousSearchQuery = searchQuery;
+      previousSelectedType = selectedType;
+      
+      // Only reload the specific tab data when filters change, not all data
+      switch (activeTab) {
+        case 'conversations':
+          loadConversations();
+          break;
+        case 'archived':
+          loadArchivedConversations();
+          break;
+        case 'flagged':
+          loadFlaggedMessages();
+          break;
+        case 'messages':
+          loadMessages();
+          break;
+      }
+    } else if (isInitialLoad) {
+      // Mark that initial load is complete
+      isInitialLoad = false;
+      previousSearchQuery = searchQuery;
+      previousSelectedType = selectedType;
+    }
+  });
+
+  // Track previous filter values to detect actual changes
+  let previousSearchQuery = $state('');
+  let previousSelectedType = $state<'all' | '1v1' | 'group'>('all');
+  let isInitialLoad = $state(true);
 
   // Input filtering function
   const filterSearchInput = (value: string) => {
@@ -77,296 +250,38 @@
     searchQuery = newValue;
   };
 
-  // Mock data
-  const mockConversations: ChatConversation[] = [
-    {
-      id: '1',
-      name: 'Marketing Team',
-      type: 'group',
-      participants: ['john.doe@company.com', 'jane.smith@company.com', 'bob.wilson@company.com'],
-      messageCount: 156,
-      lastActivity: new Date('2024-01-15T15:30:00'),
-      archived: false,
-      messages: [
-        {
-          id: '1',
-          conversationId: '1',
-          conversationName: 'Marketing Team',
-          sender: 'john.doe@company.com',
-          content: 'Hey team, let\'s discuss the new campaign strategy.',
-          timestamp: new Date('2024-01-15T15:30:00'),
-          type: 'group',
-          flagged: false,
-          participants: ['john.doe@company.com', 'jane.smith@company.com', 'bob.wilson@company.com'],
-          status: 'active'
-        },
-        {
-          id: '2',
-          conversationId: '1',
-          conversationName: 'Marketing Team',
-          sender: 'jane.smith@company.com',
-          content: 'Great idea! I have some preliminary designs ready.',
-          timestamp: new Date('2024-01-15T15:25:00'),
-          type: 'group',
-          flagged: false,
-          participants: ['john.doe@company.com', 'jane.smith@company.com', 'bob.wilson@company.com'],
-          status: 'active'
-        },
-        {
-          id: '3',
-          conversationId: '1',
-          conversationName: 'Marketing Team',
-          sender: 'bob.wilson@company.com',
-          content: 'Perfect timing! Can we schedule a meeting for tomorrow?',
-          timestamp: new Date('2024-01-15T15:20:00'),
-          type: 'group',
-          flagged: false,
-          participants: ['john.doe@company.com', 'jane.smith@company.com', 'bob.wilson@company.com'],
-          status: 'active'
-        }
-      ]
-    },
-    {
-      id: '2',
-      name: 'John and Jane',
-      type: '1v1',
-      participants: ['john.doe@company.com', 'jane.smith@company.com'],
-      messageCount: 45,
-      lastActivity: new Date('2024-01-15T14:20:00'),
-      archived: false,
-      messages: [
-        {
-          id: '4',
-          conversationId: '2',
-          conversationName: 'John and Jane',
-          sender: 'jane.smith@company.com',
-          content: 'Can we review the budget proposal together?',
-          timestamp: new Date('2024-01-15T14:20:00'),
-          type: '1v1',
-          flagged: false,
-          participants: ['john.doe@company.com', 'jane.smith@company.com'],
-          status: 'active'
-        },
-        {
-          id: '5',
-          conversationId: '2',
-          conversationName: 'John and Jane',
-          sender: 'john.doe@company.com',
-          content: 'Sure, I\'m available after 3 PM today.',
-          timestamp: new Date('2024-01-15T14:15:00'),
-          type: '1v1',
-          flagged: false,
-          participants: ['john.doe@company.com', 'jane.smith@company.com'],
-          status: 'active'
-        }
-      ]
-    },
-    {
-      id: '3',
-      name: 'Support Team',
-      type: 'group',
-      participants: ['support1@company.com', 'support2@company.com', 'manager@company.com'],
-      messageCount: 89,
-      lastActivity: new Date('2024-01-15T13:45:00'),
-      archived: false,
-      messages: [
-        {
-          id: '6',
-          conversationId: '3',
-          conversationName: 'Support Team',
-          sender: 'support1@company.com',
-          content: 'Customer ticket #1234 needs urgent attention.',
-          timestamp: new Date('2024-01-15T13:45:00'),
-          type: 'group',
-          flagged: false,
-          participants: ['support1@company.com', 'support2@company.com', 'manager@company.com'],
-          status: 'active'
-        }
-      ]
-    }
-  ];
 
-  const mockArchivedConversations: ChatConversation[] = [
-    {
-      id: '4',
-      name: 'Old Project Team',
-      type: 'group',
-      participants: ['former1@company.com', 'former2@company.com', 'former3@company.com'],
-      messageCount: 245,
-      lastActivity: new Date('2024-01-10T10:30:00'),
-      archived: true,
-      messages: [
-        {
-          id: '7',
-          conversationId: '4',
-          conversationName: 'Old Project Team',
-          sender: 'former1@company.com',
-          content: 'Project completed successfully! Great work everyone.',
-          timestamp: new Date('2024-01-10T10:30:00'),
-          type: 'group',
-          flagged: false,
-          participants: ['former1@company.com', 'former2@company.com', 'former3@company.com'],
-          status: 'active'
-        }
-      ]
-    },
-    {
-      id: '5',
-      name: 'Archived Sales Chat',
-      type: 'group',
-      participants: ['sales1@company.com', 'sales2@company.com'],
-      messageCount: 67,
-      lastActivity: new Date('2024-01-08T16:20:00'),
-      archived: true,
-      messages: [
-        {
-          id: '8',
-          conversationId: '5',
-          conversationName: 'Archived Sales Chat',
-          sender: 'sales1@company.com',
-          content: 'Quarter targets achieved!',
-          timestamp: new Date('2024-01-08T16:20:00'),
-          type: 'group',
-          flagged: false,
-          participants: ['sales1@company.com', 'sales2@company.com'],
-          status: 'active'
-        }
-      ]
-    }
-  ];
-
-  const mockMessages: ChatMessage[] = [
-    {
-      id: '1',
-      conversationId: '1',
-      conversationName: 'Marketing Team',
-      sender: 'john.doe@company.com',
-      content: 'Hey team, let\'s discuss the new campaign strategy.',
-      timestamp: new Date('2024-01-15T15:30:00'),
-      type: 'group',
-      flagged: false,
-      participants: ['john.doe@company.com', 'jane.smith@company.com', 'bob.wilson@company.com'],
-      status: 'active'
-    },
-    {
-      id: '2',
-      conversationId: '2',
-      conversationName: 'John and Jane',
-      sender: 'jane.smith@company.com',
-      content: 'Can we review the budget proposal together?',
-      timestamp: new Date('2024-01-15T14:20:00'),
-      type: '1v1',
-      flagged: false,
-      participants: ['john.doe@company.com', 'jane.smith@company.com'],
-      status: 'active'
-    },
-    {
-      id: '3',
-      conversationId: '3',
-      conversationName: 'Support Team',
-      sender: 'support1@company.com',
-      content: 'You are ugly! I hate working with people like you.',
-      timestamp: new Date('2024-01-15T13:45:00'),
-      type: 'group',
-      flagged: true,
-      flagReason: 'Contains harassment and abusive language towards team members',
-      flagType: 'Harassment',
-      participants: ['support1@company.com', 'support2@company.com', 'manager@company.com'],
-      status: 'active'
-    },
-    {
-      id: '9',
-      conversationId: '1',
-      conversationName: 'Marketing Team',
-      sender: 'jane.smith@company.com',
-      content: 'Great idea! I have some preliminary designs ready.',
-      timestamp: new Date('2024-01-15T12:30:00'),
-      type: 'group',
-      flagged: false,
-      participants: ['john.doe@company.com', 'jane.smith@company.com', 'bob.wilson@company.com'],
-      status: 'deleted'
-    },
-    {
-      id: '10',
-      conversationId: '2',
-      conversationName: 'John and Jane',
-      sender: 'john.doe@company.com',
-      content: 'This is complete garbage work! Fire whoever did this!',
-      timestamp: new Date('2024-01-15T11:45:00'),
-      type: '1v1',
-      flagged: true,
-      flagReason: 'Inappropriate language and unprofessional behavior in workplace communication',
-      flagType: 'Inappropriate Language',
-      participants: ['john.doe@company.com', 'jane.smith@company.com'],
-      status: 'active'
-    }
-  ];
 
   // Computed values
-  const filteredConversations = $derived(() => {
-    return mockConversations.filter(conv => {
-      const matchesSearch = searchQuery === '' || 
-        conv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        conv.participants.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesType = selectedType === 'all' || conv.type === selectedType;
-      
-      return matchesSearch && matchesType && !conv.archived;
-    });
-  });
-
-  const filteredArchivedConversations = $derived(() => {
-    return mockArchivedConversations.filter(conv => {
-      const matchesSearch = searchQuery === '' || 
-        conv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        conv.participants.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesType = selectedType === 'all' || conv.type === selectedType;
-      
-      return matchesSearch && matchesType;
-    });
-  });
-
-  const flaggedMessages = $derived(() => {
-    return mockMessages.filter(msg => {
-      const matchesFlag = msg.flagged;
-      const matchesSearch = searchQuery === '' || 
-        msg.conversationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.content.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = selectedType === 'all' || msg.type === selectedType;
-      
-      return matchesFlag && matchesSearch && matchesType;
-    });
-  });
-
-  const allMessages = $derived(() => {
-    return mockMessages.filter(msg => {
-      const notFlagged = !msg.flagged;
-      const matchesSearch = searchQuery === '' || 
-        msg.conversationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.content.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = selectedType === 'all' || msg.type === selectedType;
-      
-      return notFlagged && matchesSearch && matchesType;
-    });
-  });
-
   const tabCounts = $derived(() => {
     return {
-      conversations: filteredConversations().length,
-      flagged: flaggedMessages().length,
-      archived: filteredArchivedConversations().length,
-      messages: allMessages().length
+      conversations: conversations.length,
+      flagged: flaggedMessages.length,
+      archived: archivedConversations.length,
+      messages: messages.length
     };
   });
 
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleString();
+  const formatTimestamp = (date: string | Date | null | undefined) => {
+    if (!date) return 'N/A';
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      return d.toLocaleString();
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
-  const openConversationModal = (conversation: ChatConversation) => {
-    selectedConversation = conversation;
-    showConversationModal = true;
+  const openConversationModal = async (conversation: ChatConversation) => {
+    try {
+      // Load full conversation with messages from API
+      const response = await AdminChatAPI.getConversationWithMessages(conversation.id);
+      selectedConversation = { ...conversation, messages: response.data?.messages || [] };
+      showConversationModal = true;
+    } catch (error) {
+      console.error('Error loading conversation details:', error);
+      alert('Failed to load conversation details');
+    }
   };
 
   const closeConversationModal = () => {
@@ -386,15 +301,17 @@
     showConfirmModal = true;
   };
 
-  const archiveConversation = (conversation: ChatConversation) => {
-    conversation.archived = true;
-    mockArchivedConversations.push(conversation);
-    const index = mockConversations.findIndex(c => c.id === conversation.id);
-    if (index !== -1) {
-      mockConversations.splice(index, 1);
+  const archiveConversation = async (conversation: ChatConversation) => {
+    try {
+      await AdminChatAPI.archiveConversation(conversation.id);
+      showConfirmModal = false;
+      alert('Conversation archived successfully');
+      // Reload data to reflect changes
+      loadData();
+    } catch (error) {
+      console.error('Error archiving conversation:', error);
+      alert('Failed to archive conversation');
     }
-    showConfirmModal = false;
-    alert('Conversation archived successfully');
   };
 
   const confirmUnarchiveConversation = (conversation: ChatConversation) => {
@@ -402,16 +319,18 @@
     showRestoreModal = true;
   };
 
-  const unarchiveConversation = (conversation: ChatConversation) => {
-    conversation.archived = false;
-    mockConversations.push(conversation);
-    const index = mockArchivedConversations.findIndex(c => c.id === conversation.id);
-    if (index !== -1) {
-      mockArchivedConversations.splice(index, 1);
+  const unarchiveConversation = async (conversation: ChatConversation) => {
+    try {
+      await AdminChatAPI.unarchiveConversation(conversation.id);
+      showRestoreModal = false;
+      selectedConversation = null;
+      alert('Conversation restored successfully');
+      // Reload data to reflect changes
+      loadData();
+    } catch (error) {
+      console.error('Error restoring conversation:', error);
+      alert('Failed to restore conversation');
     }
-    showRestoreModal = false;
-    selectedConversation = null;
-    alert('Conversation restored successfully');
   };
 
   const openMessageModal = (message: ChatMessage) => {
@@ -435,13 +354,20 @@
     showConfirmModal = true;
   };
 
-  const deleteMessage = (message: ChatMessage) => {
-    message.status = 'deleted';
-    showConfirmModal = false;
-    if (showMessageModal) {
-      closeMessageModal();
+  const deleteMessage = async (message: ChatMessage) => {
+    try {
+      await AdminChatAPI.deleteMessage(message.id);
+      showConfirmModal = false;
+      if (showMessageModal) {
+        closeMessageModal();
+      }
+      alert('Message deleted successfully');
+      // Reload data to reflect changes
+      loadData();
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message');
     }
-    alert('Message deleted successfully');
   };
 
   const confirmUnflagMessage = (message: ChatMessage) => {
@@ -455,13 +381,20 @@
     showConfirmModal = true;
   };
 
-  const unflagMessage = (message: ChatMessage) => {
-    message.flagged = false;
-    showConfirmModal = false;
-    if (showMessageModal) {
-      closeMessageModal();
+  const unflagMessage = async (message: ChatMessage) => {
+    try {
+      await AdminChatAPI.unflagMessage(message.id);
+      showConfirmModal = false;
+      if (showMessageModal) {
+        closeMessageModal();
+      }
+      alert('Message unflagged successfully');
+      // Reload data to reflect changes
+      loadData();
+    } catch (error) {
+      console.error('Error unflagging message:', error);
+      alert('Failed to unflag message');
     }
-    alert('Message unflagged successfully');
   };
 
   const sendMessageInModal = () => {
@@ -544,18 +477,18 @@
         <div class="border-b border-gray-200">
           <nav class="flex space-x-6 px-6">
             <button
-              onclick={() => activeTab = 'messages'}
+              onclick={() => switchTab('messages')}
               class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'messages' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
-                <MessageSquare class="w-4 h-4" />
+                <MessageCircle class="w-4 h-4" />
                 <span>All Messages</span>
                 <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().messages}</span>
               </div>
             </button>
 
             <button
-              onclick={() => activeTab = 'conversations'}
+              onclick={() => switchTab('conversations')}
               class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'conversations' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
@@ -566,7 +499,7 @@
             </button>
             
             <button
-              onclick={() => activeTab = 'flagged'}
+              onclick={() => switchTab('flagged')}
               class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'flagged' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
@@ -577,7 +510,7 @@
             </button>
 
             <button
-              onclick={() => activeTab = 'archived'}
+              onclick={() => switchTab('archived')}
               class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'archived' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
             >
               <div class="flex items-center space-x-2">
@@ -589,8 +522,36 @@
           </nav>
         </div>
 
-        <!-- Content -->
-        {#if activeTab === 'messages'}
+        <!-- Loading State -->
+        {#if isLoading}
+          <div class="flex items-center justify-center p-12">
+            <div class="text-center">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#01c0a4] mx-auto mb-3"></div>
+              <p class="text-gray-500">Loading chat data...</p>
+            </div>
+          </div>
+        {:else if loadingError}
+          <div class="p-6 bg-red-50 border border-red-200 rounded-lg m-6">
+            <div class="flex items-center">
+              <AlertTriangle class="w-5 h-5 text-red-500 mr-3" />
+              <div>
+                <h3 class="text-red-800 font-medium">Error Loading Data</h3>
+                <p class="text-red-600 text-sm mt-1">{loadingError}</p>
+                <button 
+                  onclick={() => loadData()}
+                  class="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- Tab Content (always rendered unless loading/error) -->
+        {#if !isLoading && !loadingError}
+          {#key activeTab}
+          {#if activeTab === 'messages'}
           <!-- All Messages Table -->
           <div class="overflow-x-auto">
             <table class="w-full">
@@ -606,7 +567,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each allMessages() as message (message.id)}
+                {#each messages as message (message.id)}
                   <tr class="hover:bg-gray-50 {message.flagged ? 'bg-red-50' : message.status === 'deleted' ? 'bg-gray-50' : ''}">
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatTimestamp(message.timestamp)}
@@ -620,7 +581,7 @@
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {message.conversationName}
+                      {message.conversationName || 'Unknown'}
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                       <div class="flex items-center">
@@ -675,7 +636,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredConversations() as conversation (conversation.id)}
+                {#each conversations as conversation (conversation.id)}
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="flex items-center">
@@ -740,7 +701,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each flaggedMessages() as message (message.id)}
+                {#each flaggedMessages as message (message.id)}
                   <tr class="hover:bg-gray-50 bg-red-50">
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatTimestamp(message.timestamp)}
@@ -754,7 +715,7 @@
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {message.conversationName}
+                      {message.conversationName || 'Unknown'}
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                       <div class="flex items-center">
@@ -807,7 +768,7 @@
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                {#each filteredArchivedConversations() as conversation (conversation.id)}
+                {#each archivedConversations as conversation (conversation.id)}
                   <tr class="hover:bg-gray-50 bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="flex items-center">
@@ -858,15 +819,17 @@
         {/if}
 
         <!-- Empty State -->
-        {#if (activeTab === 'conversations' && filteredConversations().length === 0) || 
-             (activeTab === 'flagged' && flaggedMessages().length === 0) ||
-             (activeTab === 'archived' && filteredArchivedConversations().length === 0) ||
-             (activeTab === 'messages' && allMessages().length === 0)}
+        {#if (activeTab === 'conversations' && conversations.length === 0) || 
+             (activeTab === 'flagged' && flaggedMessages.length === 0) ||
+             (activeTab === 'archived' && archivedConversations.length === 0) ||
+             (activeTab === 'messages' && messages.length === 0)}
           <div class="text-center py-12">
             <MessageSquare class="mx-auto h-12 w-12 text-gray-400" />
             <h3 class="mt-2 text-sm font-medium text-gray-900">No {activeTab} found</h3>
             <p class="mt-1 text-sm text-gray-500">Try adjusting your search criteria or filters.</p>
           </div>
+        {/if}
+        {/key}
         {/if}
       </div>
 </div>
@@ -988,7 +951,7 @@
           </div>
           <div>
             <label class="font-medium text-gray-700">Conversation:</label>
-            <p class="text-gray-900">{selectedMessage.conversationName}</p>
+            <p class="text-gray-900">{selectedMessage.conversationName || 'Unknown'}</p>
           </div>
           <div>
             <label class="font-medium text-gray-700">Type:</label>
