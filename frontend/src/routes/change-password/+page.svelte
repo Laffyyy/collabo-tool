@@ -1,159 +1,300 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { Eye, EyeOff } from 'lucide-svelte';
-	
-	let changePasswordNew = $state('');
-	let changePasswordConfirm = $state('');
-	let changePasswordErrors: string[] = $state([]);
-	let changePasswordValid = $state(false);
-	let changePasswordsMatch = $state(false);
-	let changePasswordIsLoading = $state(false);
-	let changePasswordShowCancelModal = $state(false);
-	let changePasswordFromForgotPassword = $state(false);
-	let changePasswordShowNew = $state(false);
-	let changePasswordShowConfirm = $state(false);
-	let changePasswordNewInput: HTMLInputElement;
-	
-	onMount(() => {
-		// Check if coming from forgot password flow
-		const urlParams = new URLSearchParams(window.location.search);
-		changePasswordFromForgotPassword = urlParams.get('from') === 'forgot-password';
-		
-		// Auto-focus the first input
-		if (changePasswordNewInput) {
-			changePasswordNewInput.focus();
-		}
-	});
+    import { goto } from '$app/navigation';
+    import { onMount } from 'svelte';
+    import { Eye, EyeOff } from 'lucide-svelte';
+    import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
+    
+    let changePasswordNew = $state('');
+    let changePasswordConfirm = $state('');
+    let changePasswordErrors: string[] = $state([]);
+    let changePasswordValid = $state(false);
+    let changePasswordsMatch = $state(false);
+    let changePasswordIsLoading = $state(false);
+    let changePasswordShowCancelModal = $state(false);
+    let changePasswordFromForgotPassword = $state(false);
+    let changePasswordFromFirstTime = $state(false);
+    let changePasswordShowNew = $state(false);
+    let changePasswordShowConfirm = $state(false);
+    let changePasswordNewInput: HTMLInputElement;
+    let changePasswordError = $state('');
+
+     // User data for different flows
+    let userId = $state('');
+    let username = $state('');
+    let userEmail = $state('');
+    let resetToken = $state(''); // For forgot password flow
+    let savedSecurityAnswers: Array<{ questionId: string; answer: string }> = $state([]);
+    
+    onMount(() => {
+        // Check if coming from different flows
+        const urlParams = new URLSearchParams(window.location.search);
+        changePasswordFromForgotPassword = urlParams.get('from') === 'forgot-password';
+        changePasswordFromFirstTime = urlParams.get('from') === 'first-time';
+        
+        // Get reset token from URL for forgot password flow
+        if (changePasswordFromForgotPassword) {
+            resetToken = urlParams.get('token') || localStorage.getItem('auth_resetToken') || '';
+            console.log('Change password from forgot password flow with token:', resetToken?.substring(0, 8) + '...');
+            
+            if (!resetToken) {
+                console.log('No reset token found for forgot password flow, redirecting to login');
+                goto('/login');
+                return;
+            }
+        }
+        
+        // Get user data for first-time password change
+        if (changePasswordFromFirstTime) {
+            userId = localStorage.getItem('passwordChange_userId') || '';
+            username = localStorage.getItem('passwordChange_username') || '';
+            userEmail = localStorage.getItem('passwordChange_email') || '';
+            
+            // Get saved security answers from localStorage
+            const savedAnswers = localStorage.getItem('passwordChange_securityAnswers');
+            if (savedAnswers) {
+                savedSecurityAnswers = JSON.parse(savedAnswers);
+            }
+
+            if (!userId || savedSecurityAnswers.length === 0) {
+                console.log('No user data or security answers found for password change, redirecting to login');
+                goto('/login');
+                return;
+            }
+
+            console.log('Password change page loaded with:', { userId, username, savedSecurityAnswers });
+        }
+        
+        // Auto-focus the first input
+        setTimeout(() => {
+            if (changePasswordNewInput) {
+                changePasswordNewInput.focus();
+            }
+        }, 100);
+    });
 	
 	const changePasswordValidateInput = (value: string): string => {
-		// Only allow alphanumeric characters and specified symbols: ! @ - _ .
-		const filteredValue = value.replace(/[^a-zA-Z0-9!@_.-]/g, '');
-		// Strictly limit to 20 characters max
-		return filteredValue.slice(0, 20);
+		// Allow alphanumeric and backend-specified special characters: @$!%*?&
+		const filteredValue = value.replace(/[^a-zA-Z0-9@$!%*?&]/g, '');
+		// Backend allows up to 128 characters
+		return filteredValue.slice(0, 128);
 	};
-	
-	const changePasswordHandleNewInput = (event: Event) => {
-		const target = event.target as HTMLInputElement;
-		const filteredValue = changePasswordValidateInput(target.value);
-		changePasswordNew = filteredValue;
-		// Update the input value if it was filtered
-		if (target.value !== filteredValue) {
-			target.value = filteredValue;
-		}
-	};
-	
-	const changePasswordHandleConfirmInput = (event: Event) => {
-		const target = event.target as HTMLInputElement;
-		const filteredValue = changePasswordValidateInput(target.value);
-		changePasswordConfirm = filteredValue;
-		// Update the input value if it was filtered
-		if (target.value !== filteredValue) {
-			target.value = filteredValue;
-		}
-	};
-	
-	const changePasswordHandlePaste = (event: ClipboardEvent) => {
-		event.preventDefault();
-		const pastedText = event.clipboardData?.getData('text') || '';
-		const target = event.target as HTMLInputElement;
-		const filteredText = changePasswordValidateInput(pastedText);
-		
-		if (target.id === 'new-password') {
-			changePasswordNew = filteredText;
-			target.value = filteredText;
-		} else if (target.id === 'confirm-password') {
-			changePasswordConfirm = filteredText;
-			target.value = filteredText;
-		}
-	};
-	
-	const changePasswordValidatePassword = () => {
-		const errors: string[] = [];
-		
-		if (changePasswordNew.length > 0) {
-			if (changePasswordNew.length < 15) {
-				errors.push("Password must be at least 15 characters long");
-			}
-			
-			if (changePasswordNew.length > 20) {
-				errors.push("Password must not exceed 20 characters");
-			}
-			
-			if (!/[A-Z]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 uppercase letter");
-			}
-			
-			if (!/[a-z]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 lowercase letter");
-			}
-			
-			if (!/[0-9]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 number");
-			}
-			
-			if (!/[!@_.-]/.test(changePasswordNew)) {
-				errors.push("Password must contain at least 1 symbol (!, @, -, _, .)");
-			}
-			
-			const allowedPattern = /^[a-zA-Z0-9!@_.-]*$/;
-			if (!allowedPattern.test(changePasswordNew)) {
-				errors.push("Password can only contain letters, numbers, and these symbols: ! @ - _ .");
-			}
-		}
-		
-		changePasswordErrors = errors;
-		changePasswordValid = errors.length === 0 && changePasswordNew.length > 0;
-	};
-	
-	$effect(() => {
-		changePasswordValidatePassword();
-	});
-	
-	$effect(() => {
-		changePasswordsMatch = changePasswordNew === changePasswordConfirm && changePasswordConfirm !== '';
-	});
-	
-	const changePasswordCanSubmit = () => {
-		return changePasswordValid && changePasswordsMatch;
-	};
-	
-	const changePasswordHandleSubmit = async () => {
-		if (changePasswordCanSubmit()) {
-			changePasswordIsLoading = true;
-			
-			// Simulate API call
-			await new Promise(resolve => setTimeout(resolve, 2000));
-			
-			// Navigate based on source
-			if (changePasswordFromForgotPassword) {
+
+	// Simplified validation - only check password requirements, not common passwords
+    const changePasswordValidatePassword = () => {
+        const errors: string[] = [];
+        
+        if (changePasswordNew.length > 0) {
+            if (changePasswordNew.length < 8) {
+                errors.push("Password must be at least 8 characters long");
+            }
+            
+            if (changePasswordNew.length > 128) {
+                errors.push("Password must not exceed 128 characters");
+            }
+            
+            if (!/[A-Z]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 uppercase letter");
+            }
+            
+            if (!/[a-z]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 lowercase letter");
+            }
+            
+            if (!/[0-9]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 number");
+            }
+            
+            if (!/[@$!%*?&]/.test(changePasswordNew)) {
+                errors.push("Password must contain at least 1 special character (@$!%*?&)");
+            }
+        }
+        
+        changePasswordErrors = errors;
+        changePasswordValid = errors.length === 0 && changePasswordNew.length >= 8;
+    };
+    
+    const changePasswordHandleNewInput = (event: Event) => {
+        const target = event.target as HTMLInputElement;
+        const filteredValue = changePasswordValidateInput(target.value);
+        // Update the input value if it was filtered
+        if (target.value !== filteredValue) {
+            target.value = filteredValue;
+        }
+        changePasswordNew = filteredValue;
+    };
+    
+    const changePasswordHandleConfirmInput = (event: Event) => {
+        const target = event.target as HTMLInputElement;
+        const filteredValue = changePasswordValidateInput(target.value);
+        changePasswordConfirm = filteredValue;
+        // Update the input value if it was filtered
+        if (target.value !== filteredValue) {
+            target.value = filteredValue;
+        }
+    };
+    
+    // Disable pasting for password fields
+    const changePasswordHandlePaste = (event: ClipboardEvent) => {
+        event.preventDefault();
+    };
+    
+    $effect(() => {
+        changePasswordValidatePassword();
+    });
+    
+    $effect(() => {
+        changePasswordsMatch = changePasswordNew === changePasswordConfirm && changePasswordConfirm !== '';
+    });
+    
+    const changePasswordCanSubmit = () => {
+        return changePasswordValid && changePasswordsMatch;
+    };
+    
+    const changePasswordHandleSubmit = async () => {
+    if (!changePasswordCanSubmit()) return;
+
+    changePasswordIsLoading = true;
+    changePasswordError = '';
+    
+    try {
+        if (changePasswordFromForgotPassword) {
+            // Use the reset password endpoint for forgot password flow
+            console.log('Submitting password reset with token:', resetToken?.substring(0, 8) + '...');
+            
+            const response = await apiClient.post<{
+                ok: boolean;
+                message: string;
+            }>(API_CONFIG.endpoints.auth.resetPassword, {
+                token: resetToken,
+                newPassword: changePasswordNew
+            });
+
+            console.log('Password reset response:', response);
+
+            if (response.ok) {
+                // Clear reset token from storage
+                localStorage.removeItem('auth_resetToken');
+                localStorage.removeItem('auth_resetUserId');
+                
+                // Show success message and redirect to login
+                alert('Password has been reset successfully! Please log in with your new password.');
+                goto('/login');
+            } else {
+                throw new Error(response.message || 'Failed to reset password');
+            }
+        } else if (changePasswordFromFirstTime) {
+            console.log('Submitting password change for first-time user:', {
+                userId,
+                hasSecurityAnswers: savedSecurityAnswers.length
+            });
+
+            // First, change the password
+            const passwordResponse = await apiClient.post<{
+                ok: boolean;
+                message: string;
+                data?: {
+                    userId: string;
+                    username: string;
+                    mustChangePassword: boolean;
+                };
+            }>(API_CONFIG.endpoints.passwordChange.changePassword, {
+                userId,
+                newPassword: changePasswordNew,
+                // Don't include securityAnswers for verification since they're not in DB yet
+            });
+
+            console.log('Password change response:', passwordResponse);
+
+            if (passwordResponse.ok) {
+                // Now save the security questions to the database
+                console.log('Password changed successfully, now saving security questions...');
+                
+                const securityResponse = await apiClient.post<{
+                    ok: boolean;
+                    success: boolean;
+                    message: string;
+                }>(API_CONFIG.endpoints.securityQuestions.saveAnswers, {
+                    userId,
+                    questionAnswers: savedSecurityAnswers
+                });
+
+                console.log('Security questions save response:', securityResponse);
+
+                if (securityResponse.ok || securityResponse.success) {
+                    // Clear all stored data
+                    localStorage.removeItem('passwordChange_userId');
+                    localStorage.removeItem('passwordChange_username');
+                    localStorage.removeItem('passwordChange_email');
+                    localStorage.removeItem('passwordChange_role');
+                    localStorage.removeItem('passwordChange_name');
+                    localStorage.removeItem('passwordChange_securityAnswers');
+
+                     // Redirect based on user role - same logic as OTP verification for active users
+					const storedUserRole = localStorage.getItem('passwordChange_role') || '';
+					console.log('Redirecting first-time user with role:', storedUserRole);
+					if (storedUserRole.toLowerCase() === 'admin') {
+						goto('/admin/user-management');
+					} else {
+						goto('/chat');
+					}
+					// Success: redirect handled above
+				} else {
+					throw new Error(securityResponse.message || 'Failed to save security questions');
+				}
+            } else {
+                throw new Error(passwordResponse.message || 'Failed to change password');
+            }
+        } else {
+            // Handle other flows (existing demo behavior)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            if (changePasswordFromForgotPassword) {
 				goto('/login');
 			} else {
 				goto('/chat');
 			}
-		}
-	};
+        }
+    } catch (error: any) {
+        console.error('Setup error:', error);
+        changePasswordError = error.message || 'Failed to complete account setup. Please try again.';
+    } finally {
+        changePasswordIsLoading = false;
+    }
+};
 	
 	const changePasswordHandleCancel = () => {
-		changePasswordShowCancelModal = true;
-	};
-	
-	const changePasswordConfirmCancel = () => {
-		goto('/login');
-	};
-	
-	const changePasswordHandleKeydown = (event: KeyboardEvent) => {
-		if (event.key === 'Enter') {
-			changePasswordHandleSubmit();
-		}
-		if (event.key === 'Escape') {
-			changePasswordHandleCancel();
-		}
-	};
+        changePasswordShowCancelModal = true;
+    };
+    
+    const changePasswordConfirmCancel = () => {
+        // Clear stored data based on flow
+        if (changePasswordFromFirstTime) {
+            localStorage.removeItem('passwordChange_userId');
+            localStorage.removeItem('passwordChange_username');
+            localStorage.removeItem('passwordChange_email');
+            localStorage.removeItem('passwordChange_role');
+            localStorage.removeItem('passwordChange_name');
+            localStorage.removeItem('passwordChange_securityAnswers');
+        } else if (changePasswordFromForgotPassword) {
+            localStorage.removeItem('auth_resetToken');
+            localStorage.removeItem('auth_resetUserId');
+        }
+        goto('/login');
+    };
+    
+    const changePasswordHandleKeydown = (event: KeyboardEvent) => {
+        if (event.key === 'Enter') {
+            changePasswordHandleSubmit();
+        }
+        if (event.key === 'Escape') {
+            changePasswordHandleCancel();
+        }
+    };
 </script>
 
 <svelte:head>
-	<title>Change Password</title>
+    <title>Change Password</title>
 </svelte:head>
 
 <svelte:window onkeydown={changePasswordHandleKeydown} />
@@ -162,8 +303,20 @@
 	<div class="changepassword-card">
 		<div class="changepassword-header">
 			<h1 class="changepassword-title">Change Password</h1>
-			<p class="changepassword-subtitle">Update your account password for enhanced security</p>
+			<p class="changepassword-subtitle">
+				{#if changePasswordFromFirstTime}
+					Create a secure password for your account
+				{:else}
+					Update your account password for enhanced security
+				{/if}
+			</p>
 		</div>
+		
+		{#if changePasswordError}
+			<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+				{changePasswordError}
+			</div>
+		{/if}
 		
 		<div class="changepassword-form">
 			<div class="changepassword-field">
@@ -178,7 +331,7 @@
 						class="changepassword-input"
 						id="new-password"
 						placeholder="Create a strong password"
-						maxlength="20"
+						maxlength="128"
 						disabled={changePasswordIsLoading}
 					/>
 					<button
@@ -207,7 +360,7 @@
 						class="changepassword-input"
 						id="confirm-password"
 						placeholder="Re-type your password"
-						maxlength="20"
+						maxlength="128"
 						disabled={changePasswordIsLoading}
 					/>
 					<button
@@ -228,11 +381,11 @@
 			<div class="changepassword-password-hint">
 				<p class="changepassword-hint-title">Password requirements:</p>
 				<ul class="changepassword-hint-list">
-					<li class={changePasswordNew.length >= 15 && changePasswordNew.length <= 20 ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+					<li class={changePasswordNew.length >= 8 && changePasswordNew.length <= 128 ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
-							{#if changePasswordNew.length >= 15 && changePasswordNew.length <= 20}✓{:else}✗{/if}
+							{#if changePasswordNew.length >= 8 && changePasswordNew.length <= 128}✓{:else}✗{/if}
 						</span>
-						15-20 characters long
+						8-128 characters long
 					</li>
 					<li class={/[A-Z]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
@@ -252,11 +405,11 @@
 						</span>
 						At least 1 number
 					</li>
-					<li class={/[!@_.-]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
+					<li class={/[@$!%*?&]/.test(changePasswordNew) ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
-							{#if /[!@_.-]/.test(changePasswordNew)}✓{:else}✗{/if}
+							{#if /[@$!%*?&]/.test(changePasswordNew)}✓{:else}✗{/if}
 						</span>
-						At least 1 symbol (!, @, -, _, .)
+						At least 1 special character (@$!%*?&)
 					</li>
 					<li class={changePasswordsMatch ? 'changepassword-requirement-met' : 'changepassword-requirement-unmet'}>
 						<span class="changepassword-requirement-icon">
@@ -290,206 +443,217 @@
 
 <!-- Cancel Confirmation Modal -->
 {#if changePasswordShowCancelModal}
-	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-		<div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
-			<h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Password Change?</h3>
-			<p class="text-gray-600 mb-6">Your progress will be lost.</p>
-			<div class="flex flex-row gap-3">
-				<button onclick={changePasswordConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
-				<button onclick={() => changePasswordShowCancelModal = false} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
-			</div>
-		</div>
-	</div>
+    <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">Cancel Password {changePasswordFromForgotPassword ? 'Reset' : 'Change'}?</h3>
+            <p class="text-gray-600 mb-6">Your progress will be lost.</p>
+            <div class="flex flex-row gap-3">
+                <button onclick={changePasswordConfirmCancel} class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 cursor-pointer">Yes</button>
+                <button onclick={() => changePasswordShowCancelModal = false} class="flex-1 border-2 border-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer">No</button>
+            </div>
+        </div>
+    </div>
 {/if}
 
 <style>
-	.changepassword-container {
-		min-height: 100vh;
-		background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem;
-	}
-	
-	.changepassword-card {
-		background-color: white;
-		border-radius: 1.5rem;
-		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-		padding: 2rem;
-		width: 100%;
-		max-width: 28rem;
-	}
-	
-	.changepassword-header {
-		text-align: center;
-		margin-bottom: 2rem;
-	}
-	
-	.changepassword-title {
-		font-size: 1.5rem;
-		line-height: 2rem;
-		font-weight: 700;
-		color: #1f2937;
-		margin-bottom: 0.5rem;
-	}
-	
-	.changepassword-subtitle {
-		color: #4b5563;
-	}
-	
-	.changepassword-field {
-		margin-bottom: 1rem;
-	}
-	
-	.changepassword-input-container {
-		position: relative;
-		display: flex;
-		align-items: center;
-	}
-	
-	.changepassword-label {
-		display: block;
-		font-size: 0.875rem;
-		line-height: 1.25rem;
-		font-weight: 500;
-		color: #374151;
-		margin-bottom: 0.5rem;
-	}
-	
-	.changepassword-input {
-		width: 100%;
-		padding: 0.75rem 3rem 0.75rem 1rem;
-		border: 2px solid #d1d5db;
-		border-radius: 0.75rem;
-		transition: border-color 0.2s;
-		padding-right: 3rem;
-	}
-	
-	.changepassword-input:focus {
-		border-color: #01c0a4;
-		outline: none;
-	}
-	
-	.changepassword-input:disabled {
-		opacity: 0.5;
-	}
-	
-	.changepassword-toggle-btn {
-		position: absolute;
-		right: 0.75rem;
-		background: none;
-		border: none;
-		color: #6b7280;
-		cursor: pointer;
-		padding: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: color 0.2s;
-	}
-	
-	.changepassword-toggle-btn:hover:not(:disabled) {
-		color: #374151;
-	}
-	
-	.changepassword-toggle-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	
-	.changepassword-password-hint {
-		background-color: #dbeafe;
-		border: 1px solid #bfdbfe;
-		border-radius: 0.5rem;
-		padding: 0.75rem;
-		font-size: 0.75rem;
-		line-height: 1rem;
-		margin-bottom: 1.5rem;
-	}
-	
-	.changepassword-hint-title {
-		font-weight: 500;
-		color: #1e40af;
-		margin-bottom: 0.5rem;
-	}
-	
-	.changepassword-hint-list {
-		color: #6b7280;
-		margin-left: 0;
-		list-style-type: none;
-		padding-left: 0;
-	}
-	
-	.changepassword-hint-list > * + * {
-		margin-top: 0.25rem;
-	}
-	
-	.changepassword-requirement-met {
-		color: #059669;
-		font-weight: 500;
-		transition: color 0.15s ease-in-out, font-weight 0.15s ease-in-out;
-	}
-	
-	.changepassword-requirement-unmet {
-		color: #dc2626;
-		font-weight: 400;
-		transition: color 0.15s ease-in-out, font-weight 0.15s ease-in-out;
-	}
-	
-	.changepassword-requirement-icon {
-		display: inline-block;
-		width: 1rem;
-		text-align: center;
-		margin-right: 0.5rem;
-		font-weight: bold;
-		transition: all 0.15s ease-in-out;
-	}
-	
-	.changepassword-actions {
-		display: flex;
-		flex-direction: row;
-		gap: 0.75rem;
-	}
-	
-	.changepassword-submit-btn {
-		background-color: #01c0a4;
-		color: white;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.75rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		transition: background-color 0.2s;
-		flex: 1;
-	}
-	
-	.changepassword-submit-btn:hover:not(:disabled) {
-		background-color: #00a085;
-	}
-	
-	.changepassword-submit-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	
-	.changepassword-cancel-btn {
-		border: 1px solid #d1d5db;
-		color: #374151;
-		background-color: white;
-		padding: 0.75rem 1.5rem;
-		border-radius: 0.75rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-		flex: 1;
-	}
-	
-	.changepassword-cancel-btn:hover:not(:disabled) {
-		background-color: #f9fafb;
-	}
-	
-	.changepassword-cancel-btn:disabled {
-		opacity: 0.5;
-	}
+    .changepassword-container {
+        min-height: 100vh;
+        background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    
+    .changepassword-card {
+        background-color: white;
+        border-radius: 1.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        padding: 2rem;
+        width: 100%;
+        max-width: 28rem;
+    }
+    
+    .changepassword-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .changepassword-title {
+        font-size: 1.5rem;
+        line-height: 2rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+    
+    .changepassword-subtitle {
+        color: #4b5563;
+    }
+
+    .changepassword-error {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #b91c1c;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        margin-bottom: 1rem;
+    }
+    
+    .changepassword-field {
+        margin-bottom: 1rem;
+    }
+    
+    .changepassword-input-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    
+    .changepassword-label {
+        display: block;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    .changepassword-input {
+        width: 100%;
+        padding: 0.75rem 3rem 0.75rem 1rem;
+        border: 2px solid #d1d5db;
+        border-radius: 0.75rem;
+        transition: border-color 0.2s;
+        padding-right: 3rem;
+    }
+    
+    .changepassword-input:focus {
+        border-color: #01c0a4;
+        outline: none;
+    }
+    
+    .changepassword-input:disabled {
+        opacity: 0.5;
+    }
+    
+    .changepassword-toggle-btn {
+        position: absolute;
+        right: 0.75rem;
+        background: none;
+        border: none;
+        color: #6b7280;
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s;
+    }
+    
+    .changepassword-toggle-btn:hover:not(:disabled) {
+        color: #374151;
+    }
+    
+    .changepassword-toggle-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .changepassword-password-hint {
+        background-color: #dbeafe;
+        border: 1px solid #bfdbfe;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        font-size: 0.75rem;
+        line-height: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .changepassword-hint-title {
+        font-weight: 500;
+        color: #1e40af;
+        margin-bottom: 0.5rem;
+    }
+    
+    .changepassword-hint-list {
+        color: #6b7280;
+        margin-left: 0;
+        list-style-type: none;
+        padding-left: 0;
+    }
+    
+    .changepassword-hint-list > * + * {
+        margin-top: 0.25rem;
+    }
+    
+    .changepassword-requirement-met {
+        color: #059669;
+        font-weight: 500;
+        transition: color 0.15s ease-in-out, font-weight 0.15s ease-in-out;
+    }
+    
+    .changepassword-requirement-unmet {
+        color: #dc2626;
+        font-weight: 400;
+        transition: color 0.15s ease-in-out, font-weight 0.15s ease-in-out;
+    }
+    
+    .changepassword-requirement-icon {
+        display: inline-block;
+        width: 1rem;
+        text-align: center;
+        margin-right: 0.5rem;
+        font-weight: bold;
+        transition: all 0.15s ease-in-out;
+    }
+    
+    .changepassword-actions {
+        display: flex;
+        flex-direction: row;
+        gap: 0.75rem;
+    }
+    
+    .changepassword-submit-btn {
+        background-color: #01c0a4;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        flex: 1;
+    }
+    
+    .changepassword-submit-btn:hover:not(:disabled) {
+        background-color: #00a085;
+    }
+    
+    .changepassword-submit-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .changepassword-cancel-btn {
+        border: 1px solid #d1d5db;
+        color: #374151;
+        background-color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        flex: 1;
+    }
+    
+    .changepassword-cancel-btn:hover:not(:disabled) {
+        background-color: #f9fafb;
+    }
+    
+    .changepassword-cancel-btn:disabled {
+        opacity: 0.5;
+    }
 </style>

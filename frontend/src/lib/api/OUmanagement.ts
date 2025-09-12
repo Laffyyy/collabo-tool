@@ -56,6 +56,7 @@ interface CreateOURequest {
   OrgName: string;
   Description: string;
   Location: string;
+  ParentId?: string;
   Settings: OUSettings;
 }
 
@@ -128,6 +129,34 @@ interface FrontendOU {
   };
 }
 
+// Helper function to get current user info
+const getCurrentUser = () => {
+  try {
+    const userStr = localStorage.getItem('auth_user');
+    return userStr ? JSON.parse(userStr) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Helper function to get current user ID
+const getCurrentUserId = () => {
+  return localStorage.getItem('auth_userId');
+};
+
+// Helper function to check if user has admin role
+const hasAdminRole = () => {
+  const currentUser = getCurrentUser();
+  return currentUser?.role?.toLowerCase() === 'admin';
+};
+
+// Helper function to check if user has required permissions
+const hasOUManagementPermissions = () => {
+  const currentUser = getCurrentUser();
+  const userRole = currentUser?.role?.toLowerCase();
+  return userRole === 'admin' || userRole === 'manager' || userRole === 'supervisor';
+};
+
 // Create axios instance with default configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -140,11 +169,29 @@ const apiClient = axios.create({
 // Add request interceptor for authentication if needed
 apiClient.interceptors.request.use(
   (config) => {
-    // Add auth token if available
-    const token = localStorage.getItem('authToken');
+    // Add auth token if available - check multiple possible keys
+    const token = localStorage.getItem('auth_token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('jwt') || 
+                  localStorage.getItem('token');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Add user information for audit logging
+    const currentUser = getCurrentUser();
+    const currentUserId = getCurrentUserId();
+    
+    if (currentUser) {
+      config.headers['X-User-ID'] = currentUserId || '';
+      config.headers['X-User-Role'] = currentUser.role || '';
+      config.headers['X-User-Name'] = currentUser.username || currentUser.email || '';
+    }
+    
+    // Also add credentials for cookie-based auth if needed
+    config.withCredentials = true;
+    
     return config;
   },
   (error) => {
@@ -160,9 +207,20 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     // Handle common errors
     if (error.response?.status === 401) {
-      // Unauthorized - redirect to login
+      // Unauthorized - clean up all auth tokens and redirect to login
+      localStorage.removeItem('auth_token');
       localStorage.removeItem('authToken');
+      localStorage.removeItem('jwt');
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_userId');
+      localStorage.removeItem('auth_session');
+      
+      // Redirect to login
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      // Forbidden - user doesn't have permission
+      console.error('Access forbidden: Insufficient permissions');
     }
     return Promise.reject(error);
   }
@@ -175,6 +233,14 @@ apiClient.interceptors.response.use(
  */
 export const createOU = async (ouData: CreateOURequest): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasAdminRole()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to create Organization Units.'
+      };
+    }
+
     const response = await apiClient.post('/create', ouData);
     return {
       success: true,
@@ -199,6 +265,14 @@ export const createOU = async (ouData: CreateOURequest): Promise<APIResponse> =>
  */
 export const getActiveOUs = async (params: OUQueryParams = {}): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasOUManagementPermissions()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to view Organization Units.'
+      };
+    }
+
     const response = await apiClient.get('/list', { params: { ...params, isactive: 'true' } });
     return {
       success: true,
@@ -221,6 +295,14 @@ export const getActiveOUs = async (params: OUQueryParams = {}): Promise<APIRespo
  */
 export const getInactiveOUs = async (params: OUQueryParams = {}): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasOUManagementPermissions()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to view Organization Units.'
+      };
+    }
+
     const response = await apiClient.get('/list', { params: { ...params, isactive: 'false' } });
     return {
       success: true,
@@ -287,6 +369,14 @@ export const deactivateOUs = async (ids: string[]): Promise<APIResponse> => {
  */
 export const updateOU = async (updateData: UpdateOURequest): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasAdminRole()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to update Organization Units.'
+      };
+    }
+
     const response = await apiClient.post('/update', updateData);
     return {
       success: true,
@@ -348,18 +438,16 @@ export const reactivateOUs = async (ids: string[]): Promise<APIResponse> => {
 /**
  * Transform frontend OU data to backend API format
  * @param frontendOU - Frontend OU object
- * @param includeSettings - Which settings to include ('chat', 'broadcast', or 'both')
+ * @param parentId - Optional parent OU ID for creating child OUs
  * @returns Backend API formatted object
  */
 export const transformOUDataForAPI = (
   frontendOU: FrontendOU, 
-  includeSettings: 'chat' | 'broadcast' | 'both' = 'both'
+  parentId?: string
 ): CreateOURequest => {
-  const settings: any = {};
-
-  // Include chat settings if specified
-  if (includeSettings === 'chat' || includeSettings === 'both') {
-    settings.Chat = {
+  // Include BOTH Chat and broadcast settings (new requirement)
+  const settings: any = {
+    Chat: {
       General: {
         FileSharing: frontendOU.rules.chat.allowFileSharing,
         Emoji: frontendOU.rules.chat.allowEmojis,
@@ -384,31 +472,99 @@ export const transformOUDataForAPI = (
         ShareFiles: frontendOU.rules.chat.supervisorCanShareFiles,
         ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
       }
-    };
-  }
-
-  // Include broadcast settings if specified
-  if (includeSettings === 'broadcast' || includeSettings === 'both') {
-    settings.broadcast = {
-      General: {
-        ApprovalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
-        ScheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
-        PriorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
-        Retention: frontendOU.rules.broadcast.broadcastRetentionDays
+    },
+    broadcast: {
+      general: {
+        approvalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
+        scheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
+        priorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
+        retention: frontendOU.rules.broadcast.broadcastRetentionDays
       },
-      Frontline: {
-        CreateBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
-        ReplyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
+      frontline: {
+        createBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
       },
       support: {
-        CreateBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
-        ReplyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
+        createBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
       },
       supervisor: {
-        CreateBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
+        createBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
       }
-    };
+    }
+  };
+
+  const request: CreateOURequest = {
+    OrgName: frontendOU.name,
+    Description: frontendOU.description,
+    Location: frontendOU.location,
+    Settings: settings
+  };
+
+  // Add ParentId if provided
+  if (parentId) {
+    request.ParentId = parentId;
   }
+
+  return request;
+};
+
+/**
+ * Transform frontend OU data to backend update API format
+ * @param frontendOU - Frontend OU object
+ * @returns Backend update API formatted object
+ */
+export const transformOUDataForUpdate = (
+  frontendOU: FrontendOU
+): UpdateOUChanges => {
+  // Include BOTH Chat and broadcast settings (same as create)
+  const settings: any = {
+    Chat: {
+      General: {
+        FileSharing: frontendOU.rules.chat.allowFileSharing,
+        Emoji: frontendOU.rules.chat.allowEmojis,
+        Retention: frontendOU.rules.chat.messageRetentionDays
+      },
+      Frontline: {
+        Init1v1: frontendOU.rules.chat.frontlineCanInitiate1v1,
+        CreateGroup: frontendOU.rules.chat.frontlineCanCreateGroups,
+        JoinGroupChats: frontendOU.rules.chat.frontlineCanJoinGroups,
+        ShareFiles: frontendOU.rules.chat.frontlineCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.frontlineCanForwardMessages
+      },
+      support: {
+        Init1v1: frontendOU.rules.chat.supportCanInitiate1v1,
+        CreateGroup: frontendOU.rules.chat.supportCanCreateGroups,
+        JoinGroupChats: frontendOU.rules.chat.supportCanJoinGroups,
+        ShareFiles: frontendOU.rules.chat.supportCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.supportCanForwardMessages
+      },
+      supervisor: {
+        CreateGroup: frontendOU.rules.chat.supervisorCanCreateGroups,
+        ShareFiles: frontendOU.rules.chat.supervisorCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
+      }
+    },
+    broadcast: {
+      general: {
+        approvalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
+        scheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
+        priorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
+        retention: frontendOU.rules.broadcast.broadcastRetentionDays
+      },
+      frontline: {
+        createBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
+      },
+      support: {
+        createBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
+      },
+      supervisor: {
+        createBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
+      }
+    }
+  };
 
   return {
     OrgName: frontendOU.name,
@@ -427,5 +583,10 @@ export default {
   reactivateOU,
   reactivateOUs,
   updateOU,
-  transformOUDataForAPI
+  transformOUDataForAPI,
+  transformOUDataForUpdate,
+  getCurrentUser,
+  getCurrentUserId,
+  hasAdminRole,
+  hasOUManagementPermissions
 };

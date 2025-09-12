@@ -1,4 +1,5 @@
 const GlobalSettingsService = require('../services/global-settings.service');
+const AuditLogModel = require('../model/audit-globalconfig.model');
 const { validateRequest } = require('../utils/validate');
 
 /**
@@ -17,7 +18,29 @@ const saveGeneralSettings = async (req, res, next) => {
     const settings = req.body.settings;
     const updatedBy = req.user.id;
 
+    // Get previous settings for audit trail
+    const previousSettings = await GlobalSettingsService.getGeneralSettings();
+
     const result = await GlobalSettingsService.saveGeneralSettings(settings, updatedBy);
+
+    // Create audit log entry
+    try {
+      await AuditLogModel.createAuditLog({
+        userId: updatedBy,
+        action: 'UPDATE_GLOBAL_CONFIG',
+        targetType: 'config',
+        details: {
+          previousSettings: previousSettings || {},
+          newSettings: settings,
+          timestamp: new Date().toISOString()
+        },
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent')
+      });
+    } catch (auditError) {
+      console.error('Failed to create audit log:', auditError);
+      // Don't fail the main operation if audit logging fails
+    }
 
     res.status(200).json({
       success: true,

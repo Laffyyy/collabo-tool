@@ -86,6 +86,7 @@
 	let loading = $state<boolean>(false);
 	let error = $state<string>('');
 	let isNavigatingPages = $state<boolean>(false); // Flag to prevent filter effect during page navigation
+	let isDragging = $state<boolean>(false); // Flag to track text selection/drag operations
 	// Previous filter values to track changes
 	let prevSearchQuery = $state<string>('');
 	let prevSelectedOU = $state<string>('all');
@@ -238,6 +239,24 @@
 		loadOUs();
 		loadHierarchyOptions();
 		loadTabCounts();
+		
+		// Add global drag detection to prevent modal closure during text selection
+		const handleMouseDown = () => { isDragging = false; };
+		const handleMouseMove = () => { isDragging = true; };
+		const handleMouseUp = () => { 
+			setTimeout(() => { isDragging = false; }, 10); // Small delay to ensure click events see the flag
+		};
+		
+		document.addEventListener('mousedown', handleMouseDown);
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+		
+		// Cleanup function
+		return () => {
+			document.removeEventListener('mousedown', handleMouseDown);
+			document.removeEventListener('mousemove', handleMouseMove);
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
 	});
 
 	// Load all tab counts
@@ -574,9 +593,12 @@
 
 			console.log('Filter params being sent:', params);
 			const response = await getUsers(params);
+			console.log('API response for', params.role, ':', response);
 			
 			if (response.ok) {
+				console.log('Raw API users:', response.data.users);
 				users = response.data.users.map((apiUser: ApiUser) => transformApiUser(apiUser));
+				console.log('Transformed users:', users);
 				// Cache the data with tab-specific key
 				cachedUsersByTab[cacheKey] = [...users];
 				cachedPaginationByTab[cacheKey] = {
@@ -617,9 +639,9 @@
 			ou: apiUser.ou || '',
 			role: apiUser.role,
 			status: apiUser.status,
-			type: apiUser.type,
-			supervisorId: apiUser.supervisorId,
-			managerId: apiUser.managerId,
+			type: (apiUser.type === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+			supervisorId: apiUser.supervisorId || undefined,
+			managerId: apiUser.managerId || undefined,
 			supervisorName: apiUser.supervisorName || '',
 			managerName: apiUser.managerName || ''
 		};
@@ -737,6 +759,7 @@
 	};
 
 	const changeTab = async (tab: string) => {
+		console.log(`changeTab called with: ${tab}`);
 		currentTab = tab;
 		currentPage = 1; // Reset to first page when switching tabs
 		// Clear selections when switching tabs
@@ -746,7 +769,9 @@
 		// Reset sorting when switching tabs
 		sortColumn = '';
 		sortDirection = 'asc';
+		console.log(`About to load users for tab: ${tab}`);
 		await loadUsers();
+		console.log(`Users loaded for tab ${tab}, count: ${users.length}`);
 		// Refresh tab counts to ensure they're up-to-date
 		await loadTabCounts();
 	};
@@ -1206,27 +1231,31 @@
 		try {
 			switch (confirmationAction) {
 				case 'lock':
+					if (!selectedUser) return;
 					await toggleUserLock(selectedUser.id, true);
 					await loadTabCounts(); // Refresh tab counts
-					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been locked successfully.`;
+					successMessage = `User ${selectedUser.name} has been locked successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'unlock':
+					if (!selectedUser) return;
 					await toggleUserLock(selectedUser.id, false);
 					await loadTabCounts(); // Refresh tab counts
-					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been unlocked successfully.`;
+					successMessage = `User ${selectedUser.name} has been unlocked successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'activate':
+					if (!selectedUser) return;
 					await toggleUserActivation(selectedUser.id, true);
 					await loadTabCounts(); // Refresh tab counts
-					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been activated successfully.`;
+					successMessage = `User ${selectedUser.name} has been activated successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'deactivate':
+					if (!selectedUser) return;
 					await toggleUserActivation(selectedUser.id, false);
 					await loadTabCounts(); // Refresh tab counts
-					successMessage = `User ${selectedUser.firstName} ${selectedUser.lastName} has been deactivated successfully.`;
+					successMessage = `User ${selectedUser.name} has been deactivated successfully.`;
 					showSuccessModal = true;
 					break;
 				case 'bulk-lock':
@@ -1290,12 +1319,10 @@
 			selectedRows = new Set();
 			selectAll = false;
 			// Use toast store directly
-			const { success } = $toastStore;
-			success(`${userIds.length} users have been locked successfully!`);
+			toastStore.success(`${userIds.length} users have been locked successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk lock users:', error);
-			const { error: errorFn } = $toastStore;
-			errorFn(error instanceof Error ? error.message : 'Failed to lock users. Please try again.');
+			toastStore.error(error instanceof Error ? error.message : 'Failed to lock users. Please try again.');
 		} finally {
 			loadingLock = false;
 		}
@@ -1312,12 +1339,10 @@
 			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
-			const { success } = $toastStore;
-			success(`${userIds.length} users have been deactivated successfully!`);
+			toastStore.success(`${userIds.length} users have been deactivated successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk deactivate users:', error);
-			const { error: errorFn } = $toastStore;
-			errorFn(error instanceof Error ? error.message : 'Failed to deactivate users. Please try again.');
+			toastStore.error(error instanceof Error ? error.message : 'Failed to deactivate users. Please try again.');
 		} finally {
 			loadingBulk = false;
 		}
@@ -1348,12 +1373,10 @@
 			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
-			const { success } = $toastStore;
-			success(`${userIds.length} users have been unlocked successfully!`);
+			toastStore.success(`${userIds.length} users have been unlocked successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk unlock users:', error);
-			const { error: errorFn } = $toastStore;
-			errorFn(error instanceof Error ? error.message : 'Failed to unlock users. Please try again.');
+			toastStore.error(error instanceof Error ? error.message : 'Failed to unlock users. Please try again.');
 		} finally {
 			loadingLock = false;
 		}
@@ -1370,12 +1393,10 @@
 			await loadTabCounts(); // Refresh tab counts
 			selectedRows = new Set();
 			selectAll = false;
-			const { success } = $toastStore;
-			success(`${userIds.length} users have been reactivated successfully!`);
+			toastStore.success(`${userIds.length} users have been reactivated successfully!`);
 		} catch (error) {
 			console.error('Failed to bulk reactivate users:', error);
-			const { error: errorFn } = $toastStore;
-			errorFn(error instanceof Error ? error.message : 'Failed to reactivate users. Please try again.');
+			toastStore.error(error instanceof Error ? error.message : 'Failed to reactivate users. Please try again.');
 		} finally {
 			loadingBulk = false;
 		}
@@ -1531,15 +1552,7 @@
 		selectAll = currentPageUserIds.size > 0 && [...currentPageUserIds].every(id => selectedRows.has(id));
 	});
 
-	// Toast management functions
-	const addToast = (type: 'success' | 'error' | 'info', message: string) => {
-		const id = Math.random().toString(36).substr(2, 9);
-		toasts = [...toasts, { id, type, message }];
-	};
 
-	const removeToast = (id: string) => {
-		toasts = toasts.filter(toast => toast.id !== id);
-	};
 </script>
 
 <svelte:head>
@@ -1817,7 +1830,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Employee ID</span>
-										<svelte:component this={getSortIcon('employeeId')} class="w-3 h-3" />
+										{#if sortColumn !== 'employeeId'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-56 px-3 py-3 text-left">
@@ -1826,7 +1845,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Name</span>
-										<svelte:component this={getSortIcon('name')} class="w-3 h-3" />
+										{#if sortColumn !== 'name'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-64 px-3 py-3 text-left">
@@ -1835,7 +1860,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Email</span>
-										<svelte:component this={getSortIcon('email')} class="w-3 h-3" />
+										{#if sortColumn !== 'email'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-36 px-3 py-3 text-left">
@@ -1844,7 +1875,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>OU</span>
-										<svelte:component this={getSortIcon('ou')} class="w-3 h-3" />
+										{#if sortColumn !== 'ou'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-32 px-3 py-3 text-left">
@@ -1853,7 +1890,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Role</span>
-										<svelte:component this={getSortIcon('role')} class="w-3 h-3" />
+										{#if sortColumn !== 'role'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								{#if currentTab === 'frontline' || currentTab === 'support'}
@@ -1868,7 +1911,13 @@
 										class="flex items-center space-x-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors"
 									>
 										<span>Status</span>
-										<svelte:component this={getSortIcon('status')} class="w-3 h-3" />
+										{#if sortColumn !== 'status'}
+											<ArrowUpDown class="w-3 h-3" />
+										{:else if sortDirection === 'asc'}
+											<ArrowUp class="w-3 h-3" />
+										{:else}
+											<ArrowDown class="w-3 h-3" />
+										{/if}
 									</button>
 								</th>
 								<th class="w-48 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -2111,7 +2160,22 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => closeModal('edit')}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				closeModal('edit');
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				closeModal('edit');
+			}
+		}}
 		onkeydown={(e) => e.key === 'Escape' && closeModal('edit')}
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -2464,7 +2528,22 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => closeModal('team')}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				closeModal('team');
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				closeModal('team');
+			}
+		}}
 		onkeydown={(e) => e.key === 'Escape' && closeModal('team')}
 	>
 		<div 
@@ -2593,11 +2672,11 @@
 							<h4 class="font-medium text-gray-900 mb-3 text-center">Team Summary</h4>
 							<div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter(m => m.role === 'Frontline').length}</div>
+									<div class="text-2xl font-bold text-blue-600">{supervisorTeam.filter((m: any) => m.role === 'Frontline').length}</div>
 									<div class="text-xs text-gray-600">Frontline</div>
 								</div>
 								<div class="bg-white rounded p-3">
-									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.filter(m => m.role === 'Support').length}</div>
+									<div class="text-2xl font-bold text-purple-600">{supervisorTeam.filter((m: any) => m.role === 'Support').length}</div>
 									<div class="text-xs text-gray-600">Support</div>
 								</div>
 								<div class="bg-white rounded p-3">
@@ -2771,7 +2850,22 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => closeModal('add')}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				closeModal('add');
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				closeModal('add');
+			}
+		}}
 		onkeydown={(e) => e.key === 'Escape' && closeModal('add')}
 	>
 		<div 
@@ -3038,7 +3132,22 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={() => showBulkPreview = false}
+		onclick={(e) => {
+			// Only close if clicking directly on the backdrop, not during text selection or dragging
+			if (e.target === e.currentTarget && !window.getSelection()?.toString() && !isDragging) {
+				showBulkPreview = false;
+			}
+		}}
+		onmousedown={(e) => {
+			// Store the target where mouse down occurred
+			e.currentTarget.dataset.mousedownTarget = e.target === e.currentTarget ? 'backdrop' : 'content';
+		}}
+		onmouseup={(e) => {
+			// Only allow close if mouse down and up both occurred on backdrop and not dragging
+			if (e.target === e.currentTarget && e.currentTarget.dataset.mousedownTarget === 'backdrop' && !isDragging) {
+				showBulkPreview = false;
+			}
+		}}
 		onkeydown={(e) => e.key === 'Escape' && (showBulkPreview = false)}
 	>
 		<div 
