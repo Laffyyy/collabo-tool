@@ -39,7 +39,7 @@
 		// Only allow alphanumeric characters and specified symbols: @ _ - .
 		const filteredValue = value.replace(/[^a-zA-Z0-9@_.-]/g, '');
 		// Strictly limit to 30 characters max
-		return filteredValue.slice(0, 30);
+		return filteredValue.slice(0, 70);
 	};
 	
 	const loginValidateEmailFormat = (email: string): string => {
@@ -144,7 +144,7 @@
 				oninput={loginHandleEmailInput}
 				onpaste={loginHandleEmailPaste}
 				placeholder="you@company.com"
-				maxlength="30"
+				maxlength="70"
 				required
 				class="w-full px-4 py-3 bg-gray-50/50 border-2 {loginEmailError ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#01c0a4]'} rounded-xl focus:bg-white focus:outline-none transition-all duration-200 placeholder-gray-400"
 			/>

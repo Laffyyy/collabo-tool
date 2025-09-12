@@ -22,7 +22,12 @@ async function createBroadcast({
   requiresAcknowledgment = false,
   scheduledFor = null,
   endDate = null,
-  choices = null  // Add choices parameter
+  choices = null,
+  isRecurring = false,
+  recurrencePattern = null,
+  recurrenceDays = null,
+  recurrenceTimes = null,
+  monthlyDay = null
 }) {
   try {
     console.log(`[Broadcast Service] Creating new broadcast: "${title}" by user ${createdBy}`);
@@ -44,10 +49,40 @@ async function createBroadcast({
       console.log('[Broadcast Service] Too many choices provided');
       throw new BadRequestError('Maximum of 8 options allowed for multiple choice');
     }
+
+    if (isRecurring) {
+      if (!recurrencePattern) {
+        throw new BadRequestError('Recurrence pattern is required for recurring broadcasts');
+      }
+      
+      if (!recurrenceTimes || !Array.isArray(recurrenceTimes) || recurrenceTimes.length === 0) {
+        throw new BadRequestError('At least one recurrence time is required for recurring broadcasts');
+      }
+      
+      // Validate days for weekly recurring broadcasts
+      if (recurrencePattern === 'weekly' && (!recurrenceDays || !Array.isArray(recurrenceDays) || recurrenceDays.length === 0)) {
+        throw new BadRequestError('At least one day of the week must be selected for weekly recurring broadcasts');
+      }
+      
+      // Validate day for monthly recurring broadcasts
+      if (recurrencePattern === 'monthly' && (!monthlyDay || monthlyDay < 1 || monthlyDay > 31)) {
+        throw new BadRequestError('A valid day of the month (1-31) must be selected for monthly recurring broadcasts');
+      }
+    }
     
     // Determine if this is a scheduled broadcast
     const isScheduled = scheduledFor && new Date(scheduledFor) > new Date();
     const status = isScheduled ? 'scheduled' : 'sent';
+
+    let finalRecurrenceDays = null;
+    if (isRecurring) {
+      if (recurrencePattern === 'weekly') {
+        finalRecurrenceDays = recurrenceDays;
+      } else if (recurrencePattern === 'monthly' && monthlyDay) {
+        // For monthly, just store the day number directly
+        finalRecurrenceDays = [monthlyDay];
+      }
+    }
     
     // Create the broadcast
     const broadcast = await uploadBroadcastModel.createBroadcast({
@@ -60,7 +95,11 @@ async function createBroadcast({
       status,
       scheduledFor,
       endDate,
-      choices: responseType === 'choices' ? choices : null // Only send choices if response type is 'choices'
+      choices: responseType === 'choices' ? choices : null,
+      isRecurring,
+      recurrencePattern: isRecurring ? recurrencePattern : null,
+      recurrenceDays: finalRecurrenceDays,
+      recurrenceTimes: isRecurring ? recurrenceTimes : null
     });
     
     console.log(`[Broadcast Service] Broadcast created with ID: ${broadcast.id}`);

@@ -1,3 +1,4 @@
+import { writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -10,11 +11,9 @@ export interface Toast {
 }
 
 class ToastStore {
-  items(items: any) {
-	  throw new Error('Method not implemented.');
-  }
   // Changed to have a single toast instead of an array
   currentToast = $state<Toast | null>(null);
+  
   show(message: string, type: ToastType = 'info', duration: number = 5000) {
     const id = uuidv4();
     
@@ -53,4 +52,4 @@ class ToastStore {
   }
 }
 
-export const toastStore = new ToastStore();
+export const toastStore = writable(new ToastStore());

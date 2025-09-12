@@ -146,7 +146,12 @@ class AuthStore {
 
   updateProfilePhoto(photoUrl: string) {
     if (this.user) {
-      this.user.profilePhoto = photoUrl;
+      this.user = { ...this.user, profilePhoto: photoUrl };
+      
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(this.user));
+      }
     }
   }
 }
