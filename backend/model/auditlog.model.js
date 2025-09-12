@@ -37,8 +37,29 @@ class AuditLogModel {
     
     // Add category filter if provided
     if (category && category !== 'all') {
-      whereConditions.push(`al.ddetails->>'category' = $${paramIndex}`);
-      queryParams.push(category);
+      // Map frontend category names to database dtargettype values
+      let targetType;
+      switch (category) {
+        case 'chat':
+          targetType = 'chat';
+          break;
+        case 'broadcast':
+          targetType = 'broadcast';
+          break;
+        case 'user-management':
+          targetType = 'user';
+          break;
+        case 'ou-management':
+          targetType = 'ou';
+          break;
+        case 'global-config':
+          targetType = 'config';
+          break;
+        default:
+          targetType = category;
+      }
+      whereConditions.push(`al.dtargettype = $${paramIndex}`);
+      queryParams.push(targetType);
       paramIndex++;
     }
     
@@ -98,8 +119,29 @@ class AuditLogModel {
     
     // Add category filter if provided
     if (category && category !== 'all') {
-      whereConditions.push(`al.ddetails->>'category' = $${paramIndex}`);
-      queryParams.push(category);
+      // Map frontend category names to database dtargettype values
+      let targetType;
+      switch (category) {
+        case 'chat':
+          targetType = 'chat';
+          break;
+        case 'broadcast':
+          targetType = 'broadcast';
+          break;
+        case 'user-management':
+          targetType = 'user';
+          break;
+        case 'ou-management':
+          targetType = 'ou';
+          break;
+        case 'global-config':
+          targetType = 'config';
+          break;
+        default:
+          targetType = category;
+      }
+      whereConditions.push(`al.dtargettype = $${paramIndex}`);
+      queryParams.push(targetType);
       paramIndex++;
     }
     
@@ -174,11 +216,11 @@ class AuditLogModel {
   static async getCategoryCounts() {
     const query = `
       SELECT 
-        al.ddetails->>'category' as category,
+        al.dtargettype as target_type,
         COUNT(*) as count
       FROM public.tblauditlogs al
-      WHERE al.ddetails->>'category' IS NOT NULL
-      GROUP BY al.ddetails->>'category'
+      WHERE al.dtargettype IS NOT NULL
+      GROUP BY al.dtargettype
     `;
     
     try {
@@ -197,10 +239,19 @@ class AuditLogModel {
       const totalResult = await db.query(totalQuery);
       counts.all = parseInt(totalResult.rows[0].total);
       
-      // Set category counts
+      // Map database target types to frontend categories and set counts
+      const categoryMapping = {
+        'chat': 'chat',
+        'broadcast': 'broadcast',
+        'user': 'user-management',
+        'ou': 'ou-management',
+        'config': 'global-config'
+      };
+      
       result.rows.forEach(row => {
-        if (counts.hasOwnProperty(row.category)) {
-          counts[row.category] = parseInt(row.count);
+        const category = categoryMapping[row.target_type];
+        if (category && counts.hasOwnProperty(category)) {
+          counts[category] = parseInt(row.count);
         }
       });
       

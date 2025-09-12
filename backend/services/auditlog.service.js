@@ -132,12 +132,23 @@ class AuditLogService {
   static formatAuditLog(rawLog) {
     const details = rawLog.details || {};
     
+    // Map database dtargettype to frontend category names
+    const categoryMapping = {
+      'chat': 'chat',
+      'broadcast': 'broadcast',
+      'user': 'user-management',
+      'ou': 'ou-management',
+      'config': 'global-config'
+    };
+    
+    const category = categoryMapping[rawLog.target_type] || rawLog.target_type || 'system';
+    
     return {
       id: rawLog.id,
       timestamp: new Date(rawLog.created_at),
       user: rawLog.user_email || `${rawLog.user_first_name} ${rawLog.user_last_name}`.trim() || rawLog.username || 'Unknown User',
       action: rawLog.action,
-      category: details.category || this.inferCategoryFromAction(rawLog.action),
+      category: category,
       target: details.target || rawLog.target_type || null,
       details: details.description || rawLog.action,
       ipAddress: rawLog.ip_address || 'Unknown',

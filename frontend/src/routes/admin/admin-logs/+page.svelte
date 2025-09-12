@@ -5,12 +5,14 @@
 
   let activeTab = $state<'all' | 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config'>('all');
   let searchQuery = $state('');
+  let searchValidationError = $state<string | null>(null);
   let currentPage = $state(1);
   let pageLimit = $state(50);
   
   // Data state
   let logsData = $state<AuditLogsData | null>(null);
   let loading = $state(false);
+  let exportLoading = $state(false);
   let error = $state<string | null>(null);
   let selectedLog = $state<AuditLog | null>(null);
   let showLogDetails = $state(false);
@@ -63,13 +65,61 @@
   });
   const pagination = $derived(logsData?.pagination);
 
-  // Handle search with debouncing
+  // Search input sanitization and validation
+  const sanitizeSearchInput = (input: string): string => {
+    // Allow only alphanumeric characters, spaces, and specific special characters: , . : - _ @
+    const allowedPattern = /[^a-zA-Z0-9\s,.:\-_@]/g;
+    return input.replace(allowedPattern, '').trim();
+  };
+
+  const validateSearchInput = (input: string): boolean => {
+    // Check for maximum length
+    if (input.length > 255) {
+      searchValidationError = 'Search query is too long (maximum 255 characters)';
+      return false;
+    }
+    
+    // Check if input contains only allowed characters
+    const allowedPattern = /^[a-zA-Z0-9\s,.:\-_@]*$/;
+    if (!allowedPattern.test(input)) {
+      searchValidationError = 'Invalid characters detected. Only letters, numbers, spaces, and , . : - _ @ are allowed';
+      return false;
+    }
+    
+    searchValidationError = null;
+    return true;
+  };
+
+  // Handle search with debouncing and sanitization
   let searchTimeout: number;
   const handleSearch = (event: Event) => {
     const target = event.target as HTMLInputElement;
+    let inputValue = target.value;
+    
+    // Sanitize the input (remove invalid characters)
+    const sanitizedValue = sanitizeSearchInput(inputValue);
+    
+    // Update the input field if sanitization changed the value
+    if (sanitizedValue !== inputValue) {
+      target.value = sanitizedValue;
+      inputValue = sanitizedValue;
+      // Show temporary feedback about character removal
+      searchValidationError = 'Some invalid characters were removed';
+      setTimeout(() => {
+        if (searchValidationError === 'Some invalid characters were removed') {
+          searchValidationError = null;
+        }
+      }, 2000);
+    }
+    
+    // Validate the sanitized input
+    if (!validateSearchInput(inputValue)) {
+      return;
+    }
+    
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      searchQuery = target.value;
+      searchQuery = inputValue;
     }, 300);
   };
 
@@ -133,7 +183,7 @@
 
   const exportLogs = async () => {
     try {
-      loading = true;
+      exportLoading = true;
       const params = {
         format: 'csv' as const,
         category: activeTab === 'all' ? undefined : activeTab,
@@ -151,7 +201,7 @@
       error = err instanceof Error ? err.message : 'Failed to export logs';
       console.error('Error exporting logs:', err);
     } finally {
-      loading = false;
+      exportLoading = false;
     }
   };
 
@@ -193,10 +243,22 @@
 								oninput={handleSearch}
 								type="text"
 								placeholder="Search logs by action, user, or details..."
-								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm {searchValidationError ? 'border-red-300 focus:ring-red-500' : ''}"
 								disabled={loading}
+								maxlength="255"
+								title="Allowed characters: letters, numbers, spaces, commas, periods, colons, hyphens, underscores, and @ symbols"
 							/>
 						</div>
+						<div class="mt-1 flex justify-between text-xs">
+							<span class="text-gray-500">Allowed: a-z, 0-9, spaces, , . : - _ @</span>
+							<span class="{searchQuery.length > 240 ? 'text-orange-500' : 'text-gray-500'}">{searchQuery.length}/255</span>
+						</div>
+						{#if searchValidationError}
+							<div class="mt-1 text-xs text-red-600 flex items-center">
+								<AlertTriangle class="w-3 h-3 mr-1" />
+								{searchValidationError}
+							</div>
+						{/if}
 					</div>
 
 					<!-- Controls -->
@@ -204,11 +266,11 @@
 						<!-- Export Button -->
 						<button
 							onclick={exportLogs}
-							disabled={loading}
+							disabled={exportLoading}
 							class="px-4 py-2.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors font-medium text-sm flex items-center space-x-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Download class="w-4 h-4" />
-							<span>{loading ? 'Exporting...' : 'Export'}</span>
+							<span>{exportLoading ? 'Exporting...' : 'Export'}</span>
 						</button>
 					</div>
 				</div>
