@@ -1,8 +1,11 @@
 <script lang="ts">
-    import { API_CONFIG } from '$lib/api/config';
-    import { onMount } from 'svelte';
+  import { API_CONFIG } from '$lib/api/config';
+  import { onMount, onDestroy } from 'svelte';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
-  
+  import { toastStore } from '$lib/stores/toast.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import { sessionManager } from '$lib/stores/session.svelte';
+
   const API_BASE_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings`;
   const GENERAL_API_URL = `${API_BASE_URL}/general`;
   
@@ -78,15 +81,14 @@
 
   // State variables
   let config = $state({ ...defaultConfig });
-  let isLoading = $state(false);
+  let isSaving = $state(false);
   let hasChanges = $state(false);
   let savedConfigString = $state('');
   let activeTab = $state<'general' | 'chat' | 'broadcast'>('general');
 
-  // Load configuration from backend
+  // Load configuration from backend (without loading overlay)
   const loadConfiguration = async () => {
     try {
-      isLoading = true;
       const response = await fetch(GENERAL_API_URL, {
         method: 'GET',
         headers: {
@@ -139,14 +141,21 @@
       console.error('Error loading configuration:', error);
       // Use defaults if loading fails
       savedConfigString = JSON.stringify(config);
-    } finally {
-      isLoading = false;
     }
+    // No finally block needed since we removed isLoading
   };
 
-  // Load configuration on mount
+  // Load configuration on mount (no loading overlay)
   onMount(() => {
+    // Pause session monitoring on admin pages to reduce server load
+    sessionManager.pauseMonitoring();
+    
     loadConfiguration();
+  });
+
+  onDestroy(() => {
+    // Resume session monitoring when leaving the page
+    sessionManager.resumeMonitoring();
   });
 
   // Watch for changes
@@ -169,8 +178,20 @@
   const saveConfiguration = async () => {
     if (activeTab === 'general') {
       try {
-        isLoading = true;
+        isSaving = true;
         const generalSettings = getGeneralSettings(config);
+        
+        // Check if session timeout changed
+        const oldSessionTimeout = JSON.parse(savedConfigString || '{}').sessionTimeout;
+        const newSessionTimeout = generalSettings.sessionTimeout;
+        const sessionTimeoutChanged = oldSessionTimeout !== newSessionTimeout;
+        
+        console.log('[Global Config] Saving configuration...', { 
+          oldSessionTimeout, 
+          newSessionTimeout, 
+          sessionTimeoutChanged 
+        });
+        
         const response = await fetch(GENERAL_API_URL, {
           method: 'POST',
           headers: {
@@ -184,27 +205,47 @@
         if (result.success) {
           savedConfigString = JSON.stringify(config);
           hasChanges = false;
-          alert('Global configuration saved successfully!');
+          
+          console.log('[Global Config] ✅ Configuration saved successfully!');
+          
+          // If session timeout changed, update session manager immediately
+          if (sessionTimeoutChanged) {
+            console.log('[Global Config] 🔄 Session timeout changed, updating session manager...');
+            const reloadSuccess = await sessionManager.reloadSessionConfig();
+            
+            if (reloadSuccess) {
+              toastStore.success(`Global configuration saved.`);
+            } else {
+              toastStore.success('Global configuration saved! Session timeout will apply on next login.');
+            }
+          } else {
+            toastStore.success('Global configuration saved successfully!');
+          }
         } else {
-          alert(result.message || 'Failed to save configuration');
+          console.error('[Global Config] ❌ Save failed:', result.message);
+          toastStore.error(result.message || 'Failed to save configuration');
         }
-      } catch (error) {
-        console.error('Error saving configuration:', error);
-        alert('Failed to save configuration');
+      } catch (error: any) {
+        console.error('[Global Config] ❌ Error saving configuration:', error);
+        toastStore.error('Failed to save configuration. Please check your connection and try again.');
       } finally {
-        isLoading = false;
+        isSaving = false;
       }
     } else {
-      // For chat and broadcast tabs, simulate save for now
+      // For chat and broadcast tabs, simulate save
+      isSaving = true;
       setTimeout(() => {
         savedConfigString = JSON.stringify(config);
         hasChanges = false;
-        alert('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
+        isSaving = false;
+        
+        console.log('[Global Config] ✅ Simulated save completed for', activeTab, 'tab');
+        toastStore.success('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
       }, 500);
     }
   };
 
-const resetConfiguration = async () => {
+  const resetConfiguration = async () => {
     if (confirm('Are you sure you want to reset all changes?')) {
       await loadConfiguration(); // Reload from backend
       hasChanges = false;
@@ -238,16 +279,10 @@ const resetConfiguration = async () => {
   <title>Global Configuration - Admin Controls</title>
 </svelte:head>
 
-{#if isLoading}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#01c0a4]"></div>
-      <span class="text-gray-700">Loading configuration...</span>
-    </div>
-  </div>
-{/if}
-
 <div class="min-h-screen bg-gray-50">
+  <!-- Remove the custom alert container since we're using ToastContainer -->
+  
+  <!-- Rest of your existing template -->
   <div class="max-w-5xl mx-auto px-6 py-8">
     <!-- Header -->
     <div class="mb-8 fade-in">
@@ -261,19 +296,25 @@ const resetConfiguration = async () => {
             <button
               onclick={resetConfiguration}
               class="secondary-button flex items-center space-x-2"
-              disabled={isLoading}
+              disabled={isSaving}
             >
               <RotateCcw class="w-4 h-4" />
               <span>Reset</span>
             </button>
           {/if}
+          <!-- Save button with inline loading -->
           <button
             onclick={saveConfiguration}
-            disabled={!hasChanges || isLoading}
+            disabled={!hasChanges || isSaving}
             class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save class="w-4 h-4" />
-            <span>{isLoading ? 'Saving...' : 'Save Changes'}</span>
+            {#if isSaving}
+              <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <span>Saving...</span>
+            {:else}
+              <Save class="w-4 h-4" />
+              <span>Save Changes</span>
+            {/if}
           </button>
         </div>
       </div>
@@ -993,3 +1034,6 @@ const resetConfiguration = async () => {
     {/if}
   </div>
 </div>
+
+<!-- Add ToastContainer at the end like broadcast management -->
+<ToastContainer />

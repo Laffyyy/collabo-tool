@@ -251,8 +251,23 @@ async function getSessionInfo(req, res, next) {
   try {
     const { session } = req;
     
-    // Get session timeout from global settings
-    let sessionTimeoutMinutes = 480; // Default 8 hours
+    // Remove detailed logging for routine checks
+    if (!session) {
+      return res.status(401).json({
+        ok: false,
+        message: 'No active session found'
+      });
+    }
+    
+    if (!session.expiresAt) {
+      return res.status(500).json({
+        ok: false,
+        message: 'Invalid session data'
+      });
+    }
+    
+    // Get session timeout from global settings (keep this logged since it's configuration)
+    let sessionTimeoutMinutes = 480;
     try {
       const globalSettings = await GlobalSettingsService.getGeneralSettings();
       if (globalSettings) {
@@ -265,20 +280,31 @@ async function getSessionInfo(req, res, next) {
         }
       }
     } catch (error) {
-      console.warn('Failed to load session timeout from global settings:', error);
-      // Continue with default value
+      console.warn('[Auth Controller] Failed to load session timeout from global settings:', error);
+    }
+    
+    const timeRemaining = new Date(session.expiresAt) - new Date();
+    
+    // Only log when session is about to expire or on errors
+    if (timeRemaining <= 5 * 60 * 1000) { // 5 minutes or less
+      console.log('[Auth Controller] Session expiring soon:', {
+        sessionId: session.id,
+        timeRemaining: Math.floor(timeRemaining / 1000) + 's'
+      });
     }
     
     res.status(200).json({
       ok: true,
       data: {
         expiresAt: session.expiresAt,
-        timeRemaining: new Date(session.expiresAt) - new Date(),
-        isActive: session.isActive,
+        timeRemaining: Math.max(0, timeRemaining),
+        isActive: session.isActive !== false,
         sessionTimeout: sessionTimeoutMinutes
       }
     });
+    
   } catch (err) {
+    console.error('[Auth Controller] Error in getSessionInfo:', err);
     next(err);
   }
 }
@@ -290,9 +316,17 @@ async function refreshSession(req, res, next) {
   try {
     const { session } = req;
     
+    if (!session) {
+      return res.status(401).json({
+        ok: false,
+        message: 'No active session found'
+      });
+    }
+    
     // Get session timeout from global settings
     let sessionTimeoutMinutes = 480; // Default 8 hours
     try {
+      // Fix: Use GlobalSettingsService (capital G) instead of globalSettingsService
       const globalSettings = await GlobalSettingsService.getGeneralSettings();
       if (globalSettings) {
         const settings = typeof globalSettings === 'string' 
@@ -304,7 +338,7 @@ async function refreshSession(req, res, next) {
         }
       }
     } catch (error) {
-      console.warn('Failed to load session timeout from global settings:', error);
+      console.warn('[Auth Controller] Failed to load session timeout from global settings:', error);
       // Continue with default value
     }
     
@@ -312,6 +346,13 @@ async function refreshSession(req, res, next) {
     const newExpiresAt = new Date(Date.now() + sessionTimeoutMinutes * 60 * 1000);
     
     const updatedSession = await sessionModel.updateExpiry(session.id, newExpiresAt);
+    
+    if (!updatedSession) {
+      return res.status(500).json({
+        ok: false,
+        message: 'Failed to update session'
+      });
+    }
     
     res.status(200).json({
       ok: true,
@@ -322,6 +363,7 @@ async function refreshSession(req, res, next) {
       }
     });
   } catch (err) {
+    console.error('[Auth Controller] Error in refreshSession:', err);
     next(err);
   }
 }
