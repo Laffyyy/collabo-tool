@@ -349,20 +349,16 @@ export const reactivateOUs = async (ids: string[]): Promise<APIResponse> => {
 /**
  * Transform frontend OU data to backend API format
  * @param frontendOU - Frontend OU object
- * @param includeSettings - Which settings to include ('chat' or 'broadcast' - only one allowed)
  * @param parentId - Optional parent OU ID for creating child OUs
  * @returns Backend API formatted object
  */
 export const transformOUDataForAPI = (
   frontendOU: FrontendOU, 
-  includeSettings: 'chat' | 'broadcast' = 'chat',
   parentId?: string
 ): CreateOURequest => {
-  const settings: any = {};
-
-  // Include ONLY the specified settings type (backend requirement: only one type allowed)
-  if (includeSettings === 'chat') {
-    settings.Chat = {
+  // Include BOTH Chat and broadcast settings (new requirement)
+  const settings: any = {
+    Chat: {
       General: {
         FileSharing: frontendOU.rules.chat.allowFileSharing,
         Emoji: frontendOU.rules.chat.allowEmojis,
@@ -387,28 +383,27 @@ export const transformOUDataForAPI = (
         ShareFiles: frontendOU.rules.chat.supervisorCanShareFiles,
         ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
       }
-    };
-  } else if (includeSettings === 'broadcast') {
-    settings.broadcast = {
-      General: {
-        ApprovalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
-        ScheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
-        PriorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
-        Retention: frontendOU.rules.broadcast.broadcastRetentionDays
+    },
+    broadcast: {
+      general: {
+        approvalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
+        scheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
+        priorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
+        retention: frontendOU.rules.broadcast.broadcastRetentionDays
       },
-      Frontline: {
-        CreateBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
-        ReplyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
+      frontline: {
+        createBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
       },
       support: {
-        CreateBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
-        ReplyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
+        createBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
       },
       supervisor: {
-        CreateBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
+        createBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
       }
-    };
-  }
+    }
+  };
 
   const request: CreateOURequest = {
     OrgName: frontendOU.name,

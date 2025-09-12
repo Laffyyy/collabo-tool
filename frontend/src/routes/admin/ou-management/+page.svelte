@@ -444,10 +444,9 @@
 
       try {
         // Transform frontend data to backend API format
-        // Only send settings for the currently active tab (chat OR broadcast, not both)
+        // Send BOTH Chat and broadcast settings (new requirement)
         const apiData = transformOUDataForAPI(
-          newOU, 
-          activeRulesTab,
+          newOU,
           parentOUForNewChild?.id // Pass parent ID if creating a child OU
         );
         
@@ -669,15 +668,12 @@
     
     if (editOU.name?.trim() && editOU.description?.trim()) {
       // Build backend changes payload
-      const apiData = transformOUDataForAPI(
-        {
-          name: editOU.name!.trim(),
-          description: editOU.description!.trim(),
-          location: editOU.location?.trim() || '',
-          rules: editOU.rules
-        } as any,
-        activeRulesTab
-      );
+      const apiData = transformOUDataForAPI({
+        name: editOU.name!.trim(),
+        description: editOU.description!.trim(),
+        location: editOU.location?.trim() || '',
+        rules: editOU.rules
+      } as any);
 
       const changes: any = {
         OrgName: apiData.OrgName,
