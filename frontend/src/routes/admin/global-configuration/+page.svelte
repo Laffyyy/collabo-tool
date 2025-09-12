@@ -1,14 +1,19 @@
 <script lang="ts">
+  import { API_CONFIG } from '$lib/api/config';
+  import { onMount, onDestroy } from 'svelte';
   import { Globe, Save, RotateCcw, Shield, Clock, Bell, Users, MessageSquare, Radio, Database, User, UserCheck, Send } from 'lucide-svelte';
+  import { toastStore } from '$lib/stores/toast.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import { sessionManager } from '$lib/stores/session.svelte';
 
-  // Mock global configuration data
-  let config = $state({
+  const API_BASE_URL = `${API_CONFIG?.baseUrl ?? 'http://localhost:4000'}/api/v1/global-settings`;
+  const GENERAL_API_URL = `${API_BASE_URL}/general`;
+  
+  // Default configuration structure
+  const defaultConfig = {
     // General Settings
-    organizationName: 'CollabHub Enterprise',
-    timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
     timeFormat: '12h',
-    language: 'en',
     
     // Security Settings
     passwordPolicy: {
@@ -21,7 +26,6 @@
     },
     sessionTimeout: 480, // minutes
     maxLoginAttempts: 5,
-    twoFactorAuth: false,
     
     // Chat Settings - Global defaults for all OUs
     chat: {
@@ -56,7 +60,7 @@
       }
     },
     
-    // Broadcast Settings - Global defaults for all OUs
+// Broadcast Settings - Global defaults for all OUs
     broadcast: {
       frontlineCanCreateBroadcast: false,
       frontlineCanReplyToBroadcast: true,
@@ -72,31 +76,86 @@
       acknowledgmentReminders: true,
       reminderInterval: 1440, // minutes
       maxBroadcastTargets: 1000
-    },
-    
-    // Integration Settings
-    ldapEnabled: false,
-    ldapServer: '',
-    ldapBaseDN: '',
-    ssoEnabled: false,
-    ssoProvider: 'none',
-    
-    // Backup Settings
-    autoBackup: true,
-    backupFrequency: 'daily',
-    backupRetention: 30, // days
-    backupLocation: '/backup/collabhub'
-  });
+    }
+  };
 
+  // State variables
+  let config = $state({ ...defaultConfig });
+  let isSaving = $state(false);
   let hasChanges = $state(false);
   let savedConfigString = $state('');
   let activeTab = $state<'general' | 'chat' | 'broadcast'>('general');
 
-  // Initialize saved config on mount
-  $effect(() => {
-    if (savedConfigString === '') {
+  // Load configuration from backend (without loading overlay)
+  const loadConfiguration = async () => {
+    try {
+      const response = await fetch(GENERAL_API_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Parse the JSON string from database
+          const savedSettings = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+          
+          // Merge saved settings with defaults (in case new settings were added)
+          config = {
+            ...defaultConfig,
+            ...savedSettings,
+            passwordPolicy: {
+              ...defaultConfig.passwordPolicy,
+              ...(savedSettings.passwordPolicy || {})
+            },
+            chat: {
+              ...defaultConfig.chat,
+              ...(savedSettings.chat || {}),
+              pinnedMessages: {
+                ...defaultConfig.chat.pinnedMessages,
+                ...(savedSettings.chat?.pinnedMessages || {})
+              }
+            },
+            broadcast: {
+              ...defaultConfig.broadcast,
+              ...(savedSettings.broadcast || {})
+            }
+          };
+          
+          savedConfigString = JSON.stringify(config);
+          console.log('✅ Configuration loaded successfully:', config);
+        } else {
+          // No saved configuration, use defaults
+          console.log('ℹ️ No saved configuration found, using defaults');
+          savedConfigString = JSON.stringify(config);
+        }
+      } else {
+        console.error('Failed to load configuration:', response.statusText);
+        // Use defaults if loading fails
+        savedConfigString = JSON.stringify(config);
+      }
+    } catch (error) {
+      console.error('Error loading configuration:', error);
+      // Use defaults if loading fails
       savedConfigString = JSON.stringify(config);
     }
+    // No finally block needed since we removed isLoading
+  };
+
+  // Load configuration on mount (no loading overlay)
+  onMount(() => {
+    // Pause session monitoring on admin pages to reduce server load
+    sessionManager.pauseMonitoring();
+    
+    loadConfiguration();
+  });
+
+  onDestroy(() => {
+    // Resume session monitoring when leaving the page
+    sessionManager.resumeMonitoring();
   });
 
   // Watch for changes
@@ -106,18 +165,89 @@
     }
   });
 
-  const saveConfiguration = () => {
-    // Simulate API call
-    setTimeout(() => {
-      savedConfigString = JSON.stringify(config);
-      hasChanges = false;
-      alert('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
-    }, 500);
+ function getGeneralSettings(config: any) {
+    return {
+      dateFormat: config.dateFormat,
+      timeFormat: config.timeFormat,
+      passwordPolicy: config.passwordPolicy,
+      sessionTimeout: config.sessionTimeout,
+      maxLoginAttempts: config.maxLoginAttempts
+    };
+  }
+
+  const saveConfiguration = async () => {
+    if (activeTab === 'general') {
+      try {
+        isSaving = true;
+        const generalSettings = getGeneralSettings(config);
+        
+        // Check if session timeout changed
+        const oldSessionTimeout = JSON.parse(savedConfigString || '{}').sessionTimeout;
+        const newSessionTimeout = generalSettings.sessionTimeout;
+        const sessionTimeoutChanged = oldSessionTimeout !== newSessionTimeout;
+        
+        console.log('[Global Config] Saving configuration...', { 
+          oldSessionTimeout, 
+          newSessionTimeout, 
+          sessionTimeoutChanged 
+        });
+        
+        const response = await fetch(GENERAL_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({ settings: generalSettings })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          savedConfigString = JSON.stringify(config);
+          hasChanges = false;
+          
+          console.log('[Global Config] ✅ Configuration saved successfully!');
+          
+          // If session timeout changed, update session manager immediately
+          if (sessionTimeoutChanged) {
+            console.log('[Global Config] 🔄 Session timeout changed, updating session manager...');
+            const reloadSuccess = await sessionManager.reloadSessionConfig();
+            
+            if (reloadSuccess) {
+              toastStore.success(`Global configuration saved.`);
+            } else {
+              toastStore.success('Global configuration saved! Session timeout will apply on next login.');
+            }
+          } else {
+            toastStore.success('Global configuration saved successfully!');
+          }
+        } else {
+          console.error('[Global Config] ❌ Save failed:', result.message);
+          toastStore.error(result.message || 'Failed to save configuration');
+        }
+      } catch (error: any) {
+        console.error('[Global Config] ❌ Error saving configuration:', error);
+        toastStore.error('Failed to save configuration. Please check your connection and try again.');
+      } finally {
+        isSaving = false;
+      }
+    } else {
+      // For chat and broadcast tabs, simulate save
+      isSaving = true;
+      setTimeout(() => {
+        savedConfigString = JSON.stringify(config);
+        hasChanges = false;
+        isSaving = false;
+        
+        console.log('[Global Config] ✅ Simulated save completed for', activeTab, 'tab');
+        toastStore.success('Global configuration saved successfully! These settings will be applied as defaults for new organization units.');
+      }, 500);
+    }
   };
 
-  const resetConfiguration = () => {
+  const resetConfiguration = async () => {
     if (confirm('Are you sure you want to reset all changes?')) {
-      config = JSON.parse(savedConfigString);
+      await loadConfiguration(); // Reload from backend
       hasChanges = false;
     }
   };
@@ -150,6 +280,9 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
+  <!-- Remove the custom alert container since we're using ToastContainer -->
+  
+  <!-- Rest of your existing template -->
   <div class="max-w-5xl mx-auto px-6 py-8">
     <!-- Header -->
     <div class="mb-8 fade-in">
@@ -163,279 +296,182 @@
             <button
               onclick={resetConfiguration}
               class="secondary-button flex items-center space-x-2"
+              disabled={isSaving}
             >
               <RotateCcw class="w-4 h-4" />
               <span>Reset</span>
             </button>
           {/if}
+          <!-- Save button with inline loading -->
           <button
             onclick={saveConfiguration}
-            disabled={!hasChanges}
+            disabled={!hasChanges || isSaving}
             class="primary-button flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save class="w-4 h-4" />
-            <span>Save Changes</span>
+            {#if isSaving}
+              <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <span>Saving...</span>
+            {:else}
+              <Save class="w-4 h-4" />
+              <span>Save Changes</span>
+            {/if}
           </button>
         </div>
       </div>
     </div>
 
     <!-- Main Configuration Panel -->
+<!-- Main Configuration Panel -->
     <div class="collaboration-card fade-in">
       <!-- Tab Navigation -->
       <div class="flex space-x-6 px-6 pt-6 border-b border-gray-200">
-            <button
-              onclick={() => activeTab = 'general'}
-              class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
-            >
-              <Globe class="w-5 h-5" />
-              <span>General</span>
-            </button>
-            <button
-              onclick={() => activeTab = 'chat'}
-              class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'chat' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
-            >
-              <MessageSquare class="w-5 h-5" />
-              <span>Chat</span>
-            </button>
-            <button
-              onclick={() => activeTab = 'broadcast'}
-              class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'broadcast' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
-            >
-              <Radio class="w-5 h-5" />
-              <span>Broadcast</span>
-            </button>
-          </div>
+        <button
+          onclick={() => activeTab = 'general'}
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'general' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+        >
+          <Globe class="w-5 h-5" />
+          <span>General</span>
+        </button>
+        <button
+          onclick={() => activeTab = 'chat'}
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'chat' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+        >
+          <MessageSquare class="w-5 h-5" />
+          <span>Chat</span>
+        </button>
+        <button
+          onclick={() => activeTab = 'broadcast'}
+          class="flex items-center space-x-2 px-4 py-3 font-medium transition-colors border-b-2 {activeTab === 'broadcast' ? 'text-[#01c0a4] border-[#01c0a4]' : 'text-gray-700 border-transparent hover:text-gray-900'}"
+        >
+          <Radio class="w-5 h-5" />
+          <span>Broadcast</span>
+        </button>
+      </div>
 
-          <!-- Tab Content -->
-          <div class="p-6">
-            <!-- General Tab -->
-            {#if activeTab === 'general'}
-              <div class="space-y-6 max-w-4xl">
-                <!-- General Settings -->
-                <div class="space-y-4">
-                  <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                    <Globe class="w-5 h-5 text-[#01c0a4] mr-2" />
-                    General Settings
-                  </h3>
-                  
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label for="orgName" class="block text-sm font-medium text-gray-700 mb-2">Organization Name</label>
-                      <input
-                        id="orgName"
-                        bind:value={config.organizationName}
-                        class="input-field"
-                        placeholder="Enter organization name"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label for="timezone" class="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
-                      <select id="timezone" bind:value={config.timezone} class="input-field">
-                        <option value="America/New_York">Eastern Time (EST/EDT)</option>
-                        <option value="America/Chicago">Central Time (CST/CDT)</option>
-                        <option value="America/Denver">Mountain Time (MST/MDT)</option>
-                        <option value="America/Los_Angeles">Pacific Time (PST/PDT)</option>
-                        <option value="UTC">UTC</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label for="dateFormat" class="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
-                      <select id="dateFormat" bind:value={config.dateFormat} class="input-field">
-                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label for="timeFormat" class="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
-                      <select id="timeFormat" bind:value={config.timeFormat} class="input-field">
-                        <option value="12h">12 Hour (AM/PM)</option>
-                        <option value="24h">24 Hour</option>
-                      </select>
-                    </div>
-                  </div>
+      <!-- Tab Content -->
+      <div class="p-6">
+        <!-- General Tab -->
+        {#if activeTab === 'general'}
+          <div class="space-y-6 max-w-4xl">
+            <!-- General Settings -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <Globe class="w-5 h-5 text-[#01c0a4] mr-2" />
+                General Settings
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="dateFormat" class="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+                  <select id="dateFormat" bind:value={config.dateFormat} class="input-field">
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  </select>
                 </div>
+                <div>
+                  <label for="timeFormat" class="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
+                  <select id="timeFormat" bind:value={config.timeFormat} class="input-field">
+                    <option value="12h">12 Hour (AM/PM)</option>
+                    <option value="24h">24 Hour</option>
+                  </select>
+                </div>
+              </div>
+            </div>
 
-                <!-- Security Settings -->
-                <div class="space-y-4">
-                  <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                    <Shield class="w-5 h-5 text-[#01c0a4] mr-2" />
-                    Security Settings
-                  </h3>
-                  
-                  <div class="bg-gray-50 p-4 rounded-lg">
-                    <h4 class="font-semibold text-gray-900 mb-3">Password Policy</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label for="minLength" class="block text-sm font-medium text-gray-700 mb-2">Minimum Length</label>
-                        <input
-                          id="minLength"
-                          type="number"
-                          bind:value={config.passwordPolicy.minLength}
-                          min="6"
-                          max="32"
-                          class="input-field"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label for="passwordExpiry" class="block text-sm font-medium text-gray-700 mb-2">Password Expiry (Days)</label>
-                        <input
-                          id="passwordExpiry"
-                          type="number"
-                          bind:value={config.passwordPolicy.passwordExpiry}
-                          min="30"
-                          max="365"
-                          class="input-field"
-                        />
-                      </div>
-                      
-                      <div class="md:col-span-2 space-y-3">
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireUppercase}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Uppercase Letters</span>
-                        </label>
-                        
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireLowercase}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Lowercase Letters</span>
-                        </label>
-                        
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireNumbers}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Numbers</span>
-                        </label>
-                        
-                        <label class="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            bind:checked={config.passwordPolicy.requireSpecialChars}
-                            class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                          />
-                          <span class="text-sm">Require Special Characters</span>
-                        </label>
-                      </div>
-                    </div>
+            <!-- Security Settings -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <Shield class="w-5 h-5 text-[#01c0a4] mr-2" />
+                Security Settings
+              </h3>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <h4 class="font-semibold text-gray-900 mb-3">Password Policy</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label for="minLength" class="block text-sm font-medium text-gray-700 mb-2">Minimum Length</label>
+                    <input
+                      id="minLength"
+                      type="number"
+                      bind:value={config.passwordPolicy.minLength}
+                      min="6"
+                      max="32"
+                      class="input-field"
+                    />
                   </div>
-                  
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label for="sessionTimeout" class="block text-sm font-medium text-gray-700 mb-2">Session Timeout (Minutes)</label>
-                      <input
-                        id="sessionTimeout"
-                        type="number"
-                        bind:value={config.sessionTimeout}
-                        min="15"
-                        max="1440"
-                        class="input-field"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label for="maxLoginAttempts" class="block text-sm font-medium text-gray-700 mb-2">Max Login Attempts</label>
-                      <input
-                        id="maxLoginAttempts"
-                        type="number"
-                        bind:value={config.maxLoginAttempts}
-                        min="3"
-                        max="10"
-                        class="input-field"
-                      />
-                    </div>
+                  <div>
+                    <label for="passwordExpiry" class="block text-sm font-medium text-gray-700 mb-2">Password Expiry (Days)</label>
+                    <input
+                      id="passwordExpiry"
+                      type="number"
+                      bind:value={config.passwordPolicy.passwordExpiry}
+                      min="30"
+                      max="365"
+                      class="input-field"
+                    />
                   </div>
-                  
-                  <div class="space-y-3">
+                  <div class="md:col-span-2 space-y-3">
                     <label class="flex items-center space-x-2">
                       <input
                         type="checkbox"
-                        bind:checked={config.twoFactorAuth}
+                        bind:checked={config.passwordPolicy.requireUppercase}
                         class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
                       />
-                      <span class="text-sm font-medium">Enable Two-Factor Authentication</span>
+                      <span class="text-sm">Require Uppercase Letters</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        bind:checked={config.passwordPolicy.requireLowercase}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm">Require Lowercase Letters</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        bind:checked={config.passwordPolicy.requireNumbers}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm">Require Numbers</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        bind:checked={config.passwordPolicy.requireSpecialChars}
+                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
+                      />
+                      <span class="text-sm">Require Special Characters</span>
                     </label>
                   </div>
                 </div>
-
-                <!-- Backup Settings -->
-                <div class="space-y-6">
-                  <div class="flex items-center justify-between">
-                    <h3 class="text-xl font-semibold text-gray-900 flex items-center">
-                      <Database class="w-6 h-6 text-[#01c0a4] mr-3" />
-                      Backup Settings
-                    </h3>
-                    <button
-                      onclick={initiateBackup}
-                      class="secondary-button text-sm"
-                    >
-                      Initiate Manual Backup
-                    </button>
-                  </div>
-                  
-                  <div class="space-y-4">
-                    <div class="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        bind:checked={config.autoBackup}
-                        class="rounded border-gray-300 text-[#01c0a4] focus:ring-[#01c0a4]"
-                      />
-                      <span class="text-sm font-medium">Enable Automatic Backups</span>
-                    </div>
-                    
-                    {#if config.autoBackup}
-                      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label for="backupFrequency" class="block text-sm font-medium text-gray-700 mb-2">Backup Frequency</label>
-                          <select id="backupFrequency" bind:value={config.backupFrequency} class="input-field">
-                            <option value="hourly">Hourly</option>
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label for="backupRetention" class="block text-sm font-medium text-gray-700 mb-2">Retention (Days)</label>
-                          <input
-                            id="backupRetention"
-                            type="number"
-                            bind:value={config.backupRetention}
-                            min="7"
-                            max="365"
-                            class="input-field"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label for="backupLocation" class="block text-sm font-medium text-gray-700 mb-2">Backup Location</label>
-                          <input
-                            id="backupLocation"
-                            bind:value={config.backupLocation}
-                            class="input-field"
-                            placeholder="/backup/collabhub"
-                          />
-                        </div>
-                      </div>
-                    {/if}
-                  </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="sessionTimeout" class="block text-sm font-medium text-gray-700 mb-2">Session Timeout (Minutes)</label>
+                  <input
+                    id="sessionTimeout"
+                    type="number"
+                    bind:value={config.sessionTimeout}
+                    min="15"
+                    max="1440"
+                    class="input-field"
+                  />
+                </div>
+                <div>
+                  <label for="maxLoginAttempts" class="block text-sm font-medium text-gray-700 mb-2">Max Login Attempts</label>
+                  <input
+                    id="maxLoginAttempts"
+                    type="number"
+                    bind:value={config.maxLoginAttempts}
+                    min="3"
+                    max="10"
+                    class="input-field"
+                  />
                 </div>
               </div>
-            {/if}
+            </div>
+          </div>
+        {/if}
 
             <!-- Chat Tab -->
             {#if activeTab === 'chat'}
@@ -998,3 +1034,6 @@
     {/if}
   </div>
 </div>
+
+<!-- Add ToastContainer at the end like broadcast management -->
+<ToastContainer />

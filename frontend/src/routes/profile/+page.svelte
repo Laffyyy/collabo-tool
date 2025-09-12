@@ -1,8 +1,25 @@
 <script lang="ts">
-  import { User, Camera, Save, Edit, Mail, Shield, Building2, Bell, Calendar, Clock, X, Users, Settings } from 'lucide-svelte';
+  import { onMount } from 'svelte';
+    import { 
+    User, Save, Edit, X, Mail, Calendar, Clock, Shield, 
+    Building2, Users, Settings, Camera 
+  } from 'lucide-svelte';
   import Navigation from '$lib/components/Navigation.svelte';
   import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
   import { authStore } from '$lib/stores/auth.svelte';
+  import { profileAPI, type UserProfile } from '$lib/api/profile';
+  import { toastStore } from '$lib/stores/toast.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
+
+  // Profile state
+  let userProfile = $state<UserProfile | null>(null);
+  let isLoading = $state(true);
+  let isEditing = $state(false);
+  let editedName = $state('');
+  
+  let showTeamStructure = $state(false);
+  let showTeamModal = $state(false);
+  let selectedSupervisor = $state<any>(null);
 
   // Get current user from auth store
   const authUser = $derived($authStore.user);
@@ -20,26 +37,55 @@
 
   // Profile state based on authenticated user - using derived for reactivity
   const user = $derived({
-    id: authUser?.id || '1',
-    name: `${authUser?.firstName || 'John'} ${authUser?.lastName || 'Doe'}`,
-    email: authUser?.email || 'john.doe@company.com',
-    role: authUser?.role || 'Manager',
-    ou: authUser?.role === 'admin' ? null : (authUser?.organizationUnit || 'Sales Department'),
-    employeeId: 'EMP001',
-    manager: authUser?.role === 'admin' || authUser?.role === 'manager' ? null : 'Sarah Wilson',
-    supervisor: (authUser?.role === 'frontline' || authUser?.role === 'support') ? 'Mike Johnson' : null,
-    joinDate: new Date('2023-01-15'),
-    lastLogin: new Date('2024-01-15T14:30:00'),
+    id: userProfile?.id || authUser?.id || '1',
+    name: userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 
+          (authUser ? `${authUser.firstName || 'John'} ${authUser.lastName || 'Doe'}` : 'John Doe'),
+    email: userProfile?.email || authUser?.email || 'john.doe@company.com',
+    role: userProfile?.role || authUser?.role || 'Manager',
+    organizationUnit: userProfile?.organizationUnit || authUser?.organizationUnit || 'Sales Department',
+    onlineStatus: userProfile?.onlineStatus || authUser?.onlineStatus || 'online',
     profilePhoto: authUser?.profilePhoto || null,
-    coverPhoto: '/placeholder.svg?height=300&width=800',
-    onlineStatus: authUser?.onlineStatus || 'online'
+    ou: userProfile?.organizationUnit || authUser?.organizationUnit || 'Sales Department',
+    // Convert string dates to Date objects
+    joinDate: userProfile?.joinDate ? new Date(userProfile.joinDate) : new Date('2023-01-15'),
+    lastLogin: userProfile?.lastLogin ? new Date(userProfile.lastLogin) : new Date(),
+    manager: userProfile?.manager || 'Sarah Wilson',
+    supervisor: userProfile?.supervisor || 'Mike Johnson',
+    coverPhoto: '/placeholder.svg?height=300&width=800'
   });
 
-  let isEditing = $state(false);
-  let editedName = $state('');
-  let showTeamStructure = $state(false);
-  let showTeamModal = $state(false);
-  let selectedSupervisor = $state<any>(null);
+  onMount(async () => {
+    try {
+      console.log('[Profile Debug] Fetching user profile...');
+      const result = await profileAPI.getUserProfile();
+      console.log('[Profile Debug] Raw API response:', result);
+      userProfile = result.data.profile;
+      console.log('[Profile Debug] Parsed userProfile:', userProfile);
+      
+      // Sync with auth store if needed
+      if (userProfile && !authUser) {
+        $authStore.user = {
+          id: userProfile.id,
+          username: userProfile.username,
+          email: userProfile.email,
+          role: userProfile.role,
+          firstName: userProfile.firstName,
+          lastName: userProfile.lastName,
+          organizationUnit: userProfile.organizationUnit,
+          onlineStatus: userProfile.onlineStatus || 'offline'
+        };
+      }
+      
+      if (userProfile) {
+        editedName = `${userProfile.firstName} ${userProfile.lastName}`;
+      }
+    } catch (error) {
+      console.error('Failed to load profile data:', error);
+      $toastStore.error('Failed to load profile data');
+    } finally {
+      isLoading = false;
+    }
+  });
 
   // Sync editedName when editing starts
   $effect(() => {
@@ -142,16 +188,48 @@
     alert('Cover photo upload functionality would be implemented here');
   };
 
-  const saveProfile = () => {
-    // In a real app, this would update the backend
-    // For now, just show success message
-    isEditing = false;
-    alert('Profile updated successfully!');
+  const saveProfile = async () => {
+    if (!userProfile || !editedName.trim()) return;
+
+    try {
+      const [firstName, ...lastNameParts] = editedName.trim().split(' ');
+      const lastName = lastNameParts.join(' ');
+
+      const result = await profileAPI.updateUserProfile({
+        firstName,
+        lastName
+      });
+
+      userProfile = result.data.profile;
+      isEditing = false;
+      $toastStore.success('Profile updated successfully');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      $toastStore.error('Failed to update profile');
+    }
   };
 
   const cancelEdit = () => {
-    editedName = user.name;
+    if (userProfile) {
+      editedName = `${userProfile.firstName} ${userProfile.lastName}`;
+    }
     isEditing = false;
+  };
+
+const updateOnlineStatus = async (status: 'online' | 'away' | 'idle' | 'offline') => {
+    if (!userProfile) return;
+
+    try {
+      const result = await profileAPI.updateUserProfile({
+        onlineStatus: status
+      });
+
+      userProfile = result.data.profile;
+      $toastStore.success('Status updated');
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      $toastStore.error('Failed to update status');
+    }
   };
 
   const switchRole = (newRole: "admin" | "manager" | "supervisor" | "support" | "frontline") => {
@@ -267,40 +345,39 @@
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   {#if isEditing}
-                    <div class="flex items-center space-x-2 mb-2">
-                      <input
-                        bind:value={editedName}
-                        class="text-2xl font-bold text-gray-900 bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
-                      />
-                      <button
-                        onclick={saveProfile}
-                        class="text-green-600 hover:text-green-500 p-1"
-                        title="Save"
-                      >
-                        <Save class="w-4 h-4" />
-                      </button>
-                      <button
-                        onclick={cancelEdit}
-                        class="text-gray-600 hover:text-gray-500 p-1"
-                        title="Cancel"
-                      >
-                        <X class="w-4 h-4" />
-                      </button>
-                    </div>
-                  {:else}
-                    <div class="flex items-center space-x-2 mb-2">
-                      <h1 class="text-2xl font-bold text-gray-900">{user.name}</h1>
-                      <button
-                        onclick={() => isEditing = true}
-                        class="text-gray-600 hover:text-gray-500 p-1"
-                        title="Edit name"
-                      >
-                        <Edit class="w-4 h-4" />
-                      </button>
-                    </div>
-                  {/if}
-                  <p class="text-gray-600 mb-1">{user.role} • {user.ou || 'Administration'}</p>
-                  <p class="text-sm text-gray-500">Employee ID: {user.employeeId}</p>
+                      <div class="flex items-center space-x-2 mb-2">
+                        <input
+                          bind:value={editedName}
+                          class="text-2xl font-bold text-gray-900 bg-gray-50 border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent"
+                        />
+                        <button
+                          onclick={saveProfile}
+                          class="text-green-600 hover:text-green-500 p-1"
+                          title="Save"
+                        >
+                          <Save class="w-4 h-4" />
+                        </button>
+                        <button
+                          onclick={cancelEdit}
+                          class="text-gray-600 hover:text-gray-500 p-1"
+                          title="Cancel"
+                        >
+                          <X class="w-4 h-4" />
+                        </button>
+                      </div>
+                    {:else}
+                      <div class="flex items-center space-x-2 mb-2">
+                        <h1 class="text-2xl font-bold text-gray-900">{user.name}</h1>
+                        <button
+                          onclick={() => isEditing = true}
+                          class="text-gray-600 hover:text-gray-500 p-1"
+                          title="Edit name"
+                        >
+                          <Edit class="w-4 h-4" />
+                        </button>
+                      </div>
+                    {/if}
+                  <p class="text-gray-600 mb-1">{user.role} • {user.organizationUnit}</p>
                 </div>
 
                 <div class="mt-4 sm:mt-0">
@@ -353,11 +430,6 @@
                 <Mail class="w-4 h-4 text-gray-400" />
                 <span class="text-gray-900">{user.email}</span>
               </div>
-            </div>
-            
-            <div>
-              <label for="employee-id" class="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-              <span class="text-gray-900" id="employee-id">{user.employeeId}</span>
             </div>
 
             <div>
@@ -430,9 +502,9 @@
             {/if}
 
             <!-- Show team button for manager and supervisor roles -->
-            {#if authUser?.role === 'manager' || authUser?.role === 'supervisor'}
+            {#if (authUser?.role === 'manager' || authUser?.role === 'supervisor') || (userProfile?.role === 'manager' || userProfile?.role === 'supervisor')}
               <div>
-                <p class="block text-sm font-medium text-gray-700 mb-1">Team Management</p>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Team Management</label>
                 <button
                   onclick={showTeam}
                   class="flex items-center space-x-2 px-4 py-2 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
@@ -760,6 +832,8 @@
         </button>
       </div>
     </div>
+
+    <ToastContainer />
   </div>
 {/if}
 

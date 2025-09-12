@@ -7,23 +7,35 @@ const routes = require('./routes');
 const { env } = require('./config');
 const chatRoutes = require('./routes/v1/chat.routes');
 
+
+
+//Import route modules
+const securityQuestionsRoutes = require('./routes/v1/securityQuestions.routes');
+const passwordChangeRoutes = require('./routes/v1/passwordChange.routes');
+
 const app = express();
 
 // Core Middlewares
 app.use(helmet());
-const corsOrigins = env.CORS_ORIGIN ? env.CORS_ORIGIN.split(',') : ['http://localhost:5173'];
-app.use(cors({ 
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if(!origin) return callback(null, true);
-    
-    if(corsOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true 
+const corsEnv = (env.CORS_ORIGIN || '').trim();
+const allowAllOrigins = corsEnv === '*';
+const corsOrigins = allowAllOrigins
+  ? []
+  : (corsEnv ? corsEnv.split(',').map((o) => o.trim()).filter(Boolean) : ['http://localhost:5173']);
+
+app.use(cors({
+  origin: allowAllOrigins
+    ? true // reflect request origin (required when credentials: true)
+    : function(origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if(!origin) return callback(null, true);
+        if(corsOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
+  credentials: true
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -38,6 +50,10 @@ app.get('/health', (_req, res) => {
 // API Routes
 app.use('/api/chat', chatRoutes);
 app.use('/api', routes);
+
+// V1 API Routes
+app.use('/api/v1/security-questions', securityQuestionsRoutes);
+app.use('/api/v1/password-change', passwordChangeRoutes);
 
 // 404 handler
 app.use((req, res, _next) => {

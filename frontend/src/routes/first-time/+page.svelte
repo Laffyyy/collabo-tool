@@ -2,11 +2,28 @@
 	import { goto } from '$app/navigation';
 	import { writable } from 'svelte/store';
 	import { onMount } from 'svelte';
+	import { apiClient } from '$lib/api/client';
+    import { API_CONFIG } from '$lib/api/config';
 	
 	const firstTimeShowTermsModal = writable(true);
 	const firstTimeTermsAccepted = writable(false);
 	const firstTimeShowCancelModal = writable(false);
 	const firstTimeIsLoading = writable(false);
+
+	// User data from OTP verification
+    let userId = $state('');
+    let username = $state('');
+    let userEmail = $state('');
+    let userRole = $state('');
+    let userName = $state('');
+
+	// Error handling
+    let error = $state('');
+
+	// Security questions data
+    let firstTimeSecurityQuestions = $state<{ id: string; text: string }[]>([]);
+    const firstTimeSelectedQuestions = writable(['', '', '']);
+    const firstTimeAnswers = writable(['', '', '']);
 	
 	// Auto-focus reference
 	let firstTimeFirstAnswerInput: HTMLInputElement | undefined;
@@ -17,8 +34,50 @@
 			firstTimeFirstAnswerInput = element;
 		}
 	};
+
+	// Load security questions from backend - FIXED ENDPOINT
+	const loadSecurityQuestions = async () => {
+		try {
+			const response = await apiClient.get<{
+				ok: boolean;
+				questions: { id: string; text: string; createdAt: string }[];
+			}>(API_CONFIG.endpoints.securityQuestions.questions); // Changed from .getAll to .questions
+
+			if (response.ok && response.questions) {
+				firstTimeSecurityQuestions = response.questions.map(q => ({
+					id: q.id,
+					text: q.text
+				}));
+				console.log('Loaded security questions:', firstTimeSecurityQuestions);
+			} else {
+				error = 'Failed to load security questions';
+			}
+		} catch (err: any) {
+			console.error('Error loading security questions:', err);
+			error = 'Failed to load security questions';
+		}
+	};
 	
 	onMount(() => {
+		// Get stored user data from OTP verification
+        userId = localStorage.getItem('firstTime_userId') || '';
+        username = localStorage.getItem('firstTime_username') || '';
+        userEmail = localStorage.getItem('firstTime_email') || '';
+        userRole = localStorage.getItem('firstTime_role') || '';
+        userName = localStorage.getItem('firstTime_name') || '';
+        
+        console.log('First-time page loaded with user data:', { userId, username, userEmail });
+        
+        // If no user data is found, redirect to login
+        if (!userId || !username) {
+            console.log('No first-time user data found, redirecting to login');
+            goto('/login');
+            return;
+        }
+
+		// Load available security questions from backend
+        loadSecurityQuestions();
+		
 		// Wait for terms modal to close, then focus first answer input
 		const unsubscribe = firstTimeShowTermsModal.subscribe(showModal => {
 			if (!showModal && firstTimeFirstAnswerInput) {
@@ -75,22 +134,7 @@
 		
 		target.value = filteredText;
 	};
-	
-	// Security questions
-	const firstTimeSecurityQuestions = [
-		"What was the name of your first pet?",
-		"What city were you born in?",
-		"What was your mother's maiden name?",
-		"What was the name of your elementary school?",
-		"What was your childhood nickname?",
-		"What is your favorite movie?",
-		"What was the make of your first car?",
-		"What street did you grow up on?"
-	];
-	
-	const firstTimeSelectedQuestions = writable(['', '', '']);
-	const firstTimeAnswers = writable(['', '', '']);
-	
+
 	const firstTimeAcceptTerms = () => {
 		firstTimeShowTermsModal.set(false);
 	};
@@ -109,7 +153,11 @@
 	};
 	
 	const firstTimeGetAvailableQuestions = (currentIndex: number) => {
-		return firstTimeSecurityQuestions.filter(question => !$firstTimeSelectedQuestions.includes(question) || currentIndex === $firstTimeSelectedQuestions.indexOf(question));
+		return firstTimeSecurityQuestions.filter(
+			question =>
+				!$firstTimeSelectedQuestions.includes(question.id) ||
+				$firstTimeSelectedQuestions[currentIndex] === question.id
+		);
 	};
 	
 	const firstTimeCanSubmit = () => {
@@ -118,15 +166,52 @@
 	};
 	
 	const firstTimeHandleSubmit = async () => {
-		if (firstTimeCanSubmit()) {
-			firstTimeIsLoading.set(true);
-			
-			// Simulate API call
-			await new Promise(resolve => setTimeout(resolve, 2000));
-			
-			goto('/change-password?from=first-time');
-		}
-	};
+    if (!firstTimeCanSubmit()) {
+        error = 'Please complete all security questions';
+        return;
+    }
+    
+    firstTimeIsLoading.set(true);
+    error = '';
+    
+    try {
+        // Prepare data in the format expected by the backend
+        const questionAnswers = $firstTimeSelectedQuestions.map((questionId, index) => ({
+            questionId,
+            answer: $firstTimeAnswers[index].trim()
+        }));
+        
+        console.log('Storing security questions locally for user:', userId);
+        console.log('Question answers:', questionAnswers);
+        
+        // Store data for password change step (NO API call yet)
+        localStorage.setItem('passwordChange_userId', userId);
+        localStorage.setItem('passwordChange_username', username);
+        localStorage.setItem('passwordChange_email', userEmail);
+        localStorage.setItem('passwordChange_role', userRole);
+        localStorage.setItem('passwordChange_name', userName);
+        
+        // Store security answers for password change verification
+        localStorage.setItem('passwordChange_securityAnswers', JSON.stringify(questionAnswers));
+        
+        // Clear first-time data
+        localStorage.removeItem('firstTime_userId');
+        localStorage.removeItem('firstTime_username');
+        localStorage.removeItem('firstTime_email');
+        localStorage.removeItem('firstTime_role');
+        localStorage.removeItem('firstTime_name');
+        localStorage.removeItem('firstTime_tempPassword');
+        
+        // Redirect to password change immediately
+        goto('/change-password?from=first-time');
+        
+    } catch (err: any) {
+        console.error('Error preparing security questions:', err);
+        error = err.message || 'Failed to prepare security questions.';
+    } finally {
+        firstTimeIsLoading.set(false);
+    }
+};
 	
 	const firstTimeHandleCancel = () => {
 		firstTimeShowCancelModal.set(true);
@@ -162,7 +247,7 @@
 				<h2 class="firsttime-section-title">Security Setup</h2>
 				<p class="firsttime-section-subtitle">Choose 3 unique questions and provide answers for account recovery</p>
 				
-				{#each Array(3) as _, index}
+				{#each [0, 1, 2] as index (index)}
 					<div class="firsttime-question-group">
 						<label class="firsttime-label" for={`question-${index + 1}`}>Question {index + 1}</label>
 						<select
@@ -173,10 +258,10 @@
 						>
 							<option value="">Select a question...</option>
 							{#each firstTimeGetAvailableQuestions(index) as question}
-								<option value={question}>{question}</option>
+								<option value={question.id}>{question.text}</option>
 							{/each}
 						</select>
-						
+					
 						<label class="firsttime-label" for={`answer-${index + 1}`}>Your answer</label>
 						<input
 							use:firstTimeBindFirstInput={index}
@@ -229,7 +314,7 @@
 {#if $firstTimeShowTermsModal}
 	<div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
 		<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4" style="box-shadow: 0 20px 30px -8px rgba(0, 0, 0, 0.3);">
-			<h3 class="text-lg font-bold text-gray-800 mb-4">Terms of Service & PII Protection</h3>
+			<h3 class="text-lg font-bold text-gray-800 mb-4">Privacy Policy</h3>
 			<div class="text-gray-600 mb-6 space-y-3">
 				<p>By using this system, you agree to:</p>
 				<ul class="list-disc list-inside space-y-1 ml-4">

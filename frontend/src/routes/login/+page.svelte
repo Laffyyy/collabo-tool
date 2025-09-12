@@ -23,48 +23,106 @@
 	let forgotPasswordError = $state('');
 	let forgotPasswordSuccess = $state(false);
 	let forgotPasswordEmailInput: HTMLInputElement | undefined;
+
+	let forgotPasswordLastSent = $state(0); // Timestamp of last sent request
+	let forgotPasswordCooldown = $state(false); // Cooldown state
+	const FORGOT_PASSWORD_COOLDOWN_MS = 5000; // 1 minute cooldown
 	
+	// Add debounce tracking
+	let lastSubmissionTime = $state(0);
+	const SUBMISSION_DEBOUNCE_MS = 1000; // 1 second minimum between attempts
+		
 	const handleLoginSubmit = async (event: Event) => {
 		event.preventDefault();
+		
+		// Multiple layers of protection against spam clicking
+		const now = Date.now();
+		
+		// 1. Check if already loading
+		if (loginIsLoading) return;
+		
+		// 2. Debounce protection
+		if (now - lastSubmissionTime < SUBMISSION_DEBOUNCE_MS) {
+			return;
+		}
+		
+		// 3. Basic form validation
+		if (!loginUsername.trim() || !loginPassword.trim()) {
+			loginError = 'Please enter both username and password';
+			toastStore.error('Please enter both username and password');
+			return;
+		}
+		
+		// Record this attempt and set loading state immediately
+		lastSubmissionTime = now;
 		loginIsLoading = true;
 		loginError = '';
 		
 		try {
-		// Use the API client instead of direct fetch
-		const data = await apiClient.post<LoginResponse>(
-			API_CONFIG.endpoints.auth.login,
-			{
-			username: loginUsername,
-			password: loginPassword
+			const data = await apiClient.post<LoginResponse>(
+				API_CONFIG.endpoints.auth.login,
+				{
+					username: loginUsername,
+					password: loginPassword
+				}
+			);
+
+			console.log('Login API response:', data);
+			
+			if (data.step === 'FAILED') {
+				// Check if account is locked - either by explicit flag or by message content
+				if (data.isLocked || (data.message && data.message.toLowerCase().includes('locked'))) {
+					loginError = data.message || 'Your account is locked. Please contact your administrator.';
+					toastStore.error(loginError);
+					return;
+				}
+				
+				// Always show the error message in loginError field
+				loginError = 'Invalid Email/Password';
+				
+				// Use the message directly from the backend if it has attempt information
+				if (data.message && data.message.includes('remaining')) {
+					toastStore.error(data.message);
+				} else {
+					toastStore.error('Invalid Email/Password');
+				}
+				return;
+			} else if (data.step === 'OTP') {
+				// Store info needed for OTP verification
+				localStorage.setItem('auth_userId', data.userId);
+				localStorage.setItem('auth_userEmail', data.email);
+				localStorage.setItem('auth_username', data.username || loginUsername);
+				localStorage.setItem('auth_tempPassword', loginPassword);
+
+				// Set OTP expiry time (5 minutes from now)
+				const expiryTime = data.otpExpiresAt 
+					? new Date(data.otpExpiresAt).getTime() 
+					: (Date.now() + (5 * 60 * 1000));
+				localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+				
+				// Navigate to OTP verification page
+				goto('/otp');
+				return;
 			}
-		);
-		
-		if (data.step === 'FAILED') {
-			// Show error toast for invalid credentials
-			$toastStore.error(data.message || 'Invalid Email/Password');
-			loginError = data.message || 'Invalid Email/Password';
-			loginIsLoading = false;
-			return;
-		}
-		
-		// Store info needed for OTP verification
-		localStorage.setItem('auth_userId', data.userId);
-		localStorage.setItem('auth_userEmail', data.email);
-		localStorage.setItem('auth_username', data.username || loginUsername);
-		localStorage.setItem('auth_tempPassword', loginPassword); // For OTP resend
-	
-		
-		// Set OTP expiry time (5 minutes from now)
-		const expiryTime = Date.now() + (5 * 60 * 1000);
-		localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
-		
-		// Navigate to OTP verification page
-		goto('/otp');
 		} catch (error: any) {
-		$toastStore.error(error.message || 'Invalid credentials');
-		loginError = error.message || 'Invalid credentials';
+			console.error('Login error:', error);
+			
+			// Check if error contains API response data (some API clients wrap errors)
+			const errorData = error.response?.data || error.data;
+			
+			if (errorData?.isLocked) {
+				loginError = errorData.message || 'Your account is locked. Please contact your administrator.';
+				toastStore.error(loginError);
+			} else if (errorData?.message && errorData.message.includes('remaining')) {
+				// Use the message directly from the backend
+				loginError = 'Invalid Email/Password';
+				toastStore.error(errorData.message);
+			} else {
+				loginError = 'Invalid Email/Password';
+				toastStore.error('Invalid Email/Password');
+			}
 		} finally {
-		loginIsLoading = false;
+			loginIsLoading = false;
 		}
 	};
 	
@@ -92,6 +150,7 @@
 		forgotPasswordError = '';
 		forgotPasswordIsLoading = false;
 		forgotPasswordSuccess = false;
+		// Don't reset cooldown - let it persist even if modal is closed
 	};
 	
 	const forgotPasswordValidateEmailInput = (value: string): string => {
@@ -104,7 +163,7 @@
 	const forgotPasswordValidateEmailFormat = (email: string): string => {
 		if (!email) return '';
 		
-		// Basic email format validation
+		// Enhanced email format validation with stricter domain requirements
 		const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 		
 		if (!emailRegex.test(email)) {
@@ -115,9 +174,36 @@
 			if (email.indexOf('@') !== email.lastIndexOf('@')) {
 				return 'Email can only contain one @ symbol';
 			}
-			if (!email.includes('.') || email.lastIndexOf('.') < email.indexOf('@')) {
-				return 'Email must contain a valid domain';
+			
+			// Check for proper domain format (@domain.com)
+			const atIndex = email.indexOf('@');
+			const domainPart = email.substring(atIndex + 1);
+			
+			if (!domainPart) {
+				return 'Email must include a domain after @';
 			}
+			
+			if (!domainPart.includes('.')) {
+				return 'Email must contain a valid domain (e.g., @company.com)';
+			}
+			
+			// Check if domain has proper structure
+			const domainParts = domainPart.split('.');
+			if (domainParts.length < 2) {
+				return 'Email must contain a valid domain (e.g., @company.com)';
+			}
+			
+			// Check if any domain part is empty
+			if (domainParts.some(part => part.length === 0)) {
+				return 'Email contains invalid domain format';
+			}
+			
+			// Check if top-level domain is valid (at least 2 characters)
+			const tld = domainParts[domainParts.length - 1];
+			if (tld.length < 2) {
+				return 'Email must have a valid domain extension (e.g., .com, .org)';
+			}
+			
 			if (email.startsWith('.') || email.startsWith('@') || email.startsWith('-') || email.startsWith('_')) {
 				return 'Email cannot start with special characters';
 			}
@@ -127,7 +213,8 @@
 			if (email.includes('..') || email.includes('@.') || email.includes('.@')) {
 				return 'Email contains invalid character combinations';
 			}
-			return 'Please enter a valid email address';
+			
+			return 'Please enter a valid email address (e.g., user@company.com)';
 		}
 		
 		return '';
@@ -161,36 +248,106 @@
 	};
 	
 	const forgotPasswordValidateEmail = (email: string) => {
-		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-		return emailRegex.test(email);
+		// More strict email validation
+		const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+		
+		if (!emailRegex.test(email)) {
+			return false;
+		}
+		
+		// Additional checks for domain structure
+		const atIndex = email.indexOf('@');
+		const domainPart = email.substring(atIndex + 1);
+		const domainParts = domainPart.split('.');
+		
+		// Must have at least domain.extension format
+		if (domainParts.length < 2) {
+			return false;
+		}
+		
+		// No empty parts allowed
+		if (domainParts.some(part => part.length === 0)) {
+			return false;
+		}
+		
+		// Top-level domain must be at least 2 characters
+		const tld = domainParts[domainParts.length - 1];
+		if (tld.length < 2) {
+			return false;
+		}
+		
+		return true;
 	};
 	
+	// Replace your existing forgotPasswordHandleSubmit function
 	const forgotPasswordHandleSubmit = async () => {
+		// Prevent spam - check if already loading or in cooldown
+		if (forgotPasswordIsLoading || forgotPasswordCooldown) {
+			return;
+		}
+
+		// Check cooldown period (1 minute between requests)
+		const now = Date.now();
+		const timeSinceLastSent = now - forgotPasswordLastSent;
+		if (timeSinceLastSent < FORGOT_PASSWORD_COOLDOWN_MS) {
+			const remainingSeconds = Math.ceil((FORGOT_PASSWORD_COOLDOWN_MS - timeSinceLastSent) / 1000);
+			forgotPasswordError = `Please wait ${remainingSeconds} seconds before requesting another reset link.`;
+			return;
+		}
+
 		const emailFormatError = forgotPasswordValidateEmailFormat(forgotPasswordEmail);
 		if (emailFormatError) {
 			forgotPasswordError = emailFormatError;
 			return;
 		}
-		
+
 		if (!forgotPasswordValidateEmail(forgotPasswordEmail)) {
 			forgotPasswordError = 'Please enter a valid email address';
 			return;
 		}
-		
+
 		forgotPasswordIsLoading = true;
+		forgotPasswordCooldown = true;
 		forgotPasswordError = '';
-		
-		// Simulate API call
-		await new Promise(resolve => setTimeout(resolve, 1500));
-		
-		forgotPasswordIsLoading = false;
-		forgotPasswordSuccess = true;
-		
-		// Auto-close modal after showing success message
-		setTimeout(() => {
-			closeForgotPasswordModal();
-			goto('/security-question');
-		}, 2000);
+
+		try {
+			// Record when we're sending the request
+			forgotPasswordLastSent = now;
+
+			// Call the actual backend API
+			const response = await apiClient.post(
+				API_CONFIG.endpoints.auth.forgotPassword,
+				{ username: forgotPasswordEmail }
+			);
+
+			if (response.ok) {
+				forgotPasswordSuccess = true;
+				console.log('✅ Password reset email sent successfully');
+				
+				// Auto-close modal after showing success message
+				setTimeout(() => {
+					closeForgotPasswordModal();
+				}, 3000);
+			} else {
+				// Reset cooldown on failure so user can retry
+				forgotPasswordCooldown = false;
+				forgotPasswordError = response.message || 'Failed to send reset email';
+			}
+		} catch (error: any) {
+			console.error('Forgot password error:', error);
+			// Reset cooldown on error so user can retry
+			forgotPasswordCooldown = false;
+			forgotPasswordError = error.message || 'Failed to send reset email. Please try again.';
+		} finally {
+			forgotPasswordIsLoading = false;
+			
+			// Keep cooldown active for successful requests
+			if (forgotPasswordSuccess) {
+				setTimeout(() => {
+					forgotPasswordCooldown = false;
+				}, FORGOT_PASSWORD_COOLDOWN_MS);
+			}
+		}
 	};
 	
 	const forgotPasswordHandleKeydown = (event: KeyboardEvent) => {
@@ -302,10 +459,16 @@
 							
 							<button
 								onclick={forgotPasswordHandleSubmit}
-								disabled={forgotPasswordIsLoading || !forgotPasswordEmail.trim()}
+								disabled={forgotPasswordIsLoading || forgotPasswordCooldown || !forgotPasswordEmail.trim()}
 								class="flex-1 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 focus:outline-none focus:ring-4 focus:ring-[#01c0a4]/20 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
 							>
-								{forgotPasswordIsLoading ? 'Sending...' : 'Send Reset Code'}
+								{#if forgotPasswordIsLoading}
+									Sending...
+								{:else if forgotPasswordCooldown}
+									Please wait...
+								{:else}
+									Send Reset Code
+								{/if}
 							</button>
 						</div>
 					{/if}

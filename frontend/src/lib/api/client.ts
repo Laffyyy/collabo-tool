@@ -3,6 +3,16 @@ import { authStore } from '$lib/stores/auth.svelte';
 import { API_CONFIG } from './config';
 import { goto } from '$app/navigation';
 
+interface SessionValidationResponse {
+  valid: boolean;
+  user?: {
+    id: string;
+    username: string;
+    role: string;
+    [key: string]: any;
+  };
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -114,8 +124,8 @@ class ApiClient {
         return false;
       }
       
-      // Call an endpoint to validate the session token
-      const response = await this.get('/api/auth/validate-session');
+      // Call an endpoint to validate the session token with proper typing
+      const response = await this.get<SessionValidationResponse>('/api/auth/validate-session');
       return response.valid === true;
     } catch (error) {
       console.error('Session validation error:', error);
