@@ -478,6 +478,16 @@ class OUmodel {
             throw new Error(error.message);
         }
     }
+
+    async InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) {
+        try {
+            const query = `INSERT INTO tblauditlogs (did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
+            const result = await db.query(query, [did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
 }
 module.exports = OUmodel;
 
@@ -503,3 +513,15 @@ module.exports = OUmodel;
 // | dsupervisorid | uuid                        | null                     |
 // | dmanagerid    | uuid                        | null                     |
 // | tassignedat   | timestamp without time zone | null                     |
+//tblauditlogs
+// | column_name | data_type                   | character_maximum_length |
+// | ----------- | --------------------------- | ------------------------ |
+// | did         | uuid                        | null                     |
+// | duserid     | uuid                        | null                     |
+// | daction     | character varying           | 100                      |
+// | dtargettype | character varying           | 50                       |
+// | dtargetid   | uuid                        | null                     |
+// | ddetails    | jsonb                       | null                     |
+// | dipaddress  | inet                        | null                     |
+// | duseragent  | text                        | null                     |
+// | tcreatedat  | timestamp without time zone | null                     |
