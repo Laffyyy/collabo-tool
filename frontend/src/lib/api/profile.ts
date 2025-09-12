@@ -14,6 +14,7 @@ export interface UserProfile {
   joinDate: Date;
   lastLogin?: Date;
   profilePhoto?: string;
+  coverPhoto?: string;  // Add this line
   onlineStatus: 'online' | 'away' | 'idle' | 'offline';
   accountStatus: string;
 }
@@ -46,6 +47,14 @@ export interface TeamStructure {
   };
 }
 
+interface UpdateProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
+  profilePhoto?: string;
+  coverPhoto?: string;  // Add this field
+}
+
 function makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
   const token = localStorage.getItem('authToken');
   
@@ -64,9 +73,20 @@ class ProfileAPI {
   private baseUrl = `${API_CONFIG.baseUrl}/api/v1/profile`;
 
   async getUserProfile(): Promise<{ ok: boolean; data: { profile: UserProfile } }> {
+    console.log('[ProfileAPI] Making request to:', this.baseUrl);
     const response = await makeAuthenticatedRequest(this.baseUrl);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return await response.json();
+    console.log('[ProfileAPI] Response status:', response.status);
+    
+    if (!response.ok) {
+      console.error('[ProfileAPI] Request failed with status:', response.status);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('[ProfileAPI] Response data:', data);
+    console.log('[ProfileAPI] Profile photo in response:', data.data?.profile?.profilePhoto);
+    
+    return data;
   }
 
   async updateUserProfile(updateData: Partial<{
@@ -74,10 +94,11 @@ class ProfileAPI {
     lastName: string;
     onlineStatus: 'online' | 'away' | 'idle' | 'offline';
     profilePhoto: string;
+    coverPhoto: string;  // Add this line
   }>): Promise<{ ok: boolean; data: { profile: UserProfile }; message: string }> {
     const response = await makeAuthenticatedRequest(this.baseUrl, {
-      method: 'PUT',
-      body: JSON.stringify(updateData),
+        method: 'PUT',
+        body: JSON.stringify(updateData),
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return await response.json();

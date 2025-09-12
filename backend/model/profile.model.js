@@ -12,17 +12,19 @@ class ProfileModel {
    */
   async getUserProfile(userId) {
     try {
-        const query = `
+      console.log('[Profile Model] Getting user profile for userId:', userId);
+      
+      const query = `
         SELECT 
-            u.*,
-            ur.douid,
-            ur.droleid,
-            ur.dmanagerid,
-            ur.dsupervisorid,
-            supervisor.dfirstname || ' ' || supervisor.dlastname as supervisor_name,
-            manager.dfirstname || ' ' || manager.dlastname as manager_name,
-            ou.dname as ou_name,
-            r.dname as role_name
+          u.*,
+          ur.douid,
+          ur.droleid,
+          ur.dmanagerid,
+          ur.dsupervisorid,
+          supervisor.dfirstname || ' ' || supervisor.dlastname as supervisor_name,
+          manager.dfirstname || ' ' || manager.dlastname as manager_name,
+          ou.dname as ou_name,
+          r.dname as role_name
         FROM tblusers u
         LEFT JOIN tbluserroles ur ON u.did = ur.duserid
         LEFT JOIN tblusers supervisor ON ur.dsupervisorid = supervisor.did
@@ -30,66 +32,32 @@ class ProfileModel {
         LEFT JOIN tblorganizationalunits ou ON ur.douid = ou.did
         LEFT JOIN tblroles r ON ur.droleid = r.did
         WHERE u.did = $1 AND u.daccountstatus != 'deleted'
-        `;
-        
-        const result = await this.pool.query(query, [userId]);
-        
-        if (result.rows.length === 0) {
-        return null;
-        }
-        
-        return this.formatUserProfile(result.rows[0]);
-    } catch (error) {
-        console.error('Database error in getUserProfile:', error);
-        throw new Error(`Failed to fetch user profile: ${error.message}`);
-    }
-    }
-
-  /**
-   * Update user profile information
-   * @param {string} userId - User ID
-   * @param {Object} updateData - Profile data to update
-   * @returns {Promise<Object>} Updated user profile
-   */
-  async updateUserProfile(userId, updateData) {
-    try {
-      const allowedFields = ['dfirstname', 'dlastname', 'donlinestatus', 'dprofilephoto'];
-      const updates = [];
-      const values = [];
-      let paramIndex = 1;
-
-      Object.keys(updateData).forEach(key => {
-        if (allowedFields.includes(key) && updateData[key] !== undefined) {
-          updates.push(`${key} = $${paramIndex}`);
-          values.push(updateData[key]);
-          paramIndex++;
-        }
-      });
-
-      if (updates.length === 0) {
-        throw new Error('No valid fields to update');
-      }
-
-      values.push(userId); // Add userId for WHERE clause
-      
-      const query = `
-        UPDATE tblusers 
-        SET ${updates.join(', ')}, tupdatedat = CURRENT_TIMESTAMP
-        WHERE did = $${paramIndex} AND daccountstatus != 'deleted'
-        RETURNING *
       `;
-
-      const result = await this.pool.query(query, values);
+      
+      console.log('[Profile Model] Executing query with userId:', userId);
+      const result = await this.pool.query(query, [userId]);
+      console.log('[Profile Model] Raw database result:', result.rows[0]);
       
       if (result.rows.length === 0) {
-        throw new Error('User not found or update failed');
+        console.log('[Profile Model] No user found for userId:', userId);
+        return null;
       }
-
-      // Get the updated profile with hierarchy info
-      return await this.getUserProfile(userId);
+      
+      const rawUser = result.rows[0];
+      console.log('[Profile Model] Raw user fields:');
+      console.log('- dprofilephotourl:', rawUser.dprofilephotourl);
+      console.log('- dcoverphotourl:', rawUser.dcoverphotourl);
+      console.log('- dprofilephoto:', rawUser.dprofilephoto);
+      console.log('- dcoverphoto:', rawUser.dcoverphoto);
+      
+      const formattedProfile = this.formatUserProfile(rawUser);
+      console.log('[Profile Model] Formatted profile:', formattedProfile);
+      console.log('[Profile Model] Formatted profile photo:', formattedProfile?.profilePhoto);
+      
+      return formattedProfile;
     } catch (error) {
-      console.error('Database error in updateUserProfile:', error);
-      throw new Error(`Failed to update user profile: ${error.message}`);
+      console.error('Database error in getUserProfile:', error);
+      throw new Error(`Failed to fetch user profile: ${error.message}`);
     }
   }
 
@@ -258,29 +226,103 @@ class ProfileModel {
   }
 
   /**
+ * Update user profile information
+ * @param {string} userId - User ID
+ * @param {Object} updateData - Profile data to update
+ * @returns {Promise<Object>} Updated user profile
+ */
+async updateUserProfile(userId, updateData) {
+  try {
+    const allowedFields = ['dfirstname', 'dlastname', 'donlinestatus', 'dprofilephoto', 'dcoverphoto'];
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    console.log('Model updateUserProfile - Input data:', { userId, updateData });
+
+    Object.keys(updateData).forEach(key => {
+      if (allowedFields.includes(key) && updateData[key] !== undefined) {
+        // Map frontend field names to database field names
+        const dbFieldName = key === 'dprofilephoto' ? 'dprofilephotourl' : 
+                           key === 'dcoverphoto' ? 'dcoverphotourl' : key;
+        updates.push(`${dbFieldName} = $${paramIndex}`);
+        values.push(updateData[key]);
+        paramIndex++;
+      }
+    });
+
+    if (updates.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    values.push(userId); // Add userId for WHERE clause
+    
+    const query = `
+      UPDATE tblusers 
+      SET ${updates.join(', ')}, tupdatedat = CURRENT_TIMESTAMP
+      WHERE did = $${paramIndex} AND daccountstatus != 'deleted'
+      RETURNING *
+    `;
+
+    console.log('Model updateUserProfile - Query:', query);
+    console.log('Model updateUserProfile - Values:', values);
+
+    const result = await this.pool.query(query, values);
+    
+    console.log('Model updateUserProfile - Result rows:', result.rows.length);
+    
+    if (result.rows.length === 0) {
+      throw new Error('User not found or update failed');
+    }
+
+    // Get the updated profile with hierarchy info
+    const updatedProfile = await this.getUserProfile(userId);
+    console.log('Model updateUserProfile - Updated profile:', updatedProfile);
+    
+    return updatedProfile;
+  } catch (error) {
+    console.error('Database error in updateUserProfile:', error);
+    throw new Error(`Failed to update user profile: ${error.message}`);
+  }
+}
+
+  /**
    * Format user profile data
    */
-    formatUserProfile(user) {
+  formatUserProfile(user) {
     if (!user) return null;
     
-    return {
-        id: user.did,
-        employeeId: user.demployeeid,
-        username: user.dusername,
-        email: user.demail, // This should map to the email field correctly
-        firstName: user.dfirstname,
-        lastName: user.dlastname,
-        role: user.role_name || user.drole, // Use role name from join or fallback to drole
-        organizationUnit: user.ou_name, // Use OU name from join
-        supervisor: user.supervisor_name,
-        manager: user.manager_name,
-        joinDate: user.tjoindate || user.tcreatedat, // Use tjoindate if available, fallback to tcreatedat
-        lastLogin: user.tlastlogin, // Use tlastlogin field
-        profilePhoto: user.dprofilephoto,
-        onlineStatus: user.donlinestatus || 'offline',
-        accountStatus: user.daccountstatus
+    console.log('[Profile Model] Formatting user profile for user:', user.did);
+    console.log('[Profile Model] Input photo fields:');
+    console.log('- user.dprofilephotourl:', user.dprofilephotourl);
+    console.log('- user.dcoverphotourl:', user.dcoverphotourl);
+    
+    const formatted = {
+      id: user.did,
+      employeeId: user.demployeeid,
+      username: user.dusername,
+      email: user.demail,
+      firstName: user.dfirstname,
+      lastName: user.dlastname,
+      role: user.role_name || user.drole,
+      organizationUnit: user.ou_name,
+      supervisor: user.supervisor_name,
+      manager: user.manager_name,
+      joinDate: user.tjoindate || user.tcreatedat,
+      lastLogin: user.tlastlogin,
+      profilePhoto: user.dprofilephotourl,    // From tblusers.dprofilephotourl
+      coverPhoto: user.dcoverphotourl,        // From tblusers.dcoverphotourl
+      onlineStatus: user.donlinestatus || 'offline',
+      accountStatus: user.daccountstatus
     };
-    }
+    
+    console.log('[Profile Model] Formatted result:');
+    console.log('- profilePhoto:', formatted.profilePhoto);
+    console.log('- coverPhoto:', formatted.coverPhoto);
+    
+    return formatted;
+  }
+
   /**
    * Format team member data
    */

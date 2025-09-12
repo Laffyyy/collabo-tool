@@ -18,7 +18,12 @@ async function createBroadcast(req, res, next) {
       requiresAcknowledgment = false,
       scheduledFor = null,
       endDate = null,
-      choices = null  // Add choices parameter
+      choices = null,
+      isRecurring = false,
+      recurrencePattern = null,
+      recurrenceDays = null,
+      recurrenceTimes = null,
+      monthlyDay = null
     } = req.body;
     
     // Get user ID from authenticated session
@@ -30,7 +35,12 @@ async function createBroadcast(req, res, next) {
       scheduledFor,
       endDate,
       responseType,
-      choices: responseType === 'choices' ? choices : undefined
+      choices: responseType === 'choices' ? choices : undefined,
+      isRecurring,
+      recurrencePattern: isRecurring ? recurrencePattern : undefined,
+      recurrenceDays: isRecurring && recurrencePattern === 'weekly' ? recurrenceDays : undefined,
+      monthlyDay: isRecurring && recurrencePattern === 'monthly' ? monthlyDay : undefined,
+      recurrenceTimes: isRecurring ? recurrenceTimes : undefined
     });
     
     const broadcast = await broadcastService.createBroadcast({
@@ -44,7 +54,12 @@ async function createBroadcast(req, res, next) {
       requiresAcknowledgment,
       scheduledFor,
       endDate,
-      choices // Pass choices to the service
+      choices,
+      isRecurring,
+      recurrencePattern,
+      recurrenceDays,
+      recurrenceTimes,
+      monthlyDay
     });
     
     res.status(201).json({

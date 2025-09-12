@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-    import { 
+  import { 
     User, Save, Edit, X, Mail, Calendar, Clock, Shield, 
-    Building2, Users, Settings, Camera 
+    Building2, Users, Settings, Camera, Loader
   } from 'lucide-svelte';
   import Navigation from '$lib/components/Navigation.svelte';
   import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
@@ -10,6 +10,8 @@
   import { profileAPI, type UserProfile } from '$lib/api/profile';
   import { toastStore } from '$lib/stores/toast.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import { ImageUploadService } from '$lib/services/image-upload.service';
+  import ProfilePhotoUploadModal from '$lib/components/ProfilePhotoUploadModal.svelte';
 
   // Profile state
   let userProfile = $state<UserProfile | null>(null);
@@ -20,6 +22,13 @@
   let showTeamStructure = $state(false);
   let showTeamModal = $state(false);
   let selectedSupervisor = $state<any>(null);
+  //Image Upload State Variable
+  let isUploadingProfilePhoto = $state(false);
+  let isUploadingCoverPhoto = $state(false);
+  let uploadError = $state<string | null>(null);
+  let showProfilePhotoModal = $state(false);
+
+    
 
   // Get current user from auth store
   const authUser = $derived($authStore.user);
@@ -37,30 +46,55 @@
 
   // Profile state based on authenticated user - using derived for reactivity
   const user = $derived({
-    id: userProfile?.id || authUser?.id || '1',
-    name: userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 
-          (authUser ? `${authUser.firstName || 'John'} ${authUser.lastName || 'Doe'}` : 'John Doe'),
-    email: userProfile?.email || authUser?.email || 'john.doe@company.com',
-    role: userProfile?.role || authUser?.role || 'Manager',
-    organizationUnit: userProfile?.organizationUnit || authUser?.organizationUnit || 'Sales Department',
-    onlineStatus: userProfile?.onlineStatus || authUser?.onlineStatus || 'online',
-    profilePhoto: authUser?.profilePhoto || null,
-    ou: userProfile?.organizationUnit || authUser?.organizationUnit || 'Sales Department',
-    // Convert string dates to Date objects
-    joinDate: userProfile?.joinDate ? new Date(userProfile.joinDate) : new Date('2023-01-15'),
-    lastLogin: userProfile?.lastLogin ? new Date(userProfile.lastLogin) : new Date(),
-    manager: userProfile?.manager || 'Sarah Wilson',
-    supervisor: userProfile?.supervisor || 'Mike Johnson',
-    coverPhoto: '/placeholder.svg?height=300&width=800'
-  });
+  id: userProfile?.id || authUser?.id || '1',
+  name: userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 
+        (authUser ? `${authUser.firstName || 'John'} ${authUser.lastName || 'Doe'}` : 'John Doe'),
+  email: userProfile?.email || authUser?.email || 'john.doe@company.com',
+  role: userProfile?.role || authUser?.role || 'Manager',
+  organizationUnit: userProfile?.organizationUnit || authUser?.organizationUnit || 'Sales Department',
+  onlineStatus: userProfile?.onlineStatus || authUser?.onlineStatus || 'online',
+  // PRIORITY: userProfile first, then authUser, ensuring reactivity
+  profilePhoto: userProfile?.profilePhoto || authUser?.profilePhoto || null,
+  ou: userProfile?.organizationUnit || authUser?.organizationUnit || 'Sales Department',
+  // Convert string dates to Date objects
+  joinDate: userProfile?.joinDate ? new Date(userProfile.joinDate) : new Date('2023-01-15'),
+  lastLogin: userProfile?.lastLogin ? new Date(userProfile.lastLogin) : new Date(),
+  manager: userProfile?.manager || 'Sarah Wilson',
+  supervisor: userProfile?.supervisor || 'Mike Johnson',
+  coverPhoto: userProfile?.coverPhoto || '/placeholder.svg?height=300&width=800'
+});
+
+  const debugProfileData = () => {
+    console.group('[Profile Debug] Complete Data Analysis');
+    console.log('1. Raw userProfile from API:', userProfile);
+    console.log('2. Auth store user:', authUser);
+    console.log('3. Derived user object:', user);
+    console.log('4. Profile photo sources:');
+    console.log('   - userProfile?.profilePhoto:', userProfile?.profilePhoto);
+    console.log('   - authUser?.profilePhoto:', authUser?.profilePhoto);
+    console.log('   - user.profilePhoto:', user.profilePhoto);
+    console.groupEnd();
+  };
 
   onMount(async () => {
     try {
       console.log('[Profile Debug] Fetching user profile...');
       const result = await profileAPI.getUserProfile();
       console.log('[Profile Debug] Raw API response:', result);
+      
+      // Add detailed logging of the response structure
+      console.log('[Profile Debug] Response structure analysis:');
+      console.log('- result.ok:', result.ok);
+      console.log('- result.data:', result.data);
+      console.log('- result.data.profile:', result.data.profile);
+      console.log('- result.data.profile.profilePhoto:', result.data.profile?.profilePhoto);
+      console.log('- result.data.profile.coverPhoto:', result.data.profile?.coverPhoto);
+      
       userProfile = result.data.profile;
-      console.log('[Profile Debug] Parsed userProfile:', userProfile);
+      console.log('[Profile Debug] Assigned userProfile:', userProfile);
+      
+      // Call debug function after assignment
+      setTimeout(debugProfileData, 100);
       
       // Sync with auth store if needed
       if (userProfile && !authUser) {
@@ -72,8 +106,10 @@
           firstName: userProfile.firstName,
           lastName: userProfile.lastName,
           organizationUnit: userProfile.organizationUnit,
-          onlineStatus: userProfile.onlineStatus || 'offline'
+          onlineStatus: userProfile.onlineStatus || 'offline',
+          profilePhoto: userProfile.profilePhoto // Make sure this is included
         };
+        console.log('[Profile Debug] Updated auth store with profile photo:', userProfile.profilePhoto);
       }
       
       if (userProfile) {
@@ -84,6 +120,15 @@
       $toastStore.error('Failed to load profile data');
     } finally {
       isLoading = false;
+    }
+  });
+
+  $effect(() => {
+    if (userProfile || authUser) {
+      console.log('[Profile Debug] Reactive update detected:');
+      console.log('- userProfile.profilePhoto changed to:', userProfile?.profilePhoto);
+      console.log('- authUser.profilePhoto is:', authUser?.profilePhoto);
+      console.log('- Final user.profilePhoto is:', user.profilePhoto);
     }
   });
 
@@ -181,12 +226,95 @@
   };
 
   const handleProfilePhotoChange = () => {
-    alert('Profile photo upload functionality would be implemented here');
+    showProfilePhotoModal = true;
   };
 
-  const handleCoverPhotoChange = () => {
-    alert('Cover photo upload functionality would be implemented here');
+  const handleSaveProfilePhoto = async (blob: Blob) => {
+    if (!blob || !authUser) return;
+    
+    try {
+      isUploadingProfilePhoto = true;
+      
+      // Create a File object from the Blob
+      const file = new File([blob], `profile-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      
+      const result = await ImageUploadService.uploadUserImage(
+        file,
+        user.id,
+        'profile'
+      );
+      
+      // Update profile in backend
+      const response = await profileAPI.updateUserProfile({
+        profilePhoto: result.url
+      });
+      
+      // Update userProfile state
+      userProfile = {
+        ...response.data.profile,
+        profilePhoto: result.url
+      };
+      
+      // Update auth store with the new photo URL
+      $authStore.updateProfilePhoto(result.url);
+      
+      $toastStore.success('Profile photo updated successfully');
+      showProfilePhotoModal = false;
+    } catch (error) {
+      console.error('Failed to update profile photo:', error);
+      uploadError = error instanceof Error ? error.message : 'Failed to upload image';
+      $toastStore.error(uploadError);
+    } finally {
+      isUploadingProfilePhoto = false;
+    }
   };
+
+  const handleCoverPhotoChange = async () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    
+    const currentUser = $authStore.user;
+    if (!currentUser) {
+      $toastStore.error('Please log in to upload photos');
+      return;
+    }
+    
+    try {
+      isUploadingCoverPhoto = true;
+      uploadError = null;
+      
+      const result = await ImageUploadService.uploadUserImage(
+        file,
+        user.id,
+        'cover'
+      );
+      
+      // Update profile in backend
+      const response = await profileAPI.updateUserProfile({
+        coverPhoto: result.url
+      });
+      
+      // Update local state
+      userProfile = {
+        ...response.data.profile,
+        coverPhoto: result.url
+      };
+      
+      $toastStore.success('Cover photo updated successfully');
+    } catch (error) {
+      console.error('Failed to update cover photo:', error);
+      uploadError = error instanceof Error ? error.message : 'Failed to upload image';
+      $toastStore.error(uploadError);
+    } finally {
+      isUploadingCoverPhoto = false;
+    }
+  };
+  input.click();
+};
 
   const saveProfile = async () => {
     if (!userProfile || !editedName.trim()) return;
@@ -307,10 +435,15 @@ const updateOnlineStatus = async (status: 'online' | 'away' | 'idle' | 'offline'
           />
           <button
             onclick={handleCoverPhotoChange}
+            disabled={isUploadingCoverPhoto}
             class="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-lg hover:bg-opacity-70 transition-colors"
             title="Change cover photo"
           >
-            <Camera class="w-4 h-4" />
+            {#if isUploadingCoverPhoto}
+              <Loader class="w-4 h-4 animate-spin" />
+            {:else}
+              <Camera class="w-4 h-4" />
+            {/if}
           </button>
         </div>
 
@@ -322,21 +455,29 @@ const updateOnlineStatus = async (status: 'online' | 'away' | 'idle' | 'offline'
               <div class="relative">
                 <div class="border-4 border-white shadow-lg rounded-full">
                   <ProfileAvatar 
-                    user={{ ...user, profilePhoto: user.profilePhoto || undefined }} 
-                    size="xl" 
-                    showOnlineStatus={true} 
-                    onlineStatus={user.onlineStatus}
+                    user={{ 
+                      ...user, 
+                      profilePhoto: user.profilePhoto || undefined,
+                      name: user.name
+                    }} 
+                    size="2xl" 
                     altText={user.name}
                   />
                 </div>
-                <div class="absolute bottom-2 right-2 w-6 h-6 {onlineStatusColor} rounded-full border-4 border-white"></div>
-                <button
-                  onclick={handleProfilePhotoChange}
-                  class="absolute bottom-0 right-0 bg-[#01c0a4] text-white p-2 rounded-full hover:bg-[#00a085] transition-colors shadow-lg"
-                  title="Change profile photo"
-                >
+
+
+              <button
+                onclick={handleProfilePhotoChange}
+                disabled={isUploadingProfilePhoto}
+                class="absolute bottom-0 right-0 bg-[#01c0a4] text-white p-2 rounded-full hover:bg-[#00a085] transition-colors shadow-lg"
+                title="Change profile photo"
+              >
+                {#if isUploadingProfilePhoto}
+                  <Loader class="w-4 h-4 animate-spin" />
+                {:else}
                   <Camera class="w-4 h-4" />
-                </button>
+                {/if}
+              </button>
               </div>
             </div>
 
@@ -377,7 +518,6 @@ const updateOnlineStatus = async (status: 'online' | 'away' | 'idle' | 'offline'
                         </button>
                       </div>
                     {/if}
-                  <p class="text-gray-600 mb-1">{user.role} • {user.organizationUnit}</p>
                 </div>
 
                 <div class="mt-4 sm:mt-0">
@@ -401,9 +541,7 @@ const updateOnlineStatus = async (status: 'online' | 'away' | 'idle' | 'offline'
                         <option value="offline">⚫ Offline</option>
                       </select>
                       <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
+
                       </div>
                     </div>
                   </div>
@@ -831,9 +969,18 @@ const updateOnlineStatus = async (status: 'online' | 'away' | 'idle' | 'offline'
           Close
         </button>
       </div>
-    </div>
-
-    <ToastContainer />
+    </div>    
   </div>
+{/if}
+
+<!-- Modals at the end, outside of any other elements -->
+<ToastContainer />
+
+{#if showProfilePhotoModal}
+  <ProfilePhotoUploadModal 
+    show={showProfilePhotoModal}
+    onClose={() => showProfilePhotoModal = false}
+    onSave={handleSaveProfilePhoto}
+  />
 {/if}
 

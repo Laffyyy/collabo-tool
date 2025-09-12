@@ -18,11 +18,14 @@ class UploadBroadcastModel {
     status = 'sent',
     scheduledFor = null,
     endDate = null,
-    choices = null // Add this parameter
+    choices = null,
+    isRecurring = false,
+    recurrencePattern = null,
+    recurrenceDays = null,
+    recurrenceTimes = null
   }) {
     // Determine sent date based on schedule type
     const now = new Date();
-    // If sending immediately, set sentAt to now. If scheduled, set to scheduledFor
     const sentAt = status === 'sent' ? now : scheduledFor;
     
     const query = `
@@ -38,9 +41,13 @@ class UploadBroadcastModel {
         tsentat,
         teventdate,
         tenddate,
-        dchoices
+        dchoices,
+        drecurring,
+        drecurringtype,
+        drecurringdays,
+        trecurringtime
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
 
@@ -52,11 +59,15 @@ class UploadBroadcastModel {
       status,
       requiresAcknowledgment,
       responseType,
-      scheduledFor,    // tscheduledfor - null if immediate, date if scheduled
-      sentAt,          // tsentat - NOW() if immediate, scheduledFor if scheduled
-      sentAt,          // teventdate - follows same rules as tsentat
-      endDate,         // tenddate - optional end date
-      choices ? JSON.stringify(choices) : null  // Convert choices array to JSON string
+      scheduledFor,
+      sentAt,
+      sentAt,
+      endDate,
+      choices ? JSON.stringify(choices) : null,
+      isRecurring,
+      recurrencePattern,
+      recurrenceDays ? JSON.stringify(recurrenceDays) : null,
+      recurrenceTimes ? JSON.stringify(recurrenceTimes) : null
     ];
 
     const result = await this.pool.query(query, values);
@@ -140,6 +151,43 @@ class UploadBroadcastModel {
   formatBroadcast(broadcast) {
     if (!broadcast) return null;
     
+    // Parse JSON fields
+    let choices = null;
+    if (broadcast.dchoices) {
+      try {
+        choices = JSON.parse(broadcast.dchoices);
+      } catch (error) {
+        console.error('[Upload Broadcast Model] Error parsing choices JSON:', error);
+      }
+    }
+    
+    let recurrenceDays = null;
+    if (broadcast.drecurringdays) {
+      try {
+        recurrenceDays = JSON.parse(broadcast.drecurringdays);
+        
+        // If this is a monthly recurrence and recurrenceDays is an array with a single number,
+        // extract just that number for easier frontend handling
+        if (broadcast.drecurringtype === 'monthly' && 
+            Array.isArray(recurrenceDays) && 
+            recurrenceDays.length === 1 && 
+            typeof recurrenceDays[0] === 'number') {
+          recurrenceDays = recurrenceDays[0];
+        }
+      } catch (error) {
+        console.error('[Upload Broadcast Model] Error parsing recurring days JSON:', error);
+      }
+    }
+    
+    let recurrenceTimes = null;
+    if (broadcast.trecurringtime) {
+      try {
+        recurrenceTimes = JSON.parse(broadcast.trecurringtime);
+      } catch (error) {
+        console.error('[Upload Broadcast Model] Error parsing recurring times JSON:', error);
+      }
+    }
+    
     return {
       id: broadcast.did,
       title: broadcast.dtitle,
@@ -154,7 +202,11 @@ class UploadBroadcastModel {
       status: broadcast.dstatus,
       requiresAcknowledgment: broadcast.drequiresacknowledgment,
       responseType: broadcast.dresponsetype,
-      choices: broadcast.dchoices
+      choices: choices,
+      isRecurring: broadcast.drecurring || false,
+      recurrencePattern: broadcast.drecurringtype,
+      recurrenceDays: recurrenceDays,
+      recurrenceTimes: recurrenceTimes
     };
   }
 
@@ -261,19 +313,25 @@ class UploadBroadcastModel {
  */
 async getTemplates(userId = null) {
   try {
+    console.log(`[Upload Broadcast Model] getTemplates called with userId: ${userId}`);
+    
     // If no userId is provided, return all templates (admin case)
     if (!userId) {
+      console.log('[Upload Broadcast Model] No userId provided, returning all templates (admin case)');
       const query = `
-        SELECT * FROM tblbroadcasttemplates
-        ORDER BY tcreatedat DESC
+        SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname
+        FROM tblbroadcasttemplates t
+        LEFT JOIN tblusers u ON t.dcreatedby = u.did
+        ORDER BY t.tcreatedat DESC
       `;
       
       const result = await this.pool.query(query);
+      console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates (admin case)`);
       return result.rows.map(row => this.formatTemplate(row));
     }
     
-    // For users with an OU, get their templates directly instead of calling getTemplatesByOU
     // Check if user is admin first
+    console.log(`[Upload Broadcast Model] Checking if user ${userId} is an admin`);
     const roleQuery = `
       SELECT r.dname 
       FROM tbluserroles ur
@@ -282,30 +340,85 @@ async getTemplates(userId = null) {
     `;
     
     const roleResult = await this.pool.query(roleQuery, [userId]);
+    console.log(`[Upload Broadcast Model] Admin check result: ${roleResult.rows.length > 0 ? 'Is admin' : 'Not admin'}`);
     
     // If user is admin, return all templates
     if (roleResult.rows.length > 0) {
+      console.log('[Upload Broadcast Model] User is admin, returning all templates');
       const allTemplatesQuery = `
-        SELECT * FROM tblbroadcasttemplates
-        ORDER BY tcreatedat DESC
+        SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname 
+        FROM tblbroadcasttemplates t
+        LEFT JOIN tblusers u ON t.dcreatedby = u.did
+        ORDER BY t.tcreatedat DESC
       `;
       
       const result = await this.pool.query(allTemplatesQuery);
+      console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates (admin case)`);
       return result.rows.map(row => this.formatTemplate(row));
     }
     
-    // For non-admin users, get templates they created
-    const userTemplatesQuery = `
-      SELECT t.*
+    // For non-admin users, get templates they created AND templates from users in the same OU
+    console.log(`[Upload Broadcast Model] Getting templates for non-admin user ${userId}`);
+    
+    // Get all OUs that the current user belongs to
+    const userOusQuery = `
+      SELECT douid FROM tbluserroles WHERE duserid = $1
+    `;
+    const userOusResult = await this.pool.query(userOusQuery, [userId]);
+    const userOuIds = userOusResult.rows.map(row => row.douid);
+    
+    console.log(`[Upload Broadcast Model] User belongs to ${userOuIds.length} OUs:`, userOuIds);
+    
+    if (userOuIds.length === 0) {
+      console.log('[Upload Broadcast Model] User has no OUs, returning only their templates');
+      // User has no OUs, just return their own templates
+      const ownTemplatesQuery = `
+        SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname
+        FROM tblbroadcasttemplates t
+        LEFT JOIN tblusers u ON t.dcreatedby = u.did
+        WHERE t.dcreatedby = $1
+        ORDER BY t.tcreatedat DESC
+      `;
+      
+      const result = await this.pool.query(ownTemplatesQuery, [userId]);
+      console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates created by the user`);
+      return result.rows.map(row => this.formatTemplate(row));
+    }
+    
+    // User has OUs, get templates from them and other users in the same OUs
+    // First, get all users who share any OU with the current user
+    console.log('[Upload Broadcast Model] Getting users who share OUs with current user');
+    const sharedOuUsersQuery = `
+      SELECT DISTINCT ur.duserid
+      FROM tbluserroles ur
+      WHERE ur.douid = ANY($1::uuid[])
+    `;
+    
+    const sharedOuUsersResult = await this.pool.query(sharedOuUsersQuery, [userOuIds]);
+    const sharedUsers = sharedOuUsersResult.rows.map(row => row.duserid);
+    
+    console.log(`[Upload Broadcast Model] Found ${sharedUsers.length} users who share OUs with current user`);
+    
+    // Get templates created by any of these users (including current user)
+    const templatesQuery = `
+      SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname
       FROM tblbroadcasttemplates t
-      WHERE t.dcreatedby = $1
+      LEFT JOIN tblusers u ON t.dcreatedby = u.did
+      WHERE t.dcreatedby = ANY($1::uuid[])
       ORDER BY t.tcreatedat DESC
     `;
     
-    const result = await this.pool.query(userTemplatesQuery, [userId]);
+    const result = await this.pool.query(templatesQuery, [sharedUsers]);
+    console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates accessible to user`);
+    
+    // Add creator details to the log for debugging
+    result.rows.forEach(row => {
+      console.log(`[Upload Broadcast Model] Template: ${row.dname}, Creator: ${row.dcreatorname} (${row.dcreatedby})`);
+    });
+    
     return result.rows.map(row => this.formatTemplate(row));
   } catch (error) {
-    console.error('Error fetching templates:', error);
+    console.error('[Upload Broadcast Model] Error fetching templates:', error);
     return [];
   }
 }
@@ -394,6 +507,7 @@ async getTemplates(userId = null) {
     targetOUs: targetOUs,
     targetRoles: targetRoles,
     createdBy: template.dcreatedby,
+    creatorName: template.dcreatorname || 'Unknown User',
     createdAt: template.tcreatedat
   };
 }

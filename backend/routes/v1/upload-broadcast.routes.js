@@ -90,6 +90,53 @@ router.post(
           }
         }
         return true;
+      }),
+    body('isRecurring')
+      .optional()
+      .isBoolean()
+      .withMessage('isRecurring must be a boolean'),
+      
+    body('recurrencePattern')
+      .optional()
+      .custom((value, { req }) => {
+        if (req.body.isRecurring && !value) {
+          throw new Error('Recurrence pattern is required for recurring broadcasts');
+        }
+        if (value && !['daily', 'weekly', 'monthly'].includes(value)) {
+          throw new Error('Recurrence pattern must be daily, weekly, or monthly');
+        }
+        return true;
+      }),
+      
+    body('recurrenceDays')
+      .optional()
+      .custom((value, { req }) => {
+        if (req.body.isRecurring && req.body.recurrencePattern === 'weekly') {
+          if (!Array.isArray(value) || value.length === 0) {
+            throw new Error('At least one day of the week must be selected for weekly recurring broadcasts');
+          }
+        }
+        return true;
+      }),
+      
+    body('recurrenceTimes')
+      .optional()
+      .custom((value, { req }) => {
+        if (req.body.isRecurring) {
+          if (!Array.isArray(value) || value.length === 0) {
+            throw new Error('At least one recurrence time is required for recurring broadcasts');
+          }
+          if (value.length > 3) {
+            throw new Error('Maximum of 3 recurrence times allowed');
+          }
+          // Validate time format (HH:MM)
+          for (const time of value) {
+            if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+              throw new Error('Recurrence times must be in HH:MM format');
+            }
+          }
+        }
+        return true;
       })
   ],
   validate,
