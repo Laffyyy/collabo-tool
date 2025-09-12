@@ -1,276 +1,349 @@
 <script lang="ts">
   import { FileText, Search, Filter, Download, Eye, AlertTriangle, User, Activity, Shield, Database, Calendar, MessageSquare, Radio, Users, Building2, Settings } from 'lucide-svelte';
-
-  interface AdminLog {
-    id: string;
-    timestamp: Date;
-    user: string;
-    action: string;
-    category: 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config' | 'security' | 'system';
-    target?: string;
-    details: string;
-    ipAddress: string;
-    userAgent: string;
-    severity: 'low' | 'medium' | 'high' | 'critical';
-    success: boolean;
-    priority?: 'low' | 'medium' | 'high'; // For broadcast logs
-  }
+  import { AuditLogAPI, type AuditLog, type AuditLogsData } from '$lib/api/auditlog';
+  import { onMount, onDestroy } from 'svelte';
 
   let activeTab = $state<'all' | 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config'>('all');
   let searchQuery = $state('');
-
-  // Mock admin logs data
-  const mockLogs: AdminLog[] = [
-    // Chat logs
-    {
-      id: '1',
-      timestamp: new Date('2024-01-15T14:30:00'),
-      user: 'admin@company.com',
-      action: 'Group Chat Created',
-      category: 'chat',
-      target: 'Marketing Team Chat',
-      details: 'Created new group chat for Marketing department with 15 members',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '2',
-      timestamp: new Date('2024-01-15T14:25:00'),
-      user: 'manager@company.com',
-      action: 'Message Deleted',
-      category: 'chat',
-      target: 'General Chat',
-      details: 'Deleted inappropriate message from user john.doe@company.com',
-      ipAddress: '192.168.1.105',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    // Broadcast logs
-    {
-      id: '3',
-      timestamp: new Date('2024-01-15T14:20:00'),
-      user: 'admin@company.com',
-      action: 'Broadcast Sent',
-      category: 'broadcast',
-      target: 'All Employees',
-      details: 'Emergency maintenance notice sent to all users',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'high',
-      success: true,
-      priority: 'high'
-    },
-    {
-      id: '4',
-      timestamp: new Date('2024-01-15T14:15:00'),
-      user: 'manager@company.com',
-      action: 'Broadcast Approved',
-      category: 'broadcast',
-      target: 'Department Update',
-      details: 'Approved broadcast message for HR department',
-      ipAddress: '192.168.1.105',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true,
-      priority: 'medium'
-    },
-    // User Management logs
-    {
-      id: '5',
-      timestamp: new Date('2024-01-15T14:10:00'),
-      user: 'admin@company.com',
-      action: 'User Created',
-      category: 'user-management',
-      target: 'john.doe@company.com',
-      details: 'Created new user account with Supervisor role',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '6',
-      timestamp: new Date('2024-01-15T14:05:00'),
-      user: 'admin@company.com',
-      action: 'User Role Changed',
-      category: 'user-management',
-      target: 'jane.smith@company.com',
-      details: 'Changed user role from Support to Supervisor',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    // OU Management logs
-    {
-      id: '7',
-      timestamp: new Date('2024-01-15T14:00:00'),
-      user: 'admin@company.com',
-      action: 'OU Created',
-      category: 'ou-management',
-      target: 'Marketing West',
-      details: 'Created new organizational unit for West Coast Marketing',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '8',
-      timestamp: new Date('2024-01-15T13:55:00'),
-      user: 'admin@company.com',
-      action: 'OU Rules Updated',
-      category: 'ou-management',
-      target: 'Sales Department',
-      details: 'Updated chat permissions for frontline users',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    // Global Config logs
-    {
-      id: '9',
-      timestamp: new Date('2024-01-15T13:50:00'),
-      user: 'admin@company.com',
-      action: 'Global Config Updated',
-      category: 'global-config',
-      details: 'Updated default chat retention policy to 365 days',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    {
-      id: '10',
-      timestamp: new Date('2024-01-15T13:45:00'),
-      user: 'admin@company.com',
-      action: 'Security Policy Updated',
-      category: 'global-config',
-      details: 'Updated password policy requirements',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'high',
-      success: true
-    }
-  ];
-
-  // Computed values
-  const filteredLogs = $derived(() => {
-    let filtered = logs;
-
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(log =>
-        log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (log.target && log.target.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-
-    // Tab filter
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(log => log.category === activeTab);
-    }
-
-    // Create a copy before sorting to avoid mutating the original array
-    return [...filtered].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  });
-
-  const tabCounts = $derived(() => {
-    return {
-      all: logs.length,
-      chat: logs.filter(log => log.category === 'chat').length,
-      broadcast: logs.filter(log => log.category === 'broadcast').length,
-      'user-management': logs.filter(log => log.category === 'user-management').length,
-      'ou-management': logs.filter(log => log.category === 'ou-management').length,
-      'global-config': logs.filter(log => log.category === 'global-config').length,
-    };
-  });
-
-  // Additional mock data for demonstration
-  const additionalMockData = [
-    {
-      id: '100',
-      timestamp: new Date('2024-01-15T13:30:00'),
-      user: 'system',
-      action: 'Daily Backup',
-    },
-    {
-      id: '4',
-      timestamp: new Date('2024-01-15T14:15:00'),
-      user: 'manager@company.com',
-      action: 'User Role Change',
-      category: 'user',
-      target: 'jane.smith@company.com',
-      details: 'Changed user role from Support to Supervisor',
-      ipAddress: '192.168.1.150',
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      severity: 'medium',
-      success: true
-    },
-    {
-      id: '5',
-      timestamp: new Date('2024-01-15T14:10:00'),
-      user: 'admin@company.com',
-      action: 'Failed Login Attempt',
-      category: 'security',
-      target: 'unknown_user@company.com',
-      details: 'Multiple failed login attempts detected from same IP',
-      ipAddress: '203.0.113.42',
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-      severity: 'high',
-      success: false
-    },
-    {
-      id: '6',
-      timestamp: new Date('2024-01-15T14:05:00'),
-      user: 'admin@company.com',
-      action: 'Broadcast Deletion',
-      category: 'data',
-      target: 'Weekly Team Update #47',
-      details: 'Deleted archived broadcast message',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'low',
-      success: true
-    },
-    {
-      id: '7',
-      timestamp: new Date('2024-01-15T14:00:00'),
-      user: 'system',
-      action: 'Configuration Change',
-      category: 'configuration',
-      details: 'Session timeout changed from 8 hours to 6 hours',
-      ipAddress: '127.0.0.1',
-      userAgent: 'System/1.0',
-      severity: 'medium',
-      success: true
-    },
-    {
-      id: '8',
-      timestamp: new Date('2024-01-15T13:55:00'),
-      user: 'admin@company.com',
-      action: 'User Suspension',
-      category: 'user',
-      target: 'temp.contractor@company.com',
-      details: 'Suspended user account due to policy violation',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      severity: 'high',
-      success: true
-    }
-  ];
-
-  let logs = $state(mockLogs);
-  let selectedLog = $state<AdminLog | null>(null);
+  let searchValidationError = $state<string | null>(null);
+  let currentPage = $state(1);
+  let pageLimit = $state(20); // Changed to 20 rows per page
+  
+  // Data state
+  let logsData = $state<AuditLogsData | null>(null);
+  let loading = $state(false);
+  let exportLoading = $state(false);
+  let error = $state<string | null>(null);
+  let selectedLog = $state<AuditLog | null>(null);
   let showLogDetails = $state(false);
   
-  // Filter logs based on search and filters (moved to derived above)
+  // Pagination cache and prefetching state
+  let pageCache = $state<Map<string, { logs: AuditLog[], pagination: any, categoryCounts: any, timestamp: number }>>(new Map());
+  let lastTotalCount = $state(0);
+  let refreshInterval: number;
+
+  // Helper function to generate cache key
+  const getCacheKey = (page: number, category: string, search: string) => {
+    return `${category}-${search}-${page}`;
+  };
+
+  // Helper function to check if cache entry is fresh (within 30 seconds)
+  const isCacheFresh = (timestamp: number) => {
+    return Date.now() - timestamp < 30000;
+  };
+
+  // Load audit logs from API with smart caching
+  const loadLogs = async (targetPage?: number, skipCache = false) => {
+    const page = targetPage || currentPage;
+    loading = true;
+    error = null;
+    
+    try {
+      const params = {
+        page: page,
+        limit: pageLimit,
+        category: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery.trim() || undefined
+      };
+      
+      const cacheKey = getCacheKey(page, activeTab, searchQuery);
+      
+      // Check cache first unless we're skipping it
+      if (!skipCache && pageCache.has(cacheKey)) {
+        const cached = pageCache.get(cacheKey)!;
+        if (isCacheFresh(cached.timestamp)) {
+          // Use cached data with all information
+          logsData = {
+            logs: cached.logs,
+            pagination: cached.pagination,
+            categoryCounts: cached.categoryCounts
+          };
+          loading = false;
+          return;
+        } else {
+          // Remove stale cache entry
+          pageCache.delete(cacheKey);
+        }
+      }
+      
+      // Fetch fresh data
+      const data = await AuditLogAPI.getLogs(params);
+      logsData = data;
+      
+      // Cache the complete data for this page
+      pageCache.set(cacheKey, {
+        logs: data.logs,
+        pagination: data.pagination,
+        categoryCounts: data.categoryCounts,
+        timestamp: Date.now()
+      });
+      
+      // Prefetch adjacent pages if we're on page 1 or 2
+      if (page <= 2 && !skipCache) {
+        prefetchAdjacentPages(page);
+      }
+      
+      // Update total count for dynamic refresh detection
+      if (data.pagination) {
+        lastTotalCount = data.pagination.totalCount;
+      }
+      
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load audit logs';
+      console.error('Error loading logs:', err);
+    } finally {
+      loading = false;
+    }
+  };
+
+  // Prefetch adjacent pages
+  const prefetchAdjacentPages = async (currentPageNum: number) => {
+    if (!pagination) return;
+    
+    const pagesToPrefetch = [];
+    
+    // For page 1, prefetch page 2
+    if (currentPageNum === 1 && pagination.totalPages >= 2) {
+      pagesToPrefetch.push(2);
+    }
+    // For page 2, prefetch page 1 (if not cached) and page 3
+    else if (currentPageNum === 2) {
+      const page1Key = getCacheKey(1, activeTab, searchQuery);
+      if (!pageCache.has(page1Key)) {
+        pagesToPrefetch.push(1);
+      }
+      if (pagination.totalPages >= 3) {
+        pagesToPrefetch.push(3);
+      }
+    }
+    // For other pages, prefetch previous and next
+    else {
+      if (currentPageNum > 1) {
+        pagesToPrefetch.push(currentPageNum - 1);
+      }
+      if (currentPageNum < pagination.totalPages) {
+        pagesToPrefetch.push(currentPageNum + 1);
+      }
+    }
+    
+    // Prefetch pages in background
+    for (const page of pagesToPrefetch) {
+      if (page >= 1 && page <= pagination.totalPages) {
+        const cacheKey = getCacheKey(page, activeTab, searchQuery);
+        if (!pageCache.has(cacheKey) || !isCacheFresh(pageCache.get(cacheKey)!.timestamp)) {
+          try {
+            const params = {
+              page: page,
+              limit: pageLimit,
+              category: activeTab === 'all' ? undefined : activeTab,
+              search: searchQuery.trim() || undefined
+            };
+            
+            const data = await AuditLogAPI.getLogs(params);
+            pageCache.set(cacheKey, {
+              logs: data.logs,
+              pagination: data.pagination,
+              categoryCounts: data.categoryCounts,
+              timestamp: Date.now()
+            });
+          } catch (err) {
+            console.warn(`Failed to prefetch page ${page}:`, err);
+          }
+        }
+      }
+    }
+  };
+
+  // Check for new entries without disrupting current view
+  const checkForUpdates = async () => {
+    if (loading || exportLoading) return;
+    
+    try {
+      // Only check total count, don't fetch logs
+      const params = {
+        page: 1,
+        limit: 1,
+        category: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery.trim() || undefined
+      };
+      
+      const data = await AuditLogAPI.getLogs(params);
+      
+      if (data.pagination && data.pagination.totalCount !== lastTotalCount) {
+        // New entries detected - clear cache and update counts
+        pageCache.clear();
+        lastTotalCount = data.pagination.totalCount;
+        
+        // Update category counts without changing current page
+        if (logsData) {
+          logsData.categoryCounts = data.categoryCounts;
+          logsData.pagination = {
+            ...logsData.pagination,
+            totalCount: data.pagination.totalCount,
+            totalPages: Math.ceil(data.pagination.totalCount / pageLimit)
+          };
+        }
+        
+        // Only refresh current page data if user is on page 1
+        if (currentPage === 1) {
+          await loadLogs(1, true);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to check for updates:', err);
+    }
+  };
+
+  // Reactive loading when filters change  
+  let lastActiveTab = activeTab;
+  let lastSearchQuery = searchQuery;
+  
+  $effect(() => {
+    // Only reset page and reload if filters actually changed
+    const tabChanged = activeTab !== lastActiveTab;
+    const searchChanged = searchQuery !== lastSearchQuery;
+    
+    if (tabChanged || searchChanged) {
+      // Clear cache when filters change
+      pageCache.clear();
+      
+      // Reset to first page when filters change
+      currentPage = 1;
+      
+      // Update tracked values
+      lastActiveTab = activeTab;
+      lastSearchQuery = searchQuery;
+      
+      loadLogs();
+    }
+  });
+
+  // Load logs on component mount and set up refresh interval
+  onMount(() => {
+    loadLogs();
+    
+    // Set up periodic check for new entries (every 15 seconds)
+    refreshInterval = setInterval(checkForUpdates, 15000);
+  });
+  
+  // Cleanup interval on component destruction
+  onDestroy(() => {
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+    }
+  });
+
+  // Computed values
+  const logs = $derived(logsData?.logs || []);
+  const tabCounts = $derived(logsData?.categoryCounts || {
+    all: 0,
+    chat: 0,
+    broadcast: 0,
+    'user-management': 0,
+    'ou-management': 0,
+    'global-config': 0
+  });
+  const pagination = $derived(logsData?.pagination);
+
+  // Search input sanitization and validation
+  const sanitizeSearchInput = (input: string): string => {
+    // Allow only alphanumeric characters, spaces, and specific special characters: , . : - _ @
+    const allowedPattern = /[^a-zA-Z0-9\s,.:\-_@]/g;
+    return input.replace(allowedPattern, '').trim();
+  };
+
+  const validateSearchInput = (input: string): boolean => {
+    // Check for maximum length
+    if (input.length > 255) {
+      searchValidationError = 'Search query is too long (maximum 255 characters)';
+      return false;
+    }
+    
+    // Check if input contains only allowed characters
+    const allowedPattern = /^[a-zA-Z0-9\s,.:\-_@]*$/;
+    if (!allowedPattern.test(input)) {
+      searchValidationError = 'Invalid characters detected. Only letters, numbers, spaces, and , . : - _ @ are allowed';
+      return false;
+    }
+    
+    searchValidationError = null;
+    return true;
+  };
+
+  // Handle search with debouncing and sanitization
+  let searchTimeout: number;
+  const handleSearch = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    let inputValue = target.value;
+    
+    // Sanitize the input (remove invalid characters)
+    const sanitizedValue = sanitizeSearchInput(inputValue);
+    
+    // Update the input field if sanitization changed the value
+    if (sanitizedValue !== inputValue) {
+      target.value = sanitizedValue;
+      inputValue = sanitizedValue;
+      // Show temporary feedback about character removal
+      searchValidationError = 'Some invalid characters were removed';
+      setTimeout(() => {
+        if (searchValidationError === 'Some invalid characters were removed') {
+          searchValidationError = null;
+        }
+      }, 2000);
+    }
+    
+    // Validate the sanitized input
+    if (!validateSearchInput(inputValue)) {
+      return;
+    }
+    
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      searchQuery = inputValue;
+    }, 300);
+  };
+
+  // Handle tab change
+  const handleTabChange = (tab: typeof activeTab) => {
+    activeTab = tab;
+  };
+
+  // Handle page change with smart loading
+  const handlePageChange = async (page: number) => {
+    if (page === currentPage || !pagination) return;
+    if (page < 1 || page > pagination.totalPages) return;
+    
+    currentPage = page;
+    await loadLogs(page);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = (current: number, total: number) => {
+    const pages = [];
+    const maxPagesToShow = 7;
+    
+    if (total <= maxPagesToShow) {
+      // Show all pages if total is small
+      for (let i = 1; i <= total; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Calculate start and end positions
+      let start = Math.max(1, current - 3);
+      let end = Math.min(total, start + maxPagesToShow - 1);
+      
+      // Adjust start if we're near the end
+      if (end - start < maxPagesToShow - 1) {
+        start = Math.max(1, end - maxPagesToShow + 1);
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    
+    return pages;
+  };
 
   const formatTimestamp = (date: Date) => {
     return date.toLocaleString('en-US', {
@@ -285,22 +358,26 @@
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'user': return User;
+      case 'chat': return MessageSquare;
+      case 'broadcast': return Radio;
+      case 'user-management': return Users;
+      case 'ou-management': return Building2;
+      case 'global-config': return Settings;
       case 'security': return Shield;
       case 'system': return Activity;
-      case 'data': return Database;
-      case 'configuration': return FileText;
       default: return Activity;
     }
   };
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'user': return 'text-blue-600 bg-blue-50';
+      case 'chat': return 'text-blue-600 bg-blue-50';
+      case 'broadcast': return 'text-purple-600 bg-purple-50';
+      case 'user-management': return 'text-green-600 bg-green-50';
+      case 'ou-management': return 'text-orange-600 bg-orange-50';
+      case 'global-config': return 'text-gray-600 bg-gray-50';
       case 'security': return 'text-red-600 bg-red-50';
-      case 'system': return 'text-green-600 bg-green-50';
-      case 'data': return 'text-purple-600 bg-purple-50';
-      case 'configuration': return 'text-indigo-600 bg-indigo-50';
+      case 'system': return 'text-indigo-600 bg-indigo-50';
       default: return 'text-gray-600 bg-gray-50';
     }
   };
@@ -315,34 +392,40 @@
     }
   };
 
-  const exportLogs = () => {
-    const csvContent = [
-      ['Timestamp', 'User', 'Action', 'Category', 'Target', 'Details', 'IP Address', 'Severity', 'Success'].join(','),
-      ...filteredLogs().map(log => [
-        formatTimestamp(log.timestamp),
-        log.user,
-        log.action,
-        log.category,
-        log.target || '',
-        `"${log.details}"`,
-        log.ipAddress,
-        log.severity,
-        log.success ? 'Yes' : 'No'
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `admin-logs-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportLogs = async () => {
+    try {
+      exportLoading = true;
+      const params = {
+        format: 'csv' as const,
+        category: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery.trim() || undefined
+      };
+      
+      const blob = await AuditLogAPI.exportLogs(params);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-logs-${activeTab}-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to export logs';
+      console.error('Error exporting logs:', err);
+    } finally {
+      exportLoading = false;
+    }
   };
 
-  const viewLogDetails = (log: AdminLog) => {
-    selectedLog = log;
-    showLogDetails = true;
+  const viewLogDetails = async (log: AuditLog) => {
+    try {
+      // Fetch full log details if needed
+      const fullLog = await AuditLogAPI.getLogById(log.id);
+      selectedLog = fullLog;
+      showLogDetails = true;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load log details';
+      console.error('Error loading log details:', err);
+    }
   };
 </script>
 
@@ -368,12 +451,25 @@
 						<div class="relative">
 							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
 							<input
-								bind:value={searchQuery}
+								oninput={handleSearch}
 								type="text"
 								placeholder="Search logs by action, user, or details..."
-								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm {searchValidationError ? 'border-red-300 focus:ring-red-500' : ''}"
+								disabled={loading}
+								maxlength="255"
+								title="Allowed characters: letters, numbers, spaces, commas, periods, colons, hyphens, underscores, and @ symbols"
 							/>
 						</div>
+						<div class="mt-1 flex justify-between text-xs">
+							<span class="text-gray-500">Allowed: a-z, 0-9, spaces, , . : - _ @</span>
+							<span class="{searchQuery.length > 240 ? 'text-orange-500' : 'text-gray-500'}">{searchQuery.length}/255</span>
+						</div>
+						{#if searchValidationError}
+							<div class="mt-1 text-xs text-red-600 flex items-center">
+								<AlertTriangle class="w-3 h-3 mr-1" />
+								{searchValidationError}
+							</div>
+						{/if}
 					</div>
 
 					<!-- Controls -->
@@ -381,10 +477,11 @@
 						<!-- Export Button -->
 						<button
 							onclick={exportLogs}
-							class="px-4 py-2.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors font-medium text-sm flex items-center space-x-2 whitespace-nowrap"
+							disabled={exportLoading}
+							class="px-4 py-2.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors font-medium text-sm flex items-center space-x-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
 						>
 							<Download class="w-4 h-4" />
-							<span>Export</span>
+							<span>{exportLoading ? 'Exporting...' : 'Export'}</span>
 						</button>
 					</div>
 				</div>
@@ -394,91 +491,120 @@
 			<div class="border-b border-gray-200">
 				<nav class="flex space-x-6 px-4">
 					<button
-						onclick={() => activeTab = 'all'}
+						onclick={() => handleTabChange('all')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'all' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Activity class="w-4 h-4" />
 							<span>All Logs</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().all}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.all}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'chat'}
+						onclick={() => handleTabChange('chat')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'chat' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<MessageSquare class="w-4 h-4" />
 							<span>Chat</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().chat}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.chat}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'broadcast'}
+						onclick={() => handleTabChange('broadcast')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'broadcast' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Radio class="w-4 h-4" />
 							<span>Broadcast</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().broadcast}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts.broadcast}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'user-management'}
+						onclick={() => handleTabChange('user-management')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'user-management' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Users class="w-4 h-4" />
 							<span>Users</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['user-management']}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts['user-management']}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'ou-management'}
+						onclick={() => handleTabChange('ou-management')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'ou-management' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Building2 class="w-4 h-4" />
 							<span>OU</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['ou-management']}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts['ou-management']}</span>
 						</div>
 					</button>
 
 					<button
-						onclick={() => activeTab = 'global-config'}
+						onclick={() => handleTabChange('global-config')}
 						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'global-config' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Settings class="w-4 h-4" />
 							<span>Config</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['global-config']}</span>
+							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts['global-config']}</span>
 						</div>
 					</button>
 				</nav>
 			</div>
 
-			<!-- Table Container -->
-			<div class="flex-1 min-h-0 overflow-hidden flex flex-col">
-				<div class="flex-1 overflow-auto">
-					<table class="w-full">
-						<thead class="bg-gray-50 sticky top-0">
-							<tr>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-								{#if activeTab === 'broadcast'}
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-								{/if}
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+			<!-- Error State -->
+			{#if error}
+				<div class="p-4 bg-red-50 border-l-4 border-red-400">
+					<div class="flex">
+						<AlertTriangle class="w-5 h-5 text-red-400" />
+						<div class="ml-3">
+							<p class="text-sm text-red-700">{error}</p>
+							<button
+								onclick={loadLogs}
+								class="mt-2 text-sm text-red-600 hover:text-red-800 font-medium"
+							>
+								Try again
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Loading State -->
+			{#if loading}
+				<div class="flex-1 flex items-center justify-center p-8">
+					<div class="flex items-center space-x-2">
+						<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#01c0a4]"></div>
+						<span class="text-gray-600">Loading audit logs...</span>
+					</div>
+				</div>
+			{:else}
+				<!-- Table Container -->
+				<div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+					<div class="flex-1 overflow-auto">
+						<table class="w-full">
+							<thead class="bg-gray-50 sticky top-0">
+								<tr>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+									{#if activeTab === 'all'}
+										<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+									{/if}
+									{#if activeTab === 'broadcast'}
+										<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+									{/if}
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Options</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
-							{#each filteredLogs() as log (log.id)}
+							{#each logs as log (log.id)}
 								<tr class="hover:bg-gray-50">
 									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
 										{formatTimestamp(log.timestamp)}
@@ -508,9 +634,11 @@
 											<span class="text-sm text-gray-900">{log.action}</span>
 										</div>
 									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-										{log.target || '-'}
-									</td>
+									{#if activeTab === 'all'}
+										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+											{log.target || '-'}
+										</td>
+									{/if}
 									{#if activeTab === 'broadcast'}
 										<td class="px-6 py-4 whitespace-nowrap">
 											{#if log.priority}
@@ -537,7 +665,7 @@
 					</table>
 
 					<!-- Empty State -->
-					{#if filteredLogs().length === 0}
+					{#if logs.length === 0}
 						<div class="text-center py-12">
 							<FileText class="mx-auto h-12 w-12 text-gray-400" />
 							<h3 class="mt-2 text-sm font-medium text-gray-900">No logs found</h3>
@@ -545,7 +673,130 @@
 						</div>
 					{/if}
 				</div>
+
+				<!-- Pagination -->
+				{#if pagination && (pagination.totalPages > 1 || searchQuery.trim())}
+					<div class="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between"
+					>
+						<!-- Mobile pagination -->
+						<div class="flex-1 flex justify-between sm:hidden">
+							<button
+								onclick={() => handlePageChange(currentPage - 1)}
+								disabled={!pagination.hasPrevPage}
+								class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Previous
+							</button>
+							<button
+								onclick={() => handlePageChange(currentPage + 1)}
+								disabled={!pagination.hasNextPage}
+								class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Next
+							</button>
+						</div>
+						
+						<!-- Desktop pagination -->
+						<div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+							<div>
+								<p class="text-sm text-gray-700">
+									{#if searchQuery.trim()}
+										<span class="text-[#01c0a4] font-medium">Search results:</span>
+									{/if}
+									Showing
+									<span class="font-medium">{(currentPage - 1) * pageLimit + 1}</span>
+									to
+									<span class="font-medium">{Math.min(currentPage * pageLimit, pagination.totalCount)}</span>
+									of
+									<span class="font-medium">{pagination.totalCount}</span>
+									{#if searchQuery.trim()}
+										matching "{searchQuery.trim()}"
+									{:else}
+										results
+									{/if}
+								</p>
+							</div>
+							
+							{#if pagination.totalPages > 1}
+								<div class="flex items-center space-x-2">
+									<!-- Previous 5 pages button -->
+									<button
+										onclick={() => handlePageChange(Math.max(1, currentPage - 5))}
+										disabled={currentPage <= 5}
+										class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+										title="Previous 5 pages"
+									>
+										<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M15.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 010 1.414zm-6 0a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 011.414 1.414L5.414 10l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Previous page button -->
+								<button
+									onclick={() => handlePageChange(currentPage - 1)}
+									disabled={!pagination.hasPrevPage}
+									class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+									title="Previous page"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Page numbers -->
+								<nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+									{#each getPageNumbers(currentPage, pagination.totalPages) as page}
+										<button
+											onclick={() => handlePageChange(page)}
+											class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {page === currentPage 
+												? 'z-10 bg-[#01c0a4] border-[#01c0a4] text-white' 
+												: 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}"
+										>
+											{page}
+										</button>
+									{/each}
+								</nav>
+								
+								<!-- Next page button -->
+								<button
+									onclick={() => handlePageChange(currentPage + 1)}
+									disabled={!pagination.hasNextPage}
+									class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+									title="Next page"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Next 5 pages button -->
+								<button
+									onclick={() => handlePageChange(Math.min(pagination.totalPages, currentPage + 5))}
+									disabled={currentPage + 5 > pagination.totalPages}
+									class="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
+									title="Next 5 pages"
+								>
+									<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M10.293 15.707a1 1 0 010-1.414L14.586 10l-4.293-4.293a1 1 0 111.414-1.414l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0zm-6 0a1 1 0 010-1.414L8.586 10 4.293 5.707a1 1 0 011.414-1.414l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+									</svg>
+								</button>
+								
+								<!-- Page indicator -->
+								<div class="flex items-center ml-4 text-sm text-gray-700">
+									<span class="font-medium">Page {currentPage} of {pagination.totalPages}</span>
+								</div>
+							</div>
+						{:else}
+							<!-- Single page indicator for search results -->
+							<div class="flex items-center text-sm text-gray-700">
+								<span class="font-medium">Page 1 of 1</span>
+							</div>
+						{/if}
+						</div>
+					</div>
+				{/if}
 			</div>
+		{/if}
 		</div>
 	</div>
 </div>

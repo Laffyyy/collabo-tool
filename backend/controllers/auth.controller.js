@@ -48,6 +48,84 @@ async function login(req, res, next) {
   }
 }
 
+async function demoLogin(req, res, next) {
+  try {
+    const jwt = require('jsonwebtoken');
+    const { env } = require('../config');
+    
+    // Create a demo user token for testing
+    const demoUser = {
+      id: '1',
+      username: 'admin',
+      email: 'admin@company.com',
+      role: 'admin'
+    };
+    
+    const token = jwt.sign(demoUser, env.JWT_SECRET, { expiresIn: '24h' });
+    
+    res.status(200).json({
+      success: true,
+      token,
+      user: demoUser,
+      message: 'Demo login successful'
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  login,
+  verifyOtp,
+  firstTimeSetup,
+  changePassword,
+  setSecurityQuestions,
+  forgotPassword,
+  sendResetLink,
+  answerSecurityQuestions,
+  demoLogin
+}
+
+/**
+ * Login controller - handles user authentication requests
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function login(req, res, next) {
+  try {
+    const { username, password } = req.body;
+    
+    // Get IP and user agent for session tracking
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    
+    const result = await authService.login({ 
+      username, 
+      password, 
+      ipAddress, 
+      userAgent 
+    });
+    
+    // For the initial integration, we'll return a simple response
+    // that the frontend can use to show an alert
+    res.status(200).json({ 
+      ok: true,
+      exists: result.exists, 
+      message: result.message,
+      step: result.step,
+      userId: result.userId,
+      email: result.email,
+      username: result.username,
+      sessionTimeout: result.sessionTimeout,
+      sessionExpiresAt: result.sessionExpiresAt,
+      otpExpiresAt: result.otpExpiresAt
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * OTP verification controller
  * @param {Object} req - Express request object

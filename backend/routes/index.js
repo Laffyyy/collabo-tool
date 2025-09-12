@@ -1,5 +1,6 @@
 const { Router } = require('express');
-const authRoutes = require('./v1/auth.routes');
+const authRoutes = require('./v1/auth.routes'); // Disabled for testing
+const auditLogRoutes = require('./v1/auditlog.routes');
 
 const OUmanagerRoutes = require('./v1/oumanegament.routes');
 const adminRoutes = require('./v1/admin.routes');
@@ -18,6 +19,8 @@ const userRoutes = require('./v1/user.routes');
 
 const router = Router();
 
+// router.use('/auth', authRoutes); // Disabled for testing
+router.use('/auditlogs', auditLogRoutes);
 router.use('/v1/auth', authRoutes);
 router.use('/v1/chat', chatRoutes);
 router.use('/v1/admin', adminRoutes);
