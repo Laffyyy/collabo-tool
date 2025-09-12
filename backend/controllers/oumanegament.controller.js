@@ -1,5 +1,5 @@
 const oumanegamentService = require('../services/OUmanagement.service');
-const { transformSettingsToOUSettings, validateSettings, transformSettingsToJSSettings } = require('../utils/settingsTransformer');
+const { transformSettingsToOUSettings, validateSettings, validateSettingsForUpdate, transformSettingsToJSSettings } = require('../utils/settingsTransformer');
 
 async function getOU(req, res, next) {
     try {
@@ -118,17 +118,18 @@ async function updateOU(req, res, next) {
     try {
         const { id, changes } = req.body;
 
-        // Enforce XOR: Settings must not contain both Chat and broadcast
+        // Validate Settings structure if provided
         if (changes && changes.Settings) {
-            const hasChat = Object.prototype.hasOwnProperty.call(changes.Settings, 'Chat');
-            const hasBroadcast = Object.prototype.hasOwnProperty.call(changes.Settings, 'broadcast');
-            if (hasChat && hasBroadcast) {
+            const validation = validateSettingsForUpdate(changes.Settings);
+            if (!validation.isValid) {
                 return res.status(400).json({
                     ok: false,
-                    error: 'Provide only one of Settings.Chat or Settings.broadcast'
+                    error: 'Invalid Settings structure',
+                    details: validation.errors
                 });
             }
         }
+
         const result = await oumanegamentService.updateOU(id, changes);
         res.status(200).json({ ok: true, ...result });
     } catch (err) {

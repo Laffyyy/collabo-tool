@@ -420,6 +420,71 @@ export const transformOUDataForAPI = (
   return request;
 };
 
+/**
+ * Transform frontend OU data to backend update API format
+ * @param frontendOU - Frontend OU object
+ * @returns Backend update API formatted object
+ */
+export const transformOUDataForUpdate = (
+  frontendOU: FrontendOU
+): UpdateOUChanges => {
+  // Include BOTH Chat and broadcast settings (same as create)
+  const settings: any = {
+    Chat: {
+      General: {
+        FileSharing: frontendOU.rules.chat.allowFileSharing,
+        Emoji: frontendOU.rules.chat.allowEmojis,
+        Retention: frontendOU.rules.chat.messageRetentionDays
+      },
+      Frontline: {
+        Init1v1: frontendOU.rules.chat.frontlineCanInitiate1v1,
+        CreateGroup: frontendOU.rules.chat.frontlineCanCreateGroups,
+        JoinGroupChats: frontendOU.rules.chat.frontlineCanJoinGroups,
+        ShareFiles: frontendOU.rules.chat.frontlineCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.frontlineCanForwardMessages
+      },
+      support: {
+        Init1v1: frontendOU.rules.chat.supportCanInitiate1v1,
+        CreateGroup: frontendOU.rules.chat.supportCanCreateGroups,
+        JoinGroupChats: frontendOU.rules.chat.supportCanJoinGroups,
+        ShareFiles: frontendOU.rules.chat.supportCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.supportCanForwardMessages
+      },
+      supervisor: {
+        CreateGroup: frontendOU.rules.chat.supervisorCanCreateGroups,
+        ShareFiles: frontendOU.rules.chat.supervisorCanShareFiles,
+        ForwardMessage: frontendOU.rules.chat.supervisorCanForwardMessages
+      }
+    },
+    broadcast: {
+      general: {
+        approvalforBroadcast: frontendOU.rules.broadcast.requireApprovalForBroadcast,
+        scheduleBroadcast: frontendOU.rules.broadcast.allowScheduledBroadcasts,
+        priorityBroadcast: frontendOU.rules.broadcast.allowPriorityBroadcasts,
+        retention: frontendOU.rules.broadcast.broadcastRetentionDays
+      },
+      frontline: {
+        createBroadcasts: frontendOU.rules.broadcast.frontlineCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.frontlineCanReplyToBroadcast
+      },
+      support: {
+        createBroadcasts: frontendOU.rules.broadcast.supportCanCreateBroadcast,
+        replyToBroadcasts: frontendOU.rules.broadcast.supportCanReplyToBroadcast
+      },
+      supervisor: {
+        createBroadcasts: frontendOU.rules.broadcast.supervisorCanCreateBroadcast
+      }
+    }
+  };
+
+  return {
+    OrgName: frontendOU.name,
+    Description: frontendOU.description,
+    Location: frontendOU.location,
+    Settings: settings
+  };
+};
+
 export default {
   createOU,
   getActiveOUs,
@@ -429,5 +494,6 @@ export default {
   reactivateOU,
   reactivateOUs,
   updateOU,
-  transformOUDataForAPI
+  transformOUDataForAPI,
+  transformOUDataForUpdate
 };

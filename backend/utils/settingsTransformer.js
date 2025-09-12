@@ -203,7 +203,7 @@ function transformOUSettingsToSettings(ouSettings) {
 }
 
 /**
- * Validates the Settings object structure
+ * Validates the Settings object structure for creation (requires both Chat and broadcast)
  * @param {Object} settings - The Settings object to validate
  * @returns {Object} Validation result with isValid boolean and errors array
  */
@@ -233,6 +233,38 @@ function validateSettings(settings) {
         result.isValid = false;
         result.errors.push('Settings.broadcast is required');
     } else if (typeof settings.broadcast !== 'object') {
+        result.isValid = false;
+        result.errors.push('Settings.broadcast must be an object');
+    }
+
+    return result;
+}
+
+/**
+ * Validates the Settings object structure for updates (allows partial updates)
+ * @param {Object} settings - The Settings object to validate
+ * @returns {Object} Validation result with isValid boolean and errors array
+ */
+function validateSettingsForUpdate(settings) {
+    const result = {
+        isValid: true,
+        errors: []
+    };
+
+    if (!settings || typeof settings !== 'object') {
+        result.isValid = false;
+        result.errors.push('Settings must be a valid object');
+        return result;
+    }
+
+    // Validate Chat settings structure if present
+    if (settings.Chat && typeof settings.Chat !== 'object') {
+        result.isValid = false;
+        result.errors.push('Settings.Chat must be an object');
+    }
+
+    // Validate broadcast settings structure if present
+    if (settings.broadcast && typeof settings.broadcast !== 'object') {
         result.isValid = false;
         result.errors.push('Settings.broadcast must be an object');
     }
@@ -419,6 +451,7 @@ module.exports = {
     transformSettingsToOUSettings,
     transformOUSettingsToSettings,
     validateSettings,
+    validateSettingsForUpdate,
     transformSettingsToJSSettings,
     mergeSettings
 };

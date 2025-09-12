@@ -2,7 +2,7 @@
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import { onMount } from 'svelte';
-  import { createOU as createOUAPI, transformOUDataForAPI, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, reactivateOUs as reactivateOUsAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
+  import { createOU as createOUAPI, transformOUDataForAPI, transformOUDataForUpdate, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, reactivateOUs as reactivateOUsAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
   interface OrganizationUnit {
@@ -97,6 +97,17 @@
   let loadError = $state<string>('');
   let parentOUForNewChild = $state<OrganizationUnit | null>(null);
   let selectedRows = $state<Set<string>>(new Set());
+
+  // Notification modal state
+  let showNotificationModal = $state<boolean>(false);
+  let notificationData = $state<{
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+    onClose?: () => void;
+  } | null>(null);
+  let timerProgress = $state<number>(100);
+  let timerInterval: number | null = null;
 
   const defaultRules: OURules = {
     chat: {
@@ -434,6 +445,47 @@
     return currentList.filter(ou => !ou.parentId) as (OrganizationUnit & { children?: OrganizationUnit[] })[];
   });
 
+  // Helper function to show notifications
+  const showNotification = (type: 'success' | 'error' | 'info', title: string, message: string, onClose?: () => void) => {
+    // Clear any existing timer
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
+    
+    notificationData = { type, title, message, onClose };
+    showNotificationModal = true;
+    timerProgress = 100;
+    
+    // Start 3-second countdown timer
+    const startTime = Date.now();
+    const duration = 3000; // 3 seconds
+    
+    timerInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, duration - elapsed);
+      timerProgress = (remaining / duration) * 100;
+      
+      if (remaining <= 0) {
+        closeNotification();
+      }
+    }, 16); // ~60fps updates
+  };
+
+  const closeNotification = () => {
+    // Clear timer
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    
+    showNotificationModal = false;
+    if (notificationData?.onClose) {
+      notificationData.onClose();
+    }
+    notificationData = null;
+    timerProgress = 100;
+  };
+
   // Functions
   const createOU = async () => {
     if (newOU.name.trim() && newOU.description.trim()) {
@@ -667,49 +719,39 @@
     if (!selectedOU || !editOU) return;
     
     if (editOU.name?.trim() && editOU.description?.trim()) {
-      // Build backend changes payload
-      const apiData = transformOUDataForAPI({
-        name: editOU.name!.trim(),
-        description: editOU.description!.trim(),
-        location: editOU.location?.trim() || '',
-        rules: editOU.rules
-      } as any);
+      try {
+        // Build backend changes payload using the proper update transformation
+        const changes = transformOUDataForUpdate({
+          name: editOU.name!.trim(),
+          description: editOU.description!.trim(),
+          location: editOU.location?.trim() || '',
+          rules: editOU.rules
+        } as any);
 
-      const changes: any = {
-        OrgName: apiData.OrgName,
-        Description: apiData.Description,
-        Location: apiData.Location,
-        Settings: apiData.Settings
-      };
+        // Add status change if needed
+        if (editOU.status) {
+          changes.isactive = editOU.status === 'active';
+        }
 
-      if (editOU.status) {
-        changes.isactive = editOU.status === 'active';
+        console.log('Updating OU with data:', { id: selectedOU.id, changes });
+
+        const res = await updateOUAPI({ id: selectedOU.id, changes });
+        if (!res.success) {
+          showNotification('error', 'Update Failed', res.error || 'Failed to update Organization Unit');
+          return;
+        }
+
+        // Reload the data to get the updated information
+        await loadLists();
+        
+        showEditModal = false;
+        editOU = null;
+        selectedOU = null;
+        showNotification('success', 'Success!', 'Organization Unit updated successfully!');
+      } catch (error) {
+        console.error('Error updating OU:', error);
+        showNotification('error', 'Network Error', 'Failed to update Organization Unit. Please check your connection.');
       }
-
-      const res = await updateOUAPI({ id: selectedOU.id, changes });
-      if (!res.success) {
-        alert(res.error || 'Failed to update Organization Unit');
-        return;
-      }
-
-      organizationUnits = organizationUnits.map(ou =>
-        ou.id === selectedOU!.id
-          ? {
-              ...ou,
-              name: editOU!.name!.trim(),
-              description: editOU!.description!.trim(),
-              location: editOU!.location?.trim() || '',
-              modifiedAt: new Date(),
-              status: editOU!.status || 'active',
-              rules: editOU!.rules || ou.rules
-            }
-          : ou
-      );
-      
-      showEditModal = false;
-      editOU = null;
-      selectedOU = null;
-      alert('Organization Unit updated successfully!');
     }
   };  const confirmDeleteOU = (ou: OrganizationUnit) => {
     selectedOU = ou;
@@ -722,7 +764,7 @@
           showConfirmationModal = false;
           selectedOU = null;
           actionConfirm = null;
-          alert('Organization Unit deleted successfully!');
+          showNotification('success', 'Deleted!', 'Organization Unit deleted successfully!');
         }
       }
     };
@@ -806,10 +848,10 @@
         inactiveList = [updated, ...inactiveList];
         organizationUnits = currentTab === 'active' ? activeList : inactiveList;
       }
-      alert('Organization Unit deactivated successfully!');
+      showNotification('success', 'Deactivated!', 'Organization Unit deactivated successfully!');
     } catch (e) {
       console.error(e);
-      alert('Failed to deactivate Organization Unit.');
+      showNotification('error', 'Deactivation Failed', 'Failed to deactivate Organization Unit.');
     } finally {
       showConfirmationModal = false;
       selectedRows = new Set();
@@ -830,10 +872,10 @@
         activeList = [updated, ...activeList];
         organizationUnits = currentTab === 'inactive' ? inactiveList : activeList;
       }
-      alert('Organization Unit reactivated successfully!');
+      showNotification('success', 'Reactivated!', 'Organization Unit reactivated successfully!');
     } catch (e) {
       console.error(e);
-      alert('Failed to reactivate Organization Unit.');
+      showNotification('error', 'Reactivation Failed', 'Failed to reactivate Organization Unit.');
     }
   };
 </script>
@@ -2452,4 +2494,74 @@
     onConfirm={executeConfirmedAction}
     onCancel={() => { showConfirmationModal = false; actionConfirm = null; }}
   />
+{/if}
+
+<!-- Notification Modal -->
+{#if showNotificationModal && notificationData}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50" onclick={closeNotification}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onclick={(e) => e.stopPropagation()}>
+      <!-- Progress Bar -->
+      <div class="h-1 bg-gray-200">
+        <div 
+          class="h-full transition-all duration-75 ease-linear {notificationData?.type === 'success' ? 'bg-green-500' : notificationData?.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}"
+          style="width: {timerProgress}%"
+        ></div>
+      </div>
+      
+      <!-- Header -->
+      <div class="p-6 border-b border-gray-200">
+        <div class="flex items-center space-x-3">
+          <!-- Icon based on notification type -->
+          {#if notificationData.type === 'success'}
+            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            </div>
+          {:else if notificationData.type === 'error'}
+            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </div>
+          {:else}
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+          {/if}
+          
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold text-gray-900">{notificationData.title}</h3>
+          </div>
+          
+          <button onclick={closeNotification} class="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6">
+        <p class="text-gray-600">{notificationData.message}</p>
+      </div>
+      
+      <!-- Footer -->
+      <div class="p-6 border-t border-gray-200 bg-gray-50">
+        <button
+          onclick={closeNotification}
+          class="w-full px-4 py-2 {notificationData.type === 'success' ? 'bg-green-600 hover:bg-green-700' : notificationData.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg font-medium transition-colors"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}
