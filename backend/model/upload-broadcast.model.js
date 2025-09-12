@@ -261,19 +261,25 @@ class UploadBroadcastModel {
  */
 async getTemplates(userId = null) {
   try {
+    console.log(`[Upload Broadcast Model] getTemplates called with userId: ${userId}`);
+    
     // If no userId is provided, return all templates (admin case)
     if (!userId) {
+      console.log('[Upload Broadcast Model] No userId provided, returning all templates (admin case)');
       const query = `
-        SELECT * FROM tblbroadcasttemplates
-        ORDER BY tcreatedat DESC
+        SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname
+        FROM tblbroadcasttemplates t
+        LEFT JOIN tblusers u ON t.dcreatedby = u.did
+        ORDER BY t.tcreatedat DESC
       `;
       
       const result = await this.pool.query(query);
+      console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates (admin case)`);
       return result.rows.map(row => this.formatTemplate(row));
     }
     
-    // For users with an OU, get their templates directly instead of calling getTemplatesByOU
     // Check if user is admin first
+    console.log(`[Upload Broadcast Model] Checking if user ${userId} is an admin`);
     const roleQuery = `
       SELECT r.dname 
       FROM tbluserroles ur
@@ -282,30 +288,85 @@ async getTemplates(userId = null) {
     `;
     
     const roleResult = await this.pool.query(roleQuery, [userId]);
+    console.log(`[Upload Broadcast Model] Admin check result: ${roleResult.rows.length > 0 ? 'Is admin' : 'Not admin'}`);
     
     // If user is admin, return all templates
     if (roleResult.rows.length > 0) {
+      console.log('[Upload Broadcast Model] User is admin, returning all templates');
       const allTemplatesQuery = `
-        SELECT * FROM tblbroadcasttemplates
-        ORDER BY tcreatedat DESC
+        SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname 
+        FROM tblbroadcasttemplates t
+        LEFT JOIN tblusers u ON t.dcreatedby = u.did
+        ORDER BY t.tcreatedat DESC
       `;
       
       const result = await this.pool.query(allTemplatesQuery);
+      console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates (admin case)`);
       return result.rows.map(row => this.formatTemplate(row));
     }
     
-    // For non-admin users, get templates they created
-    const userTemplatesQuery = `
-      SELECT t.*
+    // For non-admin users, get templates they created AND templates from users in the same OU
+    console.log(`[Upload Broadcast Model] Getting templates for non-admin user ${userId}`);
+    
+    // Get all OUs that the current user belongs to
+    const userOusQuery = `
+      SELECT douid FROM tbluserroles WHERE duserid = $1
+    `;
+    const userOusResult = await this.pool.query(userOusQuery, [userId]);
+    const userOuIds = userOusResult.rows.map(row => row.douid);
+    
+    console.log(`[Upload Broadcast Model] User belongs to ${userOuIds.length} OUs:`, userOuIds);
+    
+    if (userOuIds.length === 0) {
+      console.log('[Upload Broadcast Model] User has no OUs, returning only their templates');
+      // User has no OUs, just return their own templates
+      const ownTemplatesQuery = `
+        SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname
+        FROM tblbroadcasttemplates t
+        LEFT JOIN tblusers u ON t.dcreatedby = u.did
+        WHERE t.dcreatedby = $1
+        ORDER BY t.tcreatedat DESC
+      `;
+      
+      const result = await this.pool.query(ownTemplatesQuery, [userId]);
+      console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates created by the user`);
+      return result.rows.map(row => this.formatTemplate(row));
+    }
+    
+    // User has OUs, get templates from them and other users in the same OUs
+    // First, get all users who share any OU with the current user
+    console.log('[Upload Broadcast Model] Getting users who share OUs with current user');
+    const sharedOuUsersQuery = `
+      SELECT DISTINCT ur.duserid
+      FROM tbluserroles ur
+      WHERE ur.douid = ANY($1::uuid[])
+    `;
+    
+    const sharedOuUsersResult = await this.pool.query(sharedOuUsersQuery, [userOuIds]);
+    const sharedUsers = sharedOuUsersResult.rows.map(row => row.duserid);
+    
+    console.log(`[Upload Broadcast Model] Found ${sharedUsers.length} users who share OUs with current user`);
+    
+    // Get templates created by any of these users (including current user)
+    const templatesQuery = `
+      SELECT t.*, CONCAT(u.dfirstname, ' ', u.dlastname) AS dcreatorname
       FROM tblbroadcasttemplates t
-      WHERE t.dcreatedby = $1
+      LEFT JOIN tblusers u ON t.dcreatedby = u.did
+      WHERE t.dcreatedby = ANY($1::uuid[])
       ORDER BY t.tcreatedat DESC
     `;
     
-    const result = await this.pool.query(userTemplatesQuery, [userId]);
+    const result = await this.pool.query(templatesQuery, [sharedUsers]);
+    console.log(`[Upload Broadcast Model] Found ${result.rows.length} templates accessible to user`);
+    
+    // Add creator details to the log for debugging
+    result.rows.forEach(row => {
+      console.log(`[Upload Broadcast Model] Template: ${row.dname}, Creator: ${row.dcreatorname} (${row.dcreatedby})`);
+    });
+    
     return result.rows.map(row => this.formatTemplate(row));
   } catch (error) {
-    console.error('Error fetching templates:', error);
+    console.error('[Upload Broadcast Model] Error fetching templates:', error);
     return [];
   }
 }
@@ -394,6 +455,7 @@ async getTemplates(userId = null) {
     targetOUs: targetOUs,
     targetRoles: targetRoles,
     createdBy: template.dcreatedby,
+    creatorName: template.dcreatorname || 'Unknown User',
     createdAt: template.tcreatedat
   };
 }

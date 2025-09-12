@@ -180,6 +180,7 @@ export interface BroadcastTemplate {
   acknowledgmentType: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
   choices?: string[];
   createdBy: string;
+  creatorName?: string;
   createdAt: Date;
 }
 
