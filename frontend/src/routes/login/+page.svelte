@@ -7,8 +7,6 @@
 	import { apiClient } from '$lib/api/client';
     import { API_CONFIG } from '$lib/api/config';
     import type { LoginResponse } from '$lib/api/types';
-	import { toastStore } from '$lib/stores/toast.svelte';
-  	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	
    	let loginUsername = $state('');
     let loginPassword = $state('');
@@ -29,6 +27,8 @@
 		loginIsLoading = true;
 		loginError = '';
 		
+		console.log('Login attempt:', { username: loginUsername });
+		
 		try {
 		// Use the API client instead of direct fetch
 		const data = await apiClient.post<LoginResponse>(
@@ -39,10 +39,13 @@
 			}
 		);
 		
+		console.log('Login response:', data);
+		
 		if (data.step === 'FAILED') {
-			// Show error toast for invalid credentials
-			$toastStore.error(data.message || 'Invalid Email/Password');
-			loginError = data.message || 'Invalid Email/Password';
+			// Show error message in form
+			const errorMessage = data.message || 'Invalid Credentials';
+			console.log('Login failed, showing error:', errorMessage);
+			loginError = errorMessage;
 			loginIsLoading = false;
 			return;
 		}
@@ -61,8 +64,10 @@
 		// Navigate to OTP verification page
 		goto('/otp');
 		} catch (error: any) {
-		$toastStore.error(error.message || 'Invalid credentials');
-		loginError = error.message || 'Invalid credentials';
+		console.error('Login error caught:', error);
+		const errorMessage = error.message || 'Invalid Credentials';
+		console.log('Setting error message:', errorMessage);
+		loginError = errorMessage;
 		} finally {
 		loginIsLoading = false;
 		}
@@ -211,8 +216,6 @@
 </svelte:head>
 
 <svelte:window onkeydown={forgotPasswordHandleKeydown} />
-
-<ToastContainer />
 
 <div class="min-h-screen flex items-center justify-center p-4" style="background: linear-gradient(to bottom right, #f8fafc, #ffffff, #f0fdfa);">
 	<LoginBackground />

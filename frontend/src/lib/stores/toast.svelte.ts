@@ -17,6 +17,7 @@ class ToastStore {
   currentToast = $state<Toast | null>(null);
   show(message: string, type: ToastType = 'info', duration: number = 5000) {
     const id = uuidv4();
+    console.log('ToastStore.show called:', { id, type, message, duration });
     
     // Clear any existing toast timer
     if (this.currentToast) {
@@ -25,6 +26,7 @@ class ToastStore {
     
     // Set the new toast
     this.currentToast = { id, type, message, duration };
+    console.log('ToastStore.currentToast set to:', this.currentToast);
     
     return id;
   }
@@ -34,6 +36,7 @@ class ToastStore {
   }
   
   error(message: string, duration: number = 5000) {
+    console.log('ToastStore.error called with message:', message);
     return this.show(message, 'error', duration);
   }
   

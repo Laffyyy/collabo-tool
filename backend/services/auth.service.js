@@ -52,7 +52,7 @@ async function login({ username, password, ipAddress = null, userAgent = null })
       return {
         step: 'FAILED',
         exists: false,
-        message: 'Invalid Email/Password'
+        message: 'Invalid Credentials'
       };
     }
     
@@ -66,7 +66,7 @@ async function login({ username, password, ipAddress = null, userAgent = null })
       return {
         step: 'FAILED',
         exists: true,
-        message: 'Invalid Email/Password'
+        message: 'Invalid Credentials'
       };
     }
     

@@ -98,6 +98,7 @@ export async function checkExistingDirectConversation({
 
 export async function getConversations() {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  console.log('🔑 Using token for getConversations:', token ? `${token.substring(0, 20)}...` : 'No token found');
   
   try {
     const response = await fetch('http://localhost:5000/api/chat/conversations', {
@@ -108,10 +109,12 @@ export async function getConversations() {
       credentials: 'include'
     });
     
+    console.log('📡 getConversations response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Conversation fetch error:', errorText);
-      throw new Error('Failed to fetch conversations');
+      console.error('❌ Conversation fetch error:', response.status, errorText);
+      throw new Error(`Failed to fetch conversations: ${response.status} ${errorText}`);
     }
     
     const data = await response.json();
@@ -149,7 +152,21 @@ export async function getConversations() {
         avatar: '/placeholder.svg',
         isOnline: false,
         messages: [],
-        members: conv.members || []
+        members: (conv.members || []).map((member: any) => ({
+          id: member.userId || member.id,
+          name: (member.firstName && member.lastName) 
+            ? `${member.firstName} ${member.lastName}`.trim()
+            : member.username || 'Unknown User',
+          firstName: member.firstName,
+          lastName: member.lastName,
+          username: member.username,
+          avatar: member.avatar || '/placeholder.svg',
+          department: 'Department', // This will be enriched later from availableUsers
+          role: 'Role', // This will be enriched later from availableUsers
+          organizationalUnit: 'Department',
+          isOnline: false,
+          onlineStatus: 'offline'
+        }))
       };
     });
   } catch (error) {
@@ -216,6 +233,8 @@ export async function sendMessage(conversationId: string, content: string, messa
 
 export async function getAllUsers() {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
+  console.log('🔑 Using token for getAllUsers:', token ? `${token.substring(0, 20)}...` : 'No token found');
+  
   const response = await fetch('http://localhost:5000/api/users', {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -223,8 +242,18 @@ export async function getAllUsers() {
     },
     credentials: 'include' // <-- This is required to send cookies!
   });
-  if (!response.ok) throw new Error('Failed to fetch users');
-  return await response.json();
+  
+  console.log('📡 getAllUsers response status:', response.status);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ getAllUsers failed:', response.status, errorText);
+    throw new Error(`Failed to fetch users: ${response.status} ${errorText}`);
+  }
+  
+  const data = await response.json();
+  console.log('✅ getAllUsers success:', data);
+  return data;
 }
 
 // Add this new function
@@ -264,11 +293,16 @@ export async function addMemberToConversation({
   }
 }
 
-export async function getMessagesForConversation(conversationId: string) {
+export async function getMessagesForConversation(conversationId: string, offset: number = 0, limit: number = 50) {
   const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt');
   
   try {
-    const response = await fetch(`http://localhost:5000/api/chat/messages/${conversationId}`, {
+    const params = new URLSearchParams({
+      offset: offset.toString(),
+      limit: limit.toString()
+    });
+    
+    const response = await fetch(`http://localhost:5000/api/chat/messages/${conversationId}?${params}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -326,6 +360,21 @@ export async function getMessagesForConversation(conversationId: string) {
         }
       }
       
+      // Handle reply data
+      let replyTo = null;
+      if (msg.dreplytomessageid && msg.reply_content) {
+        replyTo = {
+          id: msg.dreplytomessageid,
+          senderId: msg.reply_sender_id || 'unknown',
+          senderName: msg.reply_sender_username || 
+                     (msg.reply_sender_firstname && msg.reply_sender_lastname 
+                       ? `${msg.reply_sender_firstname} ${msg.reply_sender_lastname}` 
+                       : 'Unknown User'),
+          content: msg.reply_content,
+          timestamp: msg.reply_timestamp || new Date()
+        };
+      }
+      
       return {
         id: msg.did || msg.id || `temp-${Date.now()}-${Math.random()}`,
         senderId: msg.dsenderid || "unknown",
@@ -337,7 +386,8 @@ export async function getMessagesForConversation(conversationId: string) {
         type: msg.dmessagetype || msg.type || 'text',
         reactions: [],
         hasAttachment,
-        attachment
+        attachment,
+        replyTo
       };
     });
   } catch (error) {

@@ -36,31 +36,30 @@ class ChatModel {
     }
   }
 
-static async addMessage({ dconversationId, dsenderId, dcontent, dreplyToId, dreplyToSenderId, dreplyToContent, dmessageType }) {
+static async addMessage({ dconversationId, dsenderId, dcontent, dmessageType, dreplyToId, dreplyToSenderId, dreplyToContent }) {
   try {
     console.log('Adding message to database:', { 
-      dconversationId, dsenderId, dcontent, dmessageType
+      dconversationId, dsenderId, dcontent, dmessageType, dreplyToId 
     });
     
-    // Create SQL query parts
-    const fields = ['dconversationid', 'dsenderid', 'dcontent', 'dmessagetype'];
-    const values = [dconversationId, dsenderId, dcontent, dmessageType || 'text'];
-    const placeholders = ['$1', '$2', '$3', '$4'];
+    // Build dynamic query based on whether it's a reply
+    let query_text, params;
     
-    // Add reply fields if provided
     if (dreplyToId) {
-      fields.push('dreplytoid', 'dreplytosenderid', 'dreplytocontent');
-      values.push(dreplyToId, dreplyToSenderId, dreplyToContent);
-      placeholders.push(`$${placeholders.length + 1}`, `$${placeholders.length + 2}`, `$${placeholders.length + 3}`);
+      query_text = `INSERT INTO tblmessages 
+        (dconversationid, dsenderid, dcontent, dmessagetype, dreplytomessageid, tcreatedat)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       RETURNING *`;
+      params = [dconversationId, dsenderId, dcontent, dmessageType || 'text', dreplyToId];
+    } else {
+      query_text = `INSERT INTO tblmessages 
+        (dconversationid, dsenderid, dcontent, dmessagetype, tcreatedat)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+       RETURNING *`;
+      params = [dconversationId, dsenderId, dcontent, dmessageType || 'text'];
     }
     
-    const result = await query(
-      `INSERT INTO tblmessages 
-        (${fields.join(', ')}, tcreatedat)
-       VALUES (${placeholders.join(', ')}, CURRENT_TIMESTAMP)
-       RETURNING *`,
-      values
-    );
+    const result = await query(query_text, params);
     
     console.log('Message added:', result.rows[0]);
     return result.rows[0];
@@ -72,9 +71,17 @@ static async addMessage({ dconversationId, dsenderId, dcontent, dreplyToId, drep
 
   static async getMessagesByConversation(conversationId) {
     const result = await query(
-      `SELECT m.*, u.dusername
+      `SELECT m.*, u.dusername,
+              reply_msg.dcontent as reply_content,
+              reply_msg.dsenderid as reply_sender_id,
+              reply_msg.tcreatedat as reply_timestamp,
+              reply_sender.dusername as reply_sender_username,
+              reply_sender.dfirstname as reply_sender_firstname,
+              reply_sender.dlastname as reply_sender_lastname
        FROM "tblmessages" m
        JOIN "tblusers" u ON m.dsenderId = u.did
+       LEFT JOIN "tblmessages" reply_msg ON m.dreplytomessageid = reply_msg.did
+       LEFT JOIN "tblusers" reply_sender ON reply_msg.dsenderid = reply_sender.did
        WHERE m.dconversationId = $1
        ORDER BY m.tcreatedAt ASC`,
       [conversationId]
@@ -252,90 +259,9 @@ static async toggleReaction(messageId, userId, emoji) {
   }
 }
 
-static async getMessagesByConversation(conversationId) {
-  const result = await query(
-    `SELECT m.*, u.dusername
-     FROM tblmessages m
-     JOIN tblusers u ON m.dsenderid = u.did
-     WHERE m.dconversationid = $1
-     ORDER BY m.tcreatedat ASC`,
-    [conversationId]
-  );
-  return result.rows;
-}
-  /**
-   * Get conversation by ID
-   */
-  static async getConversationById(conversationId) {
-    try {
-      const result = await query(
-        'SELECT * FROM tblconversations WHERE did = $1',
-        [conversationId]
-      );
-      
-      return result.rows[0];
-    } catch (error) {
-      console.error('Error in getConversationById:', error);
-      throw error;
-    }
-  }
 
-  /**
-   * Check if user is a participant in the conversation
-   */
-  static async isUserInConversation(conversationId, userId) {
-    try {
-      const result = await query(
-        'SELECT * FROM tblconversationparticipants WHERE dconversationid = $1 AND duserid = $2',
-        [conversationId, userId]
-      );
-      
-      return result.rows.length > 0;
-    } catch (error) {
-      console.error('Error in isUserInConversation:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update conversation data
-   */
-  static async updateConversation(conversationId, updateData) {
-    try {
-      // Create dynamic SQL for the update based on provided fields
-      const updates = [];
-      const values = [conversationId];
-      let paramIndex = 2;
-      
-      Object.entries(updateData).forEach(([key, value]) => {
-        if (value !== undefined) {
-          updates.push(`${key} = $${paramIndex}`);
-          values.push(value);
-          paramIndex++;
-        }
-      });
-      
-      if (updates.length === 0) {
-        throw new Error('No valid fields provided for update');
-      }
-      
-      // Add timestamp update
-      updates.push(`tupdatedat = NOW()`);
-      
-      const sqlQuery = `
-        UPDATE tblconversations 
-        SET ${updates.join(', ')} 
-        WHERE did = $1 
-        RETURNING *
-      `;
-      
-      const result = await query(sqlQuery, values);
-      return result.rows[0];
-    } catch (error) {
-      console.error('Error in updateConversation:', error);
-      throw error;
-    }
-  }
 }
+
+
 
 module.exports = ChatModel;

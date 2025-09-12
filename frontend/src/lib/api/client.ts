@@ -35,6 +35,8 @@ class ApiClient {
 
   // New helper method to handle authentication errors
   private async handleResponse<T>(response: Response): Promise<T> {
+    console.log('API Response status:', response.status);
+    
     if (response.status === 401) {
       // User is not authenticated
       get(authStore).logout();
@@ -50,10 +52,13 @@ class ApiClient {
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'An error occurred' }));
+      console.log('API Error response:', error);
       throw new Error(error.message || 'An error occurred');
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log('API Response data:', data);
+    return data;
   }
 
   async get<T>(endpoint: string): Promise<T> {

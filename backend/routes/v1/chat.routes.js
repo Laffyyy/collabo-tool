@@ -82,4 +82,13 @@ router.post('/conversations/:id/photo', requireAuth, upload.single('photo'), cha
 router.put('/conversations/:id/archive', requireAuth, chatController.archiveConversation);
 router.put('/conversations/:id/settings/:settingName', requireAuth, chatController.updateConversationSetting);
 
+// Reaction routes
+router.post('/messages/:messageId/reactions', [
+  body('emoji').exists().isString().isLength({ min: 1, max: 10 })
+], chatController.addReaction);
+
+router.delete('/messages/:messageId/reactions/:emoji', chatController.removeReaction);
+
+router.get('/messages/:messageId/reactions', chatController.getMessageReactions);
+
 module.exports = router;

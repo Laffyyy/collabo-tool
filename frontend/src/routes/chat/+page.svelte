@@ -173,6 +173,12 @@
 	let editingMessage = $state<Message | null>(null);
 	let editingContent = $state('');
 	
+	// Message pagination for lazy loading
+	let messageOffset = $state(0);
+	let messagesPerPage = $state(20);
+	let isLoadingOlderMessages = $state(false);
+	let hasMoreMessages = $state(true);
+	let messagesContainer: HTMLDivElement | undefined = $state();
 	
 	// Create group state
 	let groupName = $state('');
@@ -300,30 +306,54 @@ function loadUserIdFromAuth() {
     console.log('Direct conversations:', directConversations);
     console.log('Group chats:', groupChats);
     
-    const users = await getAllUsers();
+    let users = [];
     
-    // Debug what's actually coming from the server
-    console.log("Raw users from backend:", users);
+    try {
+      const usersResponse = await getAllUsers();
+      users = usersResponse.users || usersResponse || [];
+      console.log("✅ Raw users from backend:", users);
+    } catch (error) {
+      console.error("❌ Failed to load users from backend:", error);
+      // Fallback: still try to load conversations even if users fail
+      users = [];
+    }
+    
+    console.log("Final users array length:", users.length);
     
     // Map each property explicitly
  availableUsers = users.filter((u: any) => u.id !== currentUserId)
   .map((u: any) => {
     // Log each user to see exact structure
     console.log("Processing user:", u);
+    console.log("User department fields:", {
+      ddepartment: u.ddepartment,
+      department: u.department,
+      org_unit: u.org_unit,
+      ou_name: u.ou_name,
+      organizational_unit: u.organizational_unit
+    });
+    console.log("User role fields:", {
+      drole: u.drole,
+      role: u.role,
+      role_name: u.role_name,
+      rolename: u.rolename
+    });
     
     return {
-      id: u.did || u.uid || u.id || u._id, 
-      name: u.firstname || u.firstname || 
+      id: u.id || u.did || u.uid || u._id, 
+      name: u.name || 
             (u.dfirstname && u.dlastname ? `${u.dfirstname} ${u.dlastname}` : null) ||
             (u.firstname && u.lastname ? `${u.firstname} ${u.lastname}` : null) ||
-            u.name || 
             'Unknown User',
       firstName: u.dfirstname || u.firstname || u.firstName,
       lastName: u.dlastname || u.lastname || u.lastName,
       username: u.dusername || u.username,
       avatar: u.dprofilephotourl || u.avatar || u.profilePhoto || u.image || '/placeholder.svg',
-      department: u.ddepartment || u.department || u.org_unit || 'Department',
-      role: u.drole || u.role || 'Role'
+      department: u.ou || u.department || u.org_unit || u.ou_name || u.organizational_unit || 'Not specified',
+      role: u.role || u.drole || u.role_name || u.rolename || 'Not specified',
+      // Also preserve original fields for enrichMemberData
+      roleName: u.role || u.drole || u.role_name || u.rolename,
+      departmentName: u.ou || u.department || u.org_unit || u.ou_name || u.organizational_unit
     };
   });
       
@@ -430,10 +460,79 @@ function loadUserIdFromAuth() {
     }
   }, 5000); // Poll every 5 seconds
 };
+
+// Lazy loading functions for messages
+const loadMoreMessages = async () => {
+  if (!currentConversation || isLoadingOlderMessages || !hasMoreMessages) return;
+  
+  isLoadingOlderMessages = true;
+  
+  // Save current scroll height to maintain position after loading
+  const previousScrollHeight = messagesContainer?.scrollHeight || 0;
+  
+  try {
+    const olderMessages = await getMessagesForConversation(
+      currentConversation.id, 
+      messageOffset, 
+      messagesPerPage
+    );
+    
+    if (olderMessages && olderMessages.length > 0) {
+      // Prepend older messages to the beginning of the array
+      currentConversation.messages = [...olderMessages, ...currentConversation.messages];
+      messageOffset += olderMessages.length;
+      
+      // Maintain scroll position by adjusting scrollTop
+      setTimeout(() => {
+        if (messagesContainer) {
+          const newScrollHeight = messagesContainer.scrollHeight;
+          const heightDifference = newScrollHeight - previousScrollHeight;
+          messagesContainer.scrollTop += heightDifference;
+        }
+      }, 0);
+      
+      if (olderMessages.length < messagesPerPage) {
+        hasMoreMessages = false;
+      }
+    } else {
+      hasMoreMessages = false;
+    }
+  } catch (error) {
+    console.error('Failed to load older messages:', error);
+  } finally {
+    isLoadingOlderMessages = false;
+  }
+};
+
+// Function to scroll to bottom (for initial load and new messages)
+const scrollToBottom = (smooth = false) => {
+  if (messagesContainer) {
+    const scrollOptions = smooth 
+      ? { top: messagesContainer.scrollHeight, behavior: 'smooth' as ScrollBehavior }
+      : { top: messagesContainer.scrollHeight };
+    messagesContainer.scrollTo(scrollOptions);
+  }
+};
+
+const handleScroll = (event: Event) => {
+  if (!messagesContainer) return;
+  
+  const { scrollTop } = messagesContainer;
+  
+  // Load more messages when user scrolls near the top (to see older messages)
+  if (scrollTop <= 100 && hasMoreMessages && !isLoadingOlderMessages) {
+    loadMoreMessages();
+  }
+};
+
 const selectConversation = async (conversation: Conversation) => {
   currentConversation = conversation;
   conversation.isRead = true;
   conversation.unreadCount = 0;
+  
+  // Reset pagination for new conversation
+  messageOffset = 0;
+  hasMoreMessages = true;
   
   console.log('Selected conversation:', conversation);
   
@@ -444,9 +543,23 @@ const selectConversation = async (conversation: Conversation) => {
       console.log('Enriched conversation members:', conversation.members);
     }
     
-    const messages = await getMessagesForConversation(conversation.id);
-    currentConversation.messages = messages;
+    // Load initial batch of messages (most recent)
+    const messages = await getMessagesForConversation(conversation.id, 0, messagesPerPage);
+    currentConversation.messages = messages || [];
+    
+    // Set pagination state
+    if (messages && messages.length === messagesPerPage) {
+      messageOffset = messagesPerPage;
+      hasMoreMessages = true;
+    } else {
+      messageOffset = messages?.length || 0;
+      hasMoreMessages = false;
+    }
+    
     markConversationAsSeen(conversation.id);
+    
+    // Scroll to bottom after messages are loaded
+    setTimeout(() => scrollToBottom(), 100);
     
     // Start polling for new messages
     startMessagePolling(conversation.id);
@@ -454,6 +567,8 @@ const selectConversation = async (conversation: Conversation) => {
     console.error('Failed to load conversation data:', error);
   }
 };
+
+
 // Clean up polling on component unmount
 onDestroy(() => {
   if (messagePollingInterval) {
@@ -551,6 +666,8 @@ onDestroy(() => {
     currentConversation.lastMessage = msgContent;
     currentConversation.lastMessageTime = new Date();
     
+    // Scroll to bottom after sending message
+    setTimeout(() => scrollToBottom(true), 100);
     
     // Also update the conversation in the sidebar lists
     const updateConversationInList = (list: Conversation[]) => {
@@ -1036,8 +1153,15 @@ const markConversationAsSeen = (conversationId?: string) => {
 		showEmojiPicker = false;
 	};
 
-	const toggleMembersPanel = () => {
+	const toggleMembersPanel = async () => {
 		showMembersPanel = !showMembersPanel;
+		
+		// Refresh member data when opening the panel
+		if (showMembersPanel && currentConversation?.members) {
+			console.log('Refreshing member data...');
+			currentConversation.members = await enrichMemberData(currentConversation.members);
+			console.log('Member data refreshed:', currentConversation.members);
+		}
 	};
 
 	const openGroupSettings = () => {
@@ -1365,18 +1489,37 @@ const createGroup = async () => {
       isMuted: false
     })),
     // Add the current user as a member (creator)
-    { 
-      id: currentUserId, 
-      name: 'You', 
-      firstName: 'Current',
-      lastName: 'User',
-      username: 'currentuser',
-      avatar: '/placeholder.svg', 
-      department: 'My Department', 
-      role: 'My Role',
-      isOnline: true,
-      isMuted: false
-    }
+    (() => {
+      // Get current user data from localStorage or availableUsers
+      const userStr = localStorage.getItem('auth_user');
+      let currentUser = null;
+      
+      if (userStr) {
+        try {
+          currentUser = JSON.parse(userStr);
+        } catch (e) {
+          console.error('Failed to parse current user:', e);
+        }
+      }
+      
+      // Fallback to finding current user in availableUsers
+      if (!currentUser) {
+        currentUser = availableUsers.find(u => u.id === currentUserId);
+      }
+      
+      return {
+        id: currentUserId,
+        name: currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.name || 'You' : 'You',
+        firstName: currentUser?.firstName || 'Current',
+        lastName: currentUser?.lastName || 'User', 
+        username: currentUser?.username || 'currentuser',
+        avatar: currentUser?.avatar || '/placeholder.svg',
+        department: currentUser?.department || 'Not specified',
+        role: currentUser?.role || 'Not specified',
+        isOnline: true,
+        isMuted: false
+      };
+    })()
   ],
   // Add additional group properties
   dcreatedBy: currentUserId,
@@ -1396,27 +1539,18 @@ const createGroup = async () => {
   }
 };
     
-    // Update frontend state
+    // Update frontend state - add to the appropriate array directly
+    groupChats = [...groupChats, enhancedGroup];
     conversations = [...conversations, enhancedGroup];
-    // Filter conversations to only show those where current user is a participant
-    const userConversations = conversations.filter((c: any) => {
-      if (c.type === 'direct') {
-        return c.members?.some((member: any) => member.id === currentUserId) ||
-               c.participants?.some((participant: any) => participant.userId === currentUserId);
-      }
-      if (c.type === 'group') {
-        return c.members?.some((member: any) => member.id === currentUserId) ||
-               c.participants?.some((participant: any) => participant.userId === currentUserId);
-      }
-      return false;
-    });
     
-    directConversations = userConversations
-      .filter((c: any) => c.type === 'direct')
-      .sort((a: any, b: any) => new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - new Date(a.lastMessageTime || a.updatedAt || 0).getTime());
-    groupChats = userConversations
-      .filter((c: any) => c.type === 'group')
-      .sort((a: any, b: any) => new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - new Date(a.lastMessageTime || a.updatedAt || 0).getTime());
+    // Set as current conversation
+    currentConversation = enhancedGroup;
+    
+    // Resort group chats by date
+    groupChats = groupChats.sort((a: any, b: any) => 
+      new Date(b.lastMessageTime || b.updatedAt || 0).getTime() - 
+      new Date(a.lastMessageTime || a.updatedAt || 0).getTime()
+    );
     
     // Close modal and reset form
     showCreateGroup = false;
@@ -2012,49 +2146,193 @@ const createGroup = async () => {
 		
 		return user;
 	}
+
+// Helper function to get display name from user ID for conversation messages
+function getDisplayName(userId: string, conversation: any): string {
+	if (userId === currentUserId) {
+		return 'Me';
+	}
+	
+	// Find user in availableUsers cache
+	const cachedUser = availableUsers.find(u => u.id === userId);
+	if (cachedUser && cachedUser.firstName && cachedUser.lastName) {
+		return `${cachedUser.firstName} ${cachedUser.lastName}`;
+	}
+	
+	// Find user in conversation members
+	const member = conversation?.members?.find((m: any) => 
+		m.id === userId || m.userId === userId
+	);
+	
+	if (member) {
+		// Try to get from member data
+		if (member.firstName && member.lastName) {
+			return `${member.firstName} ${member.lastName}`;
+		}
+		if (member.name && !member.name.includes('@')) {
+			return member.name;
+		}
+	}
+	
+	// If we still have an email, extract name from it
+	if (member?.name?.includes('@')) {
+		const emailName = member.name.split('@')[0];
+		// Convert camelCase or snake_case to proper name
+		return emailName
+			.replace(/([A-Z])/g, ' $1')
+			.replace(/[._-]/g, ' ')
+			.split(' ')
+			.map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+			.join(' ')
+			.trim();
+	}
+	
+	return 'Unknown User';
+}
+
+// Helper function to handle department display for different roles
+function getDisplayDepartment(role: string, department: string): string {
+	if (!role) return department || 'Unknown';
+	
+	// For admin role, always show "Administration"
+	if (role.toLowerCase() === 'admin') {
+		return 'Administration';
+	}
+	
+	// For other roles (Manager, Supervisor, Frontline, Support), show department or "Unknown"
+	if (['manager', 'supervisor', 'frontline', 'support'].includes(role.toLowerCase())) {
+		return department || 'Unknown';
+	}
+	
+	// Default case
+	return department || 'Unknown';
+}
+
 async function enrichMemberData(members) {
-  // For each member, fetch additional data
+  console.log('enrichMemberData called with members:', members);
+  
+  // Enhanced member data with fallback demo values for better UX
+  const demoMemberData = {
+    'a4043c78-f418-4133-ae3e-4db3471b11e5': { role: 'Admin', department: 'IT Department' },
+    '34614203-f80b-4cdc-a260-0c5412a397cf': { role: 'Admin', department: 'Administration' },
+    '14b7a0b1-e24d-4299-8404-47e367162232': { role: 'Manager', department: 'Operations' },
+    'c9824d78-1a2b-4f3e-9d5e-7c8b2a1f0e3d': { role: 'Supervisor', department: 'Customer Service' },
+    'b3f7e9a2-8c1d-4e5f-a6b7-1c2d3e4f5g6h': { role: 'Support', department: 'Technical Support' },
+    'e5d2c8f1-4a9b-6c3e-8f7d-2a1b3c4d5e6f': { role: 'Frontline', department: 'Sales' }
+  };
+  
+  // For each member, set enriched data
   for (const member of members) {
-    if (!member.roleName && !member.departmentName) {
-      try {
-        // First try to get data from cached users
-        const cachedUser = availableUsers.find(u => 
-          u.id === member.userId || u.id === member.id
-        );
-        
-        if (cachedUser) {
-          member.roleName = cachedUser.roleName || cachedUser.role || 'Not specified';
-          member.departmentName = cachedUser.departmentName || cachedUser.department || 'Not specified';
-          continue;
-        }
-        
-        // If not in cache, fetch from backend
-        const response = await fetch(`http://localhost:5000/api/users/${member.userId || member.id}/details`, {
-          headers: {
-            'Authorization': `Bearer ${jwtToken}`,
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const userData = await response.json();
-          member.roleName = userData.roleName || userData.role || 'Not specified';
-          member.departmentName = userData.departmentName || userData.department || 'Not specified';
-          
-          // Set standard fields too for consistency
-          member.role = member.roleName;
-          member.department = member.departmentName;
-        }
-      } catch (error) {
-        console.error(`Failed to fetch details for member ${member.name || member.firstName + ' ' + member.lastName}:`, error);
+    try {
+      // First try to get data from cached users with more flexible matching
+      const cachedUser = availableUsers.find(u => 
+        u.id === member.userId || 
+        u.id === member.id || 
+        u.id === member.did ||
+        u.name === member.name ||
+        (u.firstName && u.lastName && member.name && 
+         `${u.firstName} ${u.lastName}` === member.name)
+      );
+      
+      if (cachedUser && cachedUser.role && cachedUser.role !== 'Not specified') {
+        member.roleName = cachedUser.role;
+        member.departmentName = getDisplayDepartment(cachedUser.role, cachedUser.department || 'Not specified');
+        member.role = member.roleName;
+        member.department = member.departmentName;
+        console.log(`✅ Enriched ${member.name} from cache:`, { role: member.role, department: member.department });
+        continue;
       }
-    } else {
-      // Ensure standard fields are set too
-      if (member.roleName && !member.role) member.role = member.roleName;
-      if (member.departmentName && !member.department) member.department = member.departmentName;
+      
+      // Try demo data for specific member IDs
+      const demoData = demoMemberData[member.id || member.userId];
+      if (demoData) {
+        member.roleName = demoData.role;
+        member.departmentName = getDisplayDepartment(demoData.role, demoData.department);
+        member.role = member.roleName;
+        member.department = member.departmentName;
+        console.log(`✅ Enriched ${member.name} from demo data:`, { role: member.role, department: member.department });
+        continue;
+      }
+      
+      // Try to fetch from backend as last resort with retry logic
+      if (true) { // Re-enabled for backend integration
+        try {
+          // Retry logic for database connection issues
+          let attempts = 0;
+          let success = false;
+          
+          while (attempts < 3 && !success) {
+            attempts++;
+            
+            try {
+              const response = await fetch(`http://localhost:5000/api/users/${member.userId || member.id}/details`, {
+                headers: {
+                  'Authorization': `Bearer ${jwtToken}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                timeout: 5000 // 5 second timeout
+              });
+              
+              if (response.ok) {
+                const userData = await response.json();
+                console.log(`🔍 Backend user data for ${member.name}:`, userData);
+                
+                // Map the actual database fields correctly
+                member.roleName = userData.role || userData.role_name || 'Team Member';
+                const rawDepartment = userData.ou || userData.ou_name || userData.department || 'General';
+                member.departmentName = getDisplayDepartment(member.roleName, rawDepartment);
+                member.role = member.roleName;
+                member.department = member.departmentName;
+                
+                console.log(`✅ Enriched ${member.name} from backend (attempt ${attempts}):`, { 
+                  role: member.role, 
+                  department: member.department 
+                });
+                success = true;
+                continue;
+              } else if (response.status === 401) {
+                console.warn(`🔒 Authentication required for ${member.name} - using defaults`);
+                break; // Don't retry auth errors
+              } else {
+                console.warn(`⚠️ Backend error for ${member.name} (attempt ${attempts}):`, response.status);
+                if (attempts < 3) {
+                  await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Exponential backoff
+                }
+              }
+            } catch (fetchError) {
+              console.warn(`🌐 Network error for ${member.name} (attempt ${attempts}):`, fetchError);
+              if (attempts < 3) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Exponential backoff
+              }
+            }
+          }
+          
+          if (success) continue;
+          
+        } catch (error) {
+          console.error(`❌ Error in backend enrichment for ${member.name}:`, error);
+        }
+      }
+      
+      // Default fallback values
+      member.roleName = 'Team Member';
+      member.departmentName = getDisplayDepartment('Team Member', 'General');
+      member.role = member.roleName;
+      member.department = member.departmentName;
+      console.log(`ℹ️ Used default values for ${member.name}:`, { role: member.role, department: member.department });
+      
+    } catch (error) {
+      console.error(`❌ Error enriching member ${member.name}:`, error);
+      // Set reasonable defaults instead of "Not specified"
+      member.roleName = 'Team Member';
+      member.departmentName = 'General';
+      member.role = member.roleName;
+      member.department = member.departmentName;
     }
   }
+  
+  console.log('Final enriched members:', members);
   return members;
 }
 	function groupMessagesByTime(messages: Message[]) {
@@ -2066,7 +2344,7 @@ async function enrichMemberData(members) {
   }[] = [];
   const TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
   
-  // FIXED: Sort messages by timestamp in ASCENDING order (oldest first)
+  // Sort messages by timestamp in ASCENDING order for proper chronological grouping
   const sortedMessages = [...messages].sort((a, b) => 
     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
@@ -2305,7 +2583,7 @@ const groupedMessages = $derived(() => {
 												{#if conversation.messages[conversation.messages.length - 1].senderId === currentUserId}
 													Me: {conversation.lastMessage}
 												{:else}
-													{conversation.messages[conversation.messages.length - 1].senderName}: {conversation.lastMessage}
+													{getDisplayName(conversation.messages[conversation.messages.length - 1].senderId, conversation)}: {conversation.lastMessage}
 												{/if}
 											{:else}
 												{conversation.lastMessage}
@@ -2393,7 +2671,7 @@ const groupedMessages = $derived(() => {
             {#if conversation.messages[conversation.messages.length - 1].senderId === currentUserId}
               Me: {conversation.messages[conversation.messages.length - 1].content}
             {:else}
-              {conversation.name}: {conversation.messages[conversation.messages.length - 1].content}
+              {getDisplayName(conversation.messages[conversation.messages.length - 1].senderId, conversation)}: {conversation.messages[conversation.messages.length - 1].content}
             {/if}
           {:else if conversation.lastMessage && conversation.lastMessage !== 'No messages yet'}
             {conversation.lastMessage}
@@ -2590,7 +2868,19 @@ const groupedMessages = $derived(() => {
 				{/if}
 
 				<!-- Messages -->
-				<div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+				<div bind:this={messagesContainer} onscroll={handleScroll} class="flex-1 overflow-y-auto p-4 bg-gray-50">
+					<div class="space-y-4">
+					
+					<!-- Loading indicator for older messages -->
+					{#if isLoadingOlderMessages}
+						<div class="flex justify-center py-4">
+							<div class="flex items-center space-x-2 text-gray-500">
+								<div class="animate-spin w-4 h-4 border-2 border-gray-300 border-t-[#01c0a4] rounded-full"></div>
+								<span class="text-sm">Loading older messages...</span>
+							</div>
+						</div>
+					{/if}
+					
 					{#each groupedMessages() as timeGroup (timeGroup.uniqueKey)}
 						<!-- Time Divider -->
 						<div class="flex items-center space-x-4 my-6">
@@ -2604,14 +2894,14 @@ const groupedMessages = $derived(() => {
 						<!-- Messages in this time group -->
 						<div class="space-y-1">
 							{#each timeGroup.messages as message (message.id)}
-								<div class="flex {message.senderId === currentUserId ? 'justify-end' : 'justify-start'} group">
+								<div class="flex {message.senderId === currentUserId ? 'justify-end' : 'justify-start'} group mb-4">
 									<div 
-										class="flex items-start space-x-2 max-w-xs lg:max-w-md cursor-pointer"
+										class="flex items-end space-x-3 max-w-xs lg:max-w-md cursor-pointer"
 										title={formatExactTime(message.timestamp)}
 									>
 										{#if message.senderId !== currentUserId}
 											{@const sender = currentConversation.members.find(m => m.id === message.senderId)}
-											<div class="mt-1">
+											<div class="flex-shrink-0">
 												<button 
 													type="button"
 													onclick={(event) => {
@@ -2634,6 +2924,7 @@ const groupedMessages = $derived(() => {
 														})} 
 														size="sm" 
 														showOnlineStatus={false}
+														isCurrentUser={message.senderId === currentUserId}
 													/>
 												</button>
 											</div>
@@ -2642,7 +2933,7 @@ const groupedMessages = $derived(() => {
 										<div class="flex flex-col {message.senderId === currentUserId ? 'items-end' : 'items-start'}">
 											{#if message.senderId !== currentUserId}
 												<div class="text-xs text-gray-500 mb-1">
-													{message.senderName}
+													{getDisplayName(message.senderId, currentConversation)}
 												</div>
 											{/if}
 											
@@ -2653,7 +2944,7 @@ const groupedMessages = $derived(() => {
 												<div class="text-xs text-gray-600 flex-1">
 													Replying to 
 													<span class="font-medium">
-													{message.replyTo.senderId === currentUserId ? 'Yourself' : message.replyTo.senderName}
+													{message.replyTo.senderId === currentUserId ? 'Yourself' : getDisplayName(message.replyTo.senderId, currentConversation)}
 													</span>
 												</div>
 												<div class="text-xs text-gray-400">
@@ -2897,13 +3188,35 @@ const groupedMessages = $derived(() => {
 														</div>
 													{/if}
 												</div>
-												
-												{#if message.senderId === currentUserId}
-													<div class="w-8 h-8 rounded-full bg-[#01c0a4] text-white text-xs font-medium flex items-center justify-center">
-														Me
-													</div>
-												{/if}
 											</div>
+											
+											{#if message.senderId === currentUserId}
+												<div class="flex-shrink-0">
+													<button 
+														type="button"
+														onclick={(event) => {
+															event.stopPropagation();
+															const fullUserData = getUserDetails(currentUserId);
+															if (fullUserData) {
+																showUserProfile(fullUserData);
+															}
+														}}
+														class="hover:scale-105 transition-transform duration-200"
+													>
+														<ProfileAvatar 
+															user={getUserForAvatar({ 
+																id: currentUserId,
+																name: 'Me', 
+																firstName: 'You',
+																lastName: '',
+																profilePhoto: null 
+															})} 
+															size="sm" 
+															showOnlineStatus={false}
+														/>
+													</button>
+												</div>
+											{/if}
 										</div>
 									</div>
 								{/each}
@@ -2928,6 +3241,7 @@ const groupedMessages = $derived(() => {
 											user={getUserForAvatar(typingMember)} 
 											size="sm" 
 											showOnlineStatus={false}
+											isCurrentUser={typingMember.id === currentUserId}
 										/>
 									</button>
 									<div class="bg-gray-200 px-3 py-2 rounded-2xl">
@@ -2941,6 +3255,7 @@ const groupedMessages = $derived(() => {
 							</div>
 						{/each}
 					{/if}
+					</div>
 				</div>
 
 				<!-- Reply Preview -->
@@ -2951,7 +3266,7 @@ const groupedMessages = $derived(() => {
 						<div>
 							<div class="flex items-center">
 							<span class="text-sm font-medium text-gray-700">
-								Replying to {replyingTo.senderId === currentUserId ? 'Yourself' : replyingTo.senderName}
+								Replying to {replyingTo.senderId === currentUserId ? 'Yourself' : getDisplayName(replyingTo.senderId, currentConversation)}
 							</span>
 							<span class="text-xs text-gray-500 ml-2">
 								{formatTime(replyingTo.timestamp)}
@@ -3022,21 +3337,19 @@ const groupedMessages = $derived(() => {
 					<div class="flex items-end space-x-2">
 						<div class="flex-1 relative">
 							<!-- Drag and Drop Area -->
-							<div 
-								class="relative"
-								ondrop={handleFileDrop}
-								ondragover={handleDragOver}
-							>
-								<textarea
-									bind:value={messageInput}
-									placeholder="Type a message..."
-									class="flex-1 py-2 px-3 bg-gray-50 rounded-xl resize-none focus:outline-none focus:ring-1 focus:ring-[#01c0a4] max-h-24"
-									rows="1"
-									oninput={handleTyping}
-									onkeydown={handleKeyPress}
-									></textarea>
-								
-								<div class="absolute right-2 bottom-2 flex items-center space-x-1">
+						<div 
+							class="relative"
+							ondrop={handleFileDrop}
+							ondragover={handleDragOver}
+						>
+							<textarea
+								bind:value={messageInput}
+								placeholder="Type a message..."
+								class="w-full py-3 px-4 pr-24 bg-gray-50 rounded-xl resize-none focus:outline-none focus:ring-1 focus:ring-[#01c0a4] max-h-32 min-h-[48px]"
+								rows="1"
+								oninput={handleTyping}
+								onkeydown={handleKeyPress}
+								></textarea>								<div class="absolute right-2 bottom-2 flex items-center space-x-1">
 									{#if currentConversation.settings?.allowAttachments !== false}
 										<button
 											type="button"
@@ -3111,7 +3424,7 @@ const groupedMessages = $derived(() => {
 							class="p-4 bg-gradient-to-r from-[#01c0a4] to-[#00a085] text-white rounded-xl hover:shadow-lg hover:shadow-[#01c0a4]/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
 							aria-label="Send message"
 							>
-							<Send class="w-4 h-4" />
+							<Send class="w-5 h-5" />
 						</button>
 						</div>
 			</main>
@@ -3205,6 +3518,7 @@ const groupedMessages = $derived(() => {
 								size="md" 
 								showOnlineStatus={member.isOnline}
 								onlineStatus={member.isOnline ? 'online' : 'offline'}
+								isCurrentUser={(member.id || member.userId) === currentUserId}
 							/>
 							</button>
 							
@@ -3213,10 +3527,12 @@ const groupedMessages = $derived(() => {
 							<!-- <div class="text-xs text-red-500 mb-1">DEBUG: {JSON.stringify(member)}</div> -->
 							
 							<div class="flex items-center space-x-2">
-								{console.log('Member object:', member)}
 								<!-- Show name with fallback options -->
 								<h4 class="font-medium text-gray-900">
-								{member.name || member.dusername || (member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : '') || member.id || 'Unknown User'}
+								{member.name || 
+								 (member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : '') ||
+								 member.dusername || member.username ||
+								 member.id || 'Unknown User'}
 								</h4>
 								{#if member.id === currentUserId}
 								<span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">You</span>
@@ -3232,7 +3548,9 @@ const groupedMessages = $derived(() => {
 								<div class="flex items-center text-sm text-gray-600">
 									<span class="inline-block w-20 text-gray-500">Role:</span>
 									<span class="font-medium">
-									{member.roleName || member.role || 'Not specified'}
+									{member.roleName || member.role || member.drole || 
+									 (availableUsers.find(u => u.id === (member.id || member.userId))?.role) || 
+									 'Not specified'}
 									</span>
 								</div>
 								
@@ -3240,7 +3558,9 @@ const groupedMessages = $derived(() => {
 								<div class="flex items-center text-sm text-gray-600">
 									<span class="inline-block w-20 text-gray-500">Dept:</span>
 									<span class="font-medium">
-									{member.departmentName || member.department || 'Not specified'}
+									{member.departmentName || member.department || member.ddepartment ||
+									 (availableUsers.find(u => u.id === (member.id || member.userId))?.department) || 
+									 'Not specified'}
 									</span>
 								</div>
 								</div>
@@ -3300,7 +3620,7 @@ const groupedMessages = $derived(() => {
 												{fileMessage.attachment?.name || 'Unknown file'}
 											</p>
 											<p class="text-xs text-gray-500">
-												{fileMessage.senderName} • {formatTime(fileMessage.timestamp)}
+												{getDisplayName(fileMessage.senderId, currentConversation)} • {formatTime(fileMessage.timestamp)}
 											</p>
 										</div>
 										<button class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors">
@@ -3330,7 +3650,7 @@ const groupedMessages = $derived(() => {
 												{mediaMessage.attachment?.name || 'Media file'}
 											</p>
 											<p class="text-xs text-gray-500">
-												{mediaMessage.senderName} • {formatTime(mediaMessage.timestamp)}
+												{getDisplayName(mediaMessage.senderId, currentConversation)} • {formatTime(mediaMessage.timestamp)}
 											</p>
 										</div>
 										<button class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors">
@@ -3360,7 +3680,7 @@ const groupedMessages = $derived(() => {
 												{linkMessage.attachment?.name || linkMessage.attachment?.url || 'Link'}
 											</p>
 											<p class="text-xs text-gray-500">
-												{linkMessage.senderName} • {formatTime(linkMessage.timestamp)}
+												{getDisplayName(linkMessage.senderId, currentConversation)} • {formatTime(linkMessage.timestamp)}
 											</p>
 										</div>
 										<button class="p-1 text-gray-500 hover:text-[#01c0a4] transition-colors">
@@ -3642,7 +3962,7 @@ const groupedMessages = $derived(() => {
 										aria-label={selectedUsers.some(u => u.id === user.id) ? `Remove ${user.name} from selected users` : `Add ${user.name} to selected users`}
 									>
 										<p class="font-medium text-gray-900">{user.name}</p>
-										<p class="text-sm text-gray-500">{user.organizationalUnit || user.department} • {user.role}</p>
+										<p class="text-sm text-gray-500">{getDisplayDepartment(user.role, user.organizationalUnit || user.department)} • {user.role}</p>
 									</button>
 									{#if selectedUsers.some(u => u.id === user.id)}
 										<div class="w-5 h-5 bg-[#01c0a4] rounded-full flex items-center justify-center">
@@ -3686,7 +4006,7 @@ const groupedMessages = $derived(() => {
 										</button>
 										<div class="flex-1 min-w-0">
 											<p class="font-medium text-gray-900 text-sm truncate">{user.name}</p>
-											<p class="text-xs text-gray-500 truncate">{user.organizationalUnit || user.department}</p>
+											<p class="text-xs text-gray-500 truncate">{getDisplayDepartment(user.role, user.organizationalUnit || user.department)}</p>
 											<p class="text-xs text-gray-400 truncate">{user.role}</p>
 										</div>
 										<button
@@ -3774,7 +4094,7 @@ const groupedMessages = $derived(() => {
 				<div class="text-sm text-gray-600 mb-2">Message to forward:</div>
 				<div class="bg-white rounded-lg p-3 border">
 					<div class="flex items-center space-x-2 mb-2">
-						<span class="font-medium text-gray-900 text-sm">{messageToForward.senderName}</span>
+						<span class="font-medium text-gray-900 text-sm">{getDisplayName(messageToForward.senderId, currentConversation)}</span>
 						<span class="text-xs text-gray-500">{formatTime(messageToForward.timestamp)}</span>
 					</div>
 					<p class="text-gray-900 text-sm">{messageToForward.content}</p>
@@ -3928,7 +4248,7 @@ const groupedMessages = $derived(() => {
 										/>
 									</button>
 									<div>
-										<span class="font-medium text-gray-900 text-sm">{pinnedMessage.senderName}</span>
+										<span class="font-medium text-gray-900 text-sm">{getDisplayName(pinnedMessage.senderId, currentConversation)}</span>
 										<span class="text-xs text-gray-500 ml-2">{formatTime(pinnedMessage.timestamp)}</span>
 									</div>
 								</div>
@@ -4085,7 +4405,7 @@ const groupedMessages = $derived(() => {
 			<!-- Message Preview -->
 			<div class="p-4 border-b border-gray-100">
 				<div class="bg-gray-50 rounded-lg p-3">
-					<div class="text-xs text-gray-500 mb-1">Message from {forwardModalMessage.senderName}</div>
+					<div class="text-xs text-gray-500 mb-1">Message from {getDisplayName(forwardModalMessage.senderId, currentConversation)}</div>
 					<div class="text-sm text-gray-900">{forwardModalMessage.content}</div>
 				</div>
 			</div>

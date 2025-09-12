@@ -89,11 +89,11 @@ exports.addMessage = async ({ dconversationId, dsenderId, dcontent, dreplyToId, 
     dconversationId, 
     dsenderId, 
     dcontent, 
+    dmessageType,
     dreplyToId, 
     dreplyToSenderId, 
-    dreplyToContent, 
+    dreplyToContent
     // dattachment,  // Temporarily commented out
-    dmessageType 
   });
 };
 

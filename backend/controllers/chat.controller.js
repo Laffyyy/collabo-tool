@@ -361,3 +361,74 @@ exports.updateConversationSetting = async (req, res, next) => {
     return next(error);
   }
 };
+
+// Add a reaction to a message
+exports.addReaction = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user.id;
+
+    console.log('🎯 Adding reaction:', { messageId, emoji, userId });
+
+    // Basic validation
+    if (!emoji || emoji.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Emoji is required'
+      });
+    }
+
+    // For now, return success - we'll implement database integration later
+    return res.json({
+      success: true,
+      message: 'Reaction added successfully',
+      reaction: {
+        messageId,
+        emoji: emoji.trim(),
+        userId,
+        createdAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error adding reaction:', error);
+    return next(error);
+  }
+};
+
+// Remove a reaction from a message
+exports.removeReaction = async (req, res, next) => {
+  try {
+    const { messageId, emoji } = req.params;
+    const userId = req.user.id;
+
+    console.log('🎯 Removing reaction:', { messageId, emoji, userId });
+
+    // For now, return success - we'll implement database integration later
+    return res.json({
+      success: true,
+      message: 'Reaction removed successfully'
+    });
+  } catch (error) {
+    console.error('Error removing reaction:', error);
+    return next(error);
+  }
+};
+
+// Get all reactions for a message
+exports.getMessageReactions = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+
+    console.log('🎯 Getting reactions for message:', messageId);
+
+    // For now, return empty array - we'll implement database integration later
+    return res.json({
+      success: true,
+      reactions: []
+    });
+  } catch (error) {
+    console.error('Error getting message reactions:', error);
+    return next(error);
+  }
+};

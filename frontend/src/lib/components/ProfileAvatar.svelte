@@ -5,7 +5,8 @@
 		size = 'md',
 		showOnlineStatus = false,
 		onlineStatus = 'offline',
-		altText = ''
+		altText = '',
+		isCurrentUser = false
 	}: {
 		user?: {
 			profilePhoto?: string;
@@ -17,10 +18,15 @@
 		showOnlineStatus?: boolean;
 		onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
 		altText?: string;
+		isCurrentUser?: boolean;
 	} = $props();
 
 	// Calculate initials from user data
 	let initials = $derived.by(() => {
+		if (isCurrentUser) {
+			return 'Me';
+		}
+		
 		if (!user) return 'U';
 		
 		if (user.firstName && user.lastName) {
@@ -38,11 +44,11 @@
 		return 'U';
 	});
 
-	// Size classes mapping
+	// Size classes mapping - adjusted for "Me" text
 	const sizeClasses = {
-		sm: 'w-6 h-6 text-xs',
-		md: 'w-8 h-8 text-sm',
-		lg: 'w-10 h-10 text-lg',
+		sm: 'w-8 h-8 text-xs',
+		md: 'w-10 h-10 text-sm',
+		lg: 'w-12 h-12 text-base',
 		xl: 'w-16 h-16 text-xl',
 		'2xl': 'w-24 h-24 text-2xl'
 	};
