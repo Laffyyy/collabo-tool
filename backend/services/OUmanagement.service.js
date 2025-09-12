@@ -71,7 +71,7 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
         const startInt = Number.isInteger(start) ? start : parseInt(start || 0);
         const limitInt = Number.isInteger(limit) ? limit : parseInt(limit || 10);
 
-        const { rows, total } = await ouModel.getOUsWithTotal(
+        const { rows, total, allNodes } = await ouModel.getOUsWithTotal(
             startInt,
             limitInt,
             sort,
@@ -82,18 +82,41 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
             isactive
         );
 
-        // Ensure jsSettings is deserialized for all rows
-        for (const row of rows) {
-            if (Object.prototype.hasOwnProperty.call(row, 'jsSettings')) {
-                row.jsSettings = deserializeJsSettings(row.jsSettings);
-            }
+        // Build complete tree structure recursively
+        function buildTreeStructure(nodes, parentId = null) {
+            return nodes
+                .filter(node => node.dparentouid === parentId)
+                .map(node => ({
+                    ...node,
+                    children: buildTreeStructure(nodes, node.ouid)
+                }));
         }
+
+        // Recursively deserialize jsSettings for all nodes and their children
+        function deserializeOUSettings(ou) {
+            if (Object.prototype.hasOwnProperty.call(ou, 'jsSettings')) {
+                ou.jsSettings = deserializeJsSettings(ou.jsSettings);
+            }
+            if (ou.children && Array.isArray(ou.children)) {
+                ou.children = ou.children.map(child => deserializeOUSettings({...child}));
+            }
+            return ou;
+        }
+
+        // Build the complete tree for each root node
+        const processedRows = rows.map(row => {
+            const nodeWithTree = {
+                ...row,
+                children: buildTreeStructure(allNodes, row.ouid)
+            };
+            return deserializeOUSettings({...nodeWithTree});
+        });
 
         const totalPages = limitInt > 0 ? Math.ceil(total / limitInt) : 0;
         const page = limitInt > 0 ? Math.floor(startInt / limitInt) + 1 : 1;
 
         return {
-            data: rows,
+            data: processedRows,
             total,
             start: startInt,
             limit: limitInt,
@@ -140,6 +163,14 @@ async function getDeactiveOU(howmany, page, sort) {
  */
 async function createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings) {
     try {
+        // Check if parent OU exists if parentouid is provided
+        if (parentouid) {
+            const parentOU = await ouModel.getOUById(parentouid);
+            if (!parentOU) {
+                throw new Error('Parent OU does not exist');
+            }
+        }
+
         const result = await ouModel.createOU(OrgName, Description, parentouid, OUsettings, Location, jsSettings);
         if (result && Object.prototype.hasOwnProperty.call(result, 'jsSettings')) {
             result.jsSettings = deserializeJsSettings(result.jsSettings);
@@ -316,6 +347,25 @@ async function reactiveOU(reactivationlist) {
     }
 }
 
+async function getChildren(parentid) {
+    try {
+        // Get children
+        const result = await ouModel.getChildren(parentid);
+        
+        return result;
+    } catch (error) {
+        throw new Error(`Failed to get children: ${error.message}`);
+    }
+}
+
+async function InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) {
+    try {
+        const result = await ouModel.InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat);
+        return result;
+    } catch (error) {
+        throw new Error(`Failed to insert audit log: ${error.message}`);
+    }
+}
 module.exports = {
     getOU,
     getDeactiveOU,
@@ -323,5 +373,7 @@ module.exports = {
     deactiveOU,
     updateOU,
     getOUsettings,
-    reactiveOU
+    reactiveOU,
+    getChildren,
+    InsertAuditLog
 };

@@ -152,10 +152,12 @@ class OUmodel {
             let params = [];
             let paramIndex = 1;
 
-            if (search && search !== 'false' && searchvalue && searchvalue.trim() !== '') {
-                const searchCondition = ` AND (ou.dname ILIKE $${paramIndex} OR ou.ddescription ILIKE $${paramIndex})`;
-                whereClause += searchCondition;
-                params.push(`%${searchvalue}%`);
+            const searchParam = search && search !== 'false' && searchvalue && searchvalue.trim() !== '' 
+                ? `%${searchvalue}%` 
+                : null;
+
+            if (searchParam) {
+                params.push(searchParam);
                 paramIndex++;
             }
 
@@ -166,46 +168,143 @@ class OUmodel {
 
             // Use window function COUNT(*) OVER() to compute total across filtered set
             const query = `
-                WITH filtered AS (
-                    SELECT ou.*
-                    FROM tblorganizationalunits ou
-                    ${whereClause}
-                ),
-                with_members AS (
+                WITH RECURSIVE full_hierarchy AS (
+                    -- Get all OUs to build complete hierarchy
                     SELECT 
-                        ou.did as ouid,
-                        ou.dname,
-                        ou.ddescription,
-                        ou.dparentouid,
-                        ou.tcreatedat,
-                        ou."jsSettings",
-                        ou."dLocation",
-                        ou."bisActive",
-                        COALESCE(mc.membercount, 0) as membercount
-                    FROM filtered ou
-                    LEFT JOIN (
-                        WITH RECURSIVE ou_hierarchy AS (
-                            SELECT did as base_ou, did as descendant_ou FROM tblorganizationalunits
-                            UNION ALL
-                            SELECT h.base_ou, o.did
-                            FROM tblorganizationalunits o
-                            INNER JOIN ou_hierarchy h ON o.dparentouid = h.descendant_ou
+                        did,
+                        ARRAY[did] as path,
+                        1 as depth,
+                        dname,
+                        ddescription,
+                        dparentouid,
+                        tcreatedat,
+                        "jsSettings",
+                        "dLocation",
+                        "bisActive"
+                    FROM tblorganizationalunits
+                    WHERE "bisActive" = ${activeStatus}
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        o.did,
+                        h.path || o.did,
+                        h.depth + 1,
+                        o.dname,
+                        o.ddescription,
+                        o.dparentouid,
+                        o.tcreatedat,
+                        o."jsSettings",
+                        o."dLocation",
+                        o."bisActive"
+                    FROM tblorganizationalunits o
+                    INNER JOIN full_hierarchy h ON o.dparentouid = h.did
+                    WHERE o."bisActive" = ${activeStatus}
+                    AND h.depth < 10
+                ),
+                member_counts AS (
+                    -- Calculate member counts
+                    SELECT 
+                        ou.did,
+                        COUNT(DISTINCT ur.duserid) as membercount
+                    FROM tblorganizationalunits ou
+                    LEFT JOIN tbluserroles ur ON ur.douid = ou.did
+                    GROUP BY ou.did
+                ),
+                relevant_ous AS (
+                    -- Get all OUs that should be included in the results
+                    SELECT DISTINCT h.did
+                    FROM full_hierarchy h
+                    WHERE ${searchParam ? `
+                        -- Include if:
+                        -- 1. The OU matches the search
+                        (h.dname ILIKE $1 OR h.ddescription ILIKE $1)
+                        OR
+                        -- 2. Any parent matches
+                        EXISTS (
+                            SELECT 1 FROM full_hierarchy p
+                            WHERE p.did = ANY(h.path)
+                            AND (p.dname ILIKE $1 OR p.ddescription ILIKE $1)
                         )
-                        SELECT base_ou, COUNT(ur.duserid) as membercount
-                        FROM ou_hierarchy oh
-                        LEFT JOIN tbluserroles ur ON ur.douid = oh.descendant_ou
-                        GROUP BY base_ou
-                    ) mc ON mc.base_ou = ou.did
+                        OR
+                        -- 3. Any child matches
+                        EXISTS (
+                            SELECT 1 FROM full_hierarchy c
+                            WHERE c.path[1] = h.path[1]
+                            AND (c.dname ILIKE $1 OR c.ddescription ILIKE $1)
+                        )
+                    ` : 'true'}
+                ),
+                filtered_hierarchy AS (
+                    -- Get the complete data for relevant OUs
+                    SELECT DISTINCT ON (h.did)
+                        h.did,
+                        h.dname,
+                        h.ddescription,
+                        h.dparentouid,
+                        h.tcreatedat,
+                        h."jsSettings",
+                        h."dLocation",
+                        h."bisActive",
+                        h.path,
+                        h.depth
+                    FROM full_hierarchy h
+                    INNER JOIN relevant_ous ro ON h.did = ro.did
+                ),
+                root_nodes AS (
+                    -- Get root nodes for pagination
+                    SELECT 
+                        h.did as ouid,
+                        h.dname,
+                        h.ddescription,
+                        h.dparentouid,
+                        h.tcreatedat,
+                        h."jsSettings",
+                        h."dLocation",
+                        h."bisActive",
+                        COALESCE(mc.membercount, 0) as membercount,
+                        'root' as node_type
+                    FROM filtered_hierarchy h
+                    LEFT JOIN member_counts mc ON mc.did = h.did
+                    WHERE h.dparentouid IS NULL
+                ),
+                all_nodes AS (
+                    -- Get all nodes for tree building
+                    SELECT 
+                        h.did as ouid,
+                        h.dname,
+                        h.ddescription,
+                        h.dparentouid,
+                        h.tcreatedat,
+                        h."jsSettings",
+                        h."dLocation",
+                        h."bisActive",
+                        COALESCE(mc.membercount, 0) as membercount,
+                        'all' as node_type
+                    FROM filtered_hierarchy h
+                    LEFT JOIN member_counts mc ON mc.did = h.did
+                ),
+                paginated_roots AS (
+                    SELECT *, COUNT(*) OVER() AS total_count
+                    FROM root_nodes
+                    ORDER BY ${validSortBy} ${validSort}
+                    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
                 )
-                SELECT *, COUNT(*) OVER() AS total_count
-                FROM with_members
-                ORDER BY ${validSortBy} ${validSort}
-                LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+                -- Return both paginated roots and all nodes in one query
+                SELECT * FROM paginated_roots
+                UNION ALL
+                SELECT ouid, dname, ddescription, dparentouid, tcreatedat, "jsSettings", "dLocation", "bisActive", membercount, node_type, 0 as total_count FROM all_nodes
+                ORDER BY node_type, dname
             `;
 
             params.push(limit, start);
             const result = await db.query(query, params);
-            const rows = result.rows.map(r => ({
+            
+            // Separate root nodes and all nodes from the result
+            const rootResults = result.rows.filter(r => r.node_type === 'root');
+            const allNodesResults = result.rows.filter(r => r.node_type === 'all');
+            
+            const rows = rootResults.map(r => ({
                 ouid: r.ouid,
                 dname: r.dname,
                 ddescription: r.ddescription,
@@ -216,8 +315,22 @@ class OUmodel {
                 bisActive: r.bisActive,
                 membercount: r.membercount
             }));
-            const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
-            return { rows, total };
+            
+            const allNodes = allNodesResults.map(r => ({
+                ouid: r.ouid,
+                dname: r.dname,
+                ddescription: r.ddescription,
+                dparentouid: r.dparentouid,
+                tcreatedat: r.tcreatedat,
+                jsSettings: r.jsSettings,
+                dLocation: r.dLocation,
+                bisActive: r.bisActive,
+                membercount: r.membercount
+            }));
+            
+            const total = rootResults.length > 0 ? parseInt(rootResults[0].total_count) : 0;
+
+            return { rows, total, allNodes };
         } catch (error) {
             throw new Error(error);
         }
@@ -352,7 +465,53 @@ class OUmodel {
             throw new Error(error);
         }
     }
-    
+    async getChildren(parentid) {
+        try {
+            // Log the query parameters
+            
+            const query = `
+                WITH child_counts AS (
+                    SELECT 
+                        douid,
+                        COUNT(DISTINCT duserid) as membercount
+                    FROM tbluserroles
+                    GROUP BY douid
+                )
+                SELECT 
+                    t1.did as ouid,
+                    t1.dname,
+                    t1.ddescription,
+                    t1.dparentouid,
+                    t1.tcreatedat,
+                    t1."jsSettings",
+                    t1."dLocation",
+                    t1."bisActive",
+                    COALESCE(cc.membercount, 0) as membercount
+                FROM tblorganizationalunits t1
+                LEFT JOIN child_counts cc ON t1.did = cc.douid
+                WHERE t1.dparentouid = $1
+                ORDER BY t1.dname ASC`;
+                
+            const result = await db.query(query, [parentid]);
+
+            
+            
+            return result.rows;
+        } catch (error) {
+            console.error('Database error:', error.message);
+            throw new Error(error.message);
+        }
+    }
+
+    async InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) {
+        try {
+            const query = `INSERT INTO tblauditlogs (did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
+            const result = await db.query(query, [did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat]);
+            return result.rows[0];
+        } catch (error) {
+            throw new Error(error);
+        }
+    }
 }
 module.exports = OUmodel;
 
@@ -378,3 +537,15 @@ module.exports = OUmodel;
 // | dsupervisorid | uuid                        | null                     |
 // | dmanagerid    | uuid                        | null                     |
 // | tassignedat   | timestamp without time zone | null                     |
+//tblauditlogs
+// | column_name | data_type                   | character_maximum_length |
+// | ----------- | --------------------------- | ------------------------ |
+// | did         | uuid                        | null                     |
+// | duserid     | uuid                        | null                     |
+// | daction     | character varying           | 100                      |
+// | dtargettype | character varying           | 50                       |
+// | dtargetid   | uuid                        | null                     |
+// | ddetails    | jsonb                       | null                     |
+// | dipaddress  | inet                        | null                     |
+// | duseragent  | text                        | null                     |
+// | tcreatedat  | timestamp without time zone | null                     |

@@ -22,6 +22,14 @@ router.get(
     OUmanagerController.getOU
 )
 
+router.get(
+    '/getchildren',
+    [query('parentid').isString().notEmpty().withMessage('parentid must be a non-empty string')
+        .isUUID().withMessage('parentid must be a valid UUID')],
+    validate,
+    OUmanagerController.getChildren
+)
+
 
 router.post(
     '/create',
@@ -29,36 +37,40 @@ router.post(
     body('OrgName').isString().notEmpty(),
     body('Description').isString().notEmpty(),
     body('Location').isString().notEmpty(),
+    body('ParentId').optional().isString().notEmpty(),
     body('Settings').isObject().notEmpty(),
-    // Chat settings validation (optional - only validate if present)
-    body('Settings.Chat.Frontline.Init1v1').optional().isBoolean(),
-    body('Settings.Chat.Frontline.CreateGroup').optional().isBoolean(),
-    body('Settings.Chat.Frontline.JoinGroupChats').optional().isBoolean(),
-    body('Settings.Chat.Frontline.ShareFiles').optional().isBoolean(),
-    body('Settings.Chat.Frontline.ForwardMessage').optional().isBoolean(),
-    body('Settings.Chat.support.Init1v1').optional().isBoolean(),
-    body('Settings.Chat.support.CreateGroup').optional().isBoolean(),
-    body('Settings.Chat.support.JoinGroupChats').optional().isBoolean(),
-    body('Settings.Chat.support.ShareFiles').optional().isBoolean(),
-    body('Settings.Chat.support.ForwardMessage').optional().isBoolean(),
-    body('Settings.Chat.supervisor.CreateGroup').optional().isBoolean(),
-    body('Settings.Chat.supervisor.ShareFiles').optional().isBoolean(),
-    body('Settings.Chat.supervisor.ForwardMessage').optional().isBoolean(),
+    body('Settings.Chat').isObject().notEmpty(),
+    body('Settings.broadcast').isObject().notEmpty(),
 
-    body('Settings.Chat.General.FileSharing').optional().isBoolean(),
-    body('Settings.Chat.General.Emoji').optional().isBoolean(),
-    body('Settings.Chat.General.Retention').optional().isInt(),
-    // Broadcast settings validation (optional - only validate if present)
-    body('Settings.broadcast.Frontline.CreateBroadcasts').optional().isBoolean(),
-    body('Settings.broadcast.Frontline.ReplyToBroadcasts').optional().isBoolean(),
-    body('Settings.broadcast.support.CreateBroadcasts').optional().isBoolean(),
-    body('Settings.broadcast.support.ReplyToBroadcasts').optional().isBoolean(),
-    body('Settings.broadcast.supervisor.CreateBroadcasts').optional().isBoolean(),
+    //both is needed for the validation
+    body('Settings.Chat.Frontline.Init1v1').isBoolean(),
+    body('Settings.Chat.Frontline.CreateGroup').isBoolean(),
+    body('Settings.Chat.Frontline.JoinGroupChats').isBoolean(),
+    body('Settings.Chat.Frontline.ShareFiles').isBoolean(),
+    body('Settings.Chat.Frontline.ForwardMessage').isBoolean(),
+    body('Settings.Chat.support.Init1v1').isBoolean(),
+    body('Settings.Chat.support.CreateGroup').isBoolean(),
+    body('Settings.Chat.support.JoinGroupChats').isBoolean(),
+    body('Settings.Chat.support.ShareFiles').isBoolean(),
+    body('Settings.Chat.support.ForwardMessage').isBoolean(),
+    body('Settings.Chat.supervisor.CreateGroup').isBoolean(),
+    body('Settings.Chat.supervisor.ShareFiles').isBoolean(),
+    body('Settings.Chat.supervisor.ForwardMessage').isBoolean(),
 
-    body('Settings.broadcast.General.ApprovalforBroadcast').optional().isBoolean(),
-    body('Settings.broadcast.General.ScheduleBroadcast').optional().isBoolean(),
-    body('Settings.broadcast.General.PriorityBroadcast').optional().isBoolean(),
-    body('Settings.broadcast.General.Retention').optional().isInt(),
+    body('Settings.Chat.General.FileSharing').isBoolean(),
+    body('Settings.Chat.General.Emoji').isBoolean(),
+    body('Settings.Chat.General.Retention').isInt(),
+    
+    body('Settings.broadcast.frontline.createBroadcasts').isBoolean(),
+    body('Settings.broadcast.frontline.replyToBroadcasts').isBoolean(),
+    body('Settings.broadcast.support.createBroadcasts').isBoolean(),
+    body('Settings.broadcast.support.replyToBroadcasts').isBoolean(),
+    body('Settings.broadcast.supervisor.createBroadcasts').isBoolean(),
+
+    body('Settings.broadcast.general.approvalforBroadcast').isBoolean(),
+    body('Settings.broadcast.general.scheduleBroadcast').isBoolean(),
+    body('Settings.broadcast.general.priorityBroadcast').isBoolean(),
+    body('Settings.broadcast.general.retention').isInt(),
     ],
     validate,
     OUmanagerController.createOUmanager
@@ -99,19 +111,19 @@ router.post(
     body('changes.Settings.Chat.General.Retention').optional().isInt(),
     // Broadcast Settings - Only validate if broadcast object exists
     body('changes.Settings.broadcast').optional().isObject(),
-    body('changes.Settings.broadcast.Frontline').optional().isObject(),
-    body('changes.Settings.broadcast.Frontline.CreateBroadcasts').optional().isBoolean(),
-    body('changes.Settings.broadcast.Frontline.ReplyToBroadcasts').optional().isBoolean(),
+    body('changes.Settings.broadcast.frontline').optional().isObject(),
+    body('changes.Settings.broadcast.frontline.createBroadcasts').optional().isBoolean(),
+    body('changes.Settings.broadcast.frontline.replyToBroadcasts').optional().isBoolean(),
     body('changes.Settings.broadcast.support').optional().isObject(),
-    body('changes.Settings.broadcast.support.CreateBroadcasts').optional().isBoolean(),
-    body('changes.Settings.broadcast.support.ReplyToBroadcasts').optional().isBoolean(),
+    body('changes.Settings.broadcast.support.createBroadcasts').optional().isBoolean(),
+    body('changes.Settings.broadcast.support.replyToBroadcasts').optional().isBoolean(),
     body('changes.Settings.broadcast.supervisor').optional().isObject(),
-    body('changes.Settings.broadcast.supervisor.CreateBroadcasts').optional().isBoolean(),
-    body('changes.Settings.broadcast.General').optional().isObject(),
-    body('changes.Settings.broadcast.General.ApprovalforBroadcast').optional().isBoolean(),
-    body('changes.Settings.broadcast.General.ScheduleBroadcast').optional().isBoolean(),
-    body('changes.Settings.broadcast.General.PriorityBroadcast').optional().isBoolean(),
-    body('changes.Settings.broadcast.General.Retention').optional().isInt(),
+    body('changes.Settings.broadcast.supervisor.createBroadcasts').optional().isBoolean(),
+    body('changes.Settings.broadcast.general').optional().isObject(),
+    body('changes.Settings.broadcast.general.approvalforBroadcast').optional().isBoolean(),
+    body('changes.Settings.broadcast.general.scheduleBroadcast').optional().isBoolean(),
+    body('changes.Settings.broadcast.general.priorityBroadcast').optional().isBoolean(),
+    body('changes.Settings.broadcast.general.retention').optional().isInt(),
 ],
     validate,
     OUmanagerController.updateOU
