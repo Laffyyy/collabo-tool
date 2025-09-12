@@ -99,7 +99,9 @@ async function verifyOtp(req, res, next) {
         email: result.user.email,
         role: result.user.role,
         username: result.user.username,
-        ouId: result.user.ouId
+        ouId: result.user.ouId,
+        mustChangePassword: result.user.mustChangePassword,
+        accountStatus: result.user.accountStatus
       },
       token: result.token,
       sessionToken: result.sessionToken,

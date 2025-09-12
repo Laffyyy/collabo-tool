@@ -137,6 +137,9 @@ function closePool() {
   }
 }
 
+// Export sql for models that use template literals
+const sqlInstance = getSql();
+
 module.exports = {
   db,
   getPool,

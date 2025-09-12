@@ -47,6 +47,9 @@ export interface LoginResponse extends ApiResponse {
   email: string;
   step?: string;
   exists?: boolean;
+  isLocked?: boolean;
+  attemptsRemaining?: number;
+  otpExpiresAt?: string;
 }
 
 export interface OtpVerificationResponse extends ApiResponse {
