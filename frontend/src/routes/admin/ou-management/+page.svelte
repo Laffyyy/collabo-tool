@@ -2,6 +2,7 @@
   import { Building2, Plus, Search, Edit, Trash2, Users, MapPin, FileText, MessageCircle, Radio, Shield, User, UserCheck, Send, ChevronRight, ChevronDown, X } from 'lucide-svelte';
   import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
   import { onMount } from 'svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
   import { createOU as createOUAPI, transformOUDataForAPI, transformOUDataForUpdate, getActiveOUs, getInactiveOUs, deactivateOUs as deactivateOUsAPI, deactivateOU as deactivateOUAPI, reactivateOU as reactivateOUAPI, reactivateOUs as reactivateOUsAPI, updateOU as updateOUAPI } from '$lib/api/OUmanagement';
 
   // TypeScript interfaces
@@ -97,6 +98,9 @@
   let loadError = $state<string>('');
   let parentOUForNewChild = $state<OrganizationUnit | null>(null);
   let selectedRows = $state<Set<string>>(new Set());
+
+  // Theme reactivity
+  const isDarkMode = $derived(themeStore.isDarkMode);
 
   // Notification modal state
   let showNotificationModal = $state<boolean>(false);
@@ -884,7 +888,10 @@
 {#snippet ouTreeNode(ou: OrganizationUnit & { children?: OrganizationUnit[] }, depth: number)}
   <div class="w-full relative">
     <div 
-      class="flex items-center py-2 px-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors {selectedOU?.id === ou.id ? 'bg-blue-50 border-l-4 border-[#01c0a4]' : ''}"
+      class="flex items-center py-2 px-2 rounded-lg cursor-pointer {selectedOU?.id === ou.id 
+        ? (isDarkMode ? 'bg-gray-700 border-l-4 border-[#01c0a4]' : 'bg-blue-50 border-l-4 border-[#01c0a4]') 
+        : (isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50')
+      } transition-colors duration-300"
       style="margin-left: {depth * 16}px"
       onclick={() => selectOU(ou)}
     >
@@ -892,12 +899,12 @@
       {#if ou.children && ou.children.length > 0}
         <button
           onclick={(e) => { e.stopPropagation(); toggleExpand(ou.id); }}
-          class="mr-2 p-1 rounded hover:bg-gray-200 transition-all duration-200 flex items-center justify-center"
+          class="mr-2 p-1 rounded transition-all duration-200 flex items-center justify-center {isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}"
           title={expandedNodes.has(ou.id) ? 'Collapse children' : 'Expand children'}
           aria-label={expandedNodes.has(ou.id) ? 'Collapse children' : 'Expand children'}
         >
           <div class="transform transition-transform duration-200 {expandedNodes.has(ou.id) ? 'rotate-90' : 'rotate-0'}">
-            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 {isDarkMode ? 'text-gray-400' : 'text-gray-600'} transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
           </div>
@@ -912,16 +919,16 @@
           <Building2 class="w-3 h-3 text-white" />
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium text-gray-900 truncate flex items-center">
+          <div class="text-sm font-medium {isDarkMode ? 'text-white' : 'text-gray-900'} truncate flex items-center transition-colors duration-300">
             {ou.name}
             {#if ou.children && ou.children.length > 0}
-              <span class="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              <span class="ml-2 text-xs px-2 py-0.5 rounded-full transition-colors duration-300 {isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-100 text-gray-600'}">
                 {ou.children.length} {ou.children.length === 1 ? 'child' : 'children'}
               </span>
             {/if}
           </div>
           {#if ou.memberCount > 0}
-            <div class="text-xs text-gray-500">{ou.memberCount} members</div>
+            <div class="text-xs {isDarkMode ? 'text-gray-400' : 'text-gray-500'} transition-colors duration-300">{ou.memberCount} members</div>
           {/if}
         </div>
         <div class="flex-shrink-0 flex items-center space-x-2">
@@ -930,7 +937,7 @@
           
           <!-- Additional Dropdown Indicator for Parent OUs -->
           {#if ou.children && ou.children.length > 0}
-            <div class="text-xs text-gray-400 font-medium">
+            <div class="text-xs font-medium transition-colors duration-300 {isDarkMode ? 'text-gray-500' : 'text-gray-400'}">
               {expandedNodes.has(ou.id) ? 'Expanded' : 'Collapsed'}
             </div>
           {/if}
@@ -961,24 +968,24 @@
   <title>OU Management - Admin Controls</title>
 </svelte:head>
 
-<div class="p-6 bg-gray-50 min-h-screen space-y-6">
+<div class="p-6 min-h-screen space-y-6 transition-colors duration-300 {isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}">
   <!-- Header -->
   <div class="flex items-center justify-between fade-in">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900 mb-1">Organization Unit Management</h1>
-      <p class="text-sm text-gray-600">Manage organizational structure and communication policies</p>
+      <h1 class="text-2xl font-bold mb-1 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Organization Unit Management</h1>
+      <p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}">Manage organizational structure and communication policies</p>
     </div>
   </div>
 
   <!-- Main Layout: Directory + Details -->
-  <div class="collaboration-card fade-in">
+  <div class="collaboration-card fade-in transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}">
     <div class="flex h-[calc(100vh-200px)]">
       <!-- Left Side: Directory Tree -->
-      <div class="w-1/4 border-r border-gray-200 flex flex-col">
+      <div class="w-1/4 flex flex-col transition-colors duration-300 {isDarkMode ? 'border-r border-gray-600' : 'border-r border-gray-200'}">
         <!-- Header with Search and Create Button -->
-        <div class="p-4 border-b border-gray-200 bg-gray-50">
+        <div class="p-4 transition-colors duration-300 {isDarkMode ? 'border-b border-gray-600 bg-gray-700' : 'border-b border-gray-200 bg-gray-50'}">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">Organization Units</h3>
+            <h3 class="text-lg font-semibold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Organization Units</h3>
             <button
               onclick={() => { parentOUForNewChild = null; showCreateModal = true; }}
               class="primary-button flex items-center space-x-2 text-sm px-3 py-2"
@@ -989,12 +996,12 @@
           </div>
           
           <div class="relative mb-4">
-            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-400'}" />
             <input
               bind:value={searchQuery}
               type="text"
               placeholder="Search organization units..."
-              class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+              class="w-full pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300 {isDarkMode ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-500'}"
             />
           </div>
 
@@ -1002,7 +1009,7 @@
           <div class="grid grid-cols-2 gap-1">
             <button
               onclick={() => changeTab('active')}
-              class="flex items-center justify-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors {currentTab === 'active' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+              class="flex items-center justify-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors duration-300 {currentTab === 'active' ? 'bg-[#01c0a4] text-white' : (isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-100')}"
             >
               <Building2 class="w-4 h-4" />
               <span>Activated ({tabCounts.active})</span>
@@ -1010,7 +1017,7 @@
 
             <button
               onclick={() => changeTab('inactive')}
-              class="flex items-center justify-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors {currentTab === 'inactive' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+              class="flex items-center justify-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors duration-300 {currentTab === 'inactive' ? 'bg-[#01c0a4] text-white' : (isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-white text-gray-700 hover:bg-gray-100')}"
             >
               <X class="w-4 h-4" />
               <span>Deactivated ({tabCounts.inactive})</span>
@@ -1023,17 +1030,17 @@
           {#if isLoading}
             <div class="text-center py-8">
               <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#01c0a4] mx-auto mb-3"></div>
-              <p class="text-gray-500 text-sm">Loading organization units...</p>
+              <p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Loading organization units...</p>
             </div>
           {:else if loadError}
             <div class="text-center py-8">
-              <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
+              <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-colors duration-300 {isDarkMode ? 'bg-red-900/30' : 'bg-red-100'}">
                 <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
               </div>
               <p class="text-red-600 text-sm mb-2">Error loading organization units</p>
-              <p class="text-gray-500 text-xs mb-3">{loadError}</p>
+              <p class="text-xs mb-3 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">{loadError}</p>
               <button 
                 onclick={loadLists}
                 class="text-sm px-3 py-1 bg-[#01c0a4] text-white rounded hover:bg-[#00a085] transition-colors"
@@ -1048,8 +1055,8 @@
 
             {#if hierarchicalOUs.length === 0}
               <div class="text-center py-8">
-                <Building2 class="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p class="text-gray-500 text-sm">
+                <Building2 class="w-12 h-12 mx-auto mb-3 transition-colors duration-300 {isDarkMode ? 'text-gray-600' : 'text-gray-300'}" />
+                <p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">
                   {searchQuery ? 'No units match your search.' : 'No organization units found.'}
                 </p>
               </div>
@@ -1066,15 +1073,15 @@
           {@const hasChildren = selectedOU ? currentList.some(ou => ou.parentId === selectedOU!.id) : false}
           
           <!-- OU Header -->
-          <div class="p-6 border-b border-gray-200 bg-gray-50">
+          <div class="p-6 transition-colors duration-300 {isDarkMode ? 'border-b border-gray-600 bg-gray-700' : 'border-b border-gray-200 bg-gray-50'}">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-4">
                 <div class="h-12 w-12 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
                   <Building2 class="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h2 class="text-xl font-bold text-gray-900">{selectedOU.name}</h2>
-                  <p class="text-gray-600">{selectedOU.description}</p>
+                  <h2 class="text-xl font-bold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{selectedOU.name}</h2>
+                  <p class="transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}">{selectedOU.description}</p>
                 </div>
               </div>
               
@@ -1097,14 +1104,14 @@
               <!-- Parent OU View: Show Children in Table -->
               <div class="p-6">
                 <div class="mb-6">
-                  <p class="text-sm text-gray-600">Handles day-to-day office operations, procurement, facility management, and administrative support.</p>
+                  <p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">Handles day-to-day office operations, procurement, facility management, and administrative support.</p>
                 </div>
                 
-                <div class="bg-white rounded-lg border border-gray-200">
-                  <div class="px-6 py-4 border-b border-gray-200">
+                <div class="rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                  <div class="px-6 py-4 transition-colors duration-300 {isDarkMode ? 'border-b border-gray-600' : 'border-b border-gray-200'}">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center space-x-2">
-                        <h3 class="text-lg font-semibold text-gray-900">Sub-Organization Units</h3>
+                        <h3 class="text-lg font-semibold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Sub-Organization Units</h3>
                       </div>
                       <button
                         onclick={() => { if (selectedOU) { parentOUForNewChild = selectedOU; showCreateModal = true; } }}
@@ -1148,12 +1155,12 @@
                               </div>
                             </td>
                             <td class="px-6 py-4">
-                              <span class="px-2 py-1 text-xs font-medium rounded-full {childOU.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                              <span class="px-2 py-1 text-xs font-medium rounded-full {childOU.status === 'active' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800') : (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800')} transition-colors duration-300">
                                 {childOU.status === 'active' ? 'Active' : 'Inactive'}
                               </span>
                             </td>
                             <td class="px-6 py-4">
-                              <span class="text-sm text-gray-600">Organization Unit</span>
+                              <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">Organization Unit</span>
                             </td>
                             <td class="px-6 py-4">
                               <div class="flex items-center space-x-2">
@@ -1188,57 +1195,57 @@
                 <div class="grid grid-cols-2 gap-6 mb-8">
                   <div class="space-y-4">
                     <div>
-                      <label class="block text-sm font-medium text-gray-500 mb-1">Location</label>
+                      <label class="block text-sm font-medium mb-1 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Location</label>
                       <div class="flex items-center space-x-2">
-                        <MapPin class="w-4 h-4 text-gray-400" />
-                        <span class="text-gray-900">{selectedOU.location || 'Not specified'}</span>
+                        <MapPin class="w-4 h-4 transition-colors duration-300 {isDarkMode ? 'text-gray-500' : 'text-gray-400'}" />
+                        <span class="transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{selectedOU.location || 'Not specified'}</span>
                       </div>
                     </div>
                     
                     <div>
-                      <label class="block text-sm font-medium text-gray-500 mb-1">Members</label>
+                      <label class="block text-sm font-medium mb-1 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Members</label>
                       <div class="flex items-center space-x-2">
-                        <Users class="w-4 h-4 text-gray-400" />
-                        <span class="text-gray-900">{selectedOU.memberCount} people</span>
+                        <Users class="w-4 h-4 transition-colors duration-300 {isDarkMode ? 'text-gray-500' : 'text-gray-400'}" />
+                        <span class="transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{selectedOU.memberCount} people</span>
                       </div>
                     </div>
                   </div>
                   
                   <div class="space-y-4">
                     <div>
-                      <label class="block text-sm font-medium text-gray-500 mb-1">Created</label>
-                      <span class="text-gray-900">{formatDate(selectedOU.createdAt)}</span>
+                      <label class="block text-sm font-medium mb-1 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Created</label>
+                      <span class="transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{formatDate(selectedOU.createdAt)}</span>
                     </div>
                     
                     <div>
-                      <label class="block text-sm font-medium text-gray-500 mb-1">Last Modified</label>
-                      <span class="text-gray-900">{formatDate(selectedOU.modifiedAt)}</span>
+                      <label class="block text-sm font-medium mb-1 transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Last Modified</label>
+                      <span class="transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{formatDate(selectedOU.modifiedAt)}</span>
                     </div>
                   </div>
                 </div>
 
                 <!-- Rules & Policies Preview -->
                 <div class="mb-8">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-4">Rules & Policies</h3>
+                  <h3 class="text-lg font-semibold mb-4 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Rules & Policies</h3>
                   <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="p-4 rounded-lg transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}">
                       <div class="flex items-center space-x-2 mb-2">
                         <MessageCircle class="w-4 h-4 text-[#01c0a4]" />
-                        <span class="font-medium text-gray-900">Chat Permissions</span>
+                        <span class="font-medium transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Chat Permissions</span>
                       </div>
-                      <div class="space-y-1 text-sm text-gray-600">
+                      <div class="space-y-1 text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}">
                         <div>File Sharing: {selectedOU.rules.chat.allowFileSharing ? 'Enabled' : 'Disabled'}</div>
                         <div>Group Creation: {selectedOU.rules.chat.frontlineCanCreateGroups ? 'All Users' : 'Restricted'}</div>
                         <div>Message Retention: {selectedOU.rules.chat.messageRetentionDays} days</div>
                       </div>
                     </div>
                     
-                    <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="p-4 rounded-lg transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}">
                       <div class="flex items-center space-x-2 mb-2">
                         <Radio class="w-4 h-4 text-[#01c0a4]" />
-                        <span class="font-medium text-gray-900">Broadcast Permissions</span>
+                        <span class="font-medium transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Broadcast Permissions</span>
                       </div>
-                      <div class="space-y-1 text-sm text-gray-600">
+                      <div class="space-y-1 text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}">
                         <div>Create Broadcasts: {selectedOU.rules.broadcast.frontlineCanCreateBroadcast ? 'All Users' : 'Restricted'}</div>
                         <div>Approval Required: {selectedOU.rules.broadcast.requireApprovalForBroadcast ? 'Yes' : 'No'}</div>
                         <div>Retention: {selectedOU.rules.broadcast.broadcastRetentionDays} days</div>
@@ -1248,7 +1255,7 @@
                 </div>
 
                 <!-- Actions -->
-                <div class="border-t border-gray-200 pt-6">
+                <div class="border-t pt-6 transition-colors duration-300 {isDarkMode ? 'border-gray-700' : 'border-gray-200'}">
                   <div class="flex justify-end gap-3">
                     <button
                       onclick={() => selectedOU && confirmDeleteOU(selectedOU)}
@@ -1300,9 +1307,9 @@
           <!-- Empty State -->
           <div class="flex-1 flex items-center justify-center">
             <div class="text-center">
-              <Building2 class="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 class="text-xl font-semibold text-gray-600 mb-2">Select an Organization Unit</h3>
-              <p class="text-gray-500">Choose an OU from the directory to view its details and manage settings.</p>
+              <Building2 class="w-16 h-16 mx-auto mb-4 transition-colors duration-300 {isDarkMode ? 'text-gray-600' : 'text-gray-300'}" />
+              <h3 class="text-xl font-semibold mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-600'}">Select an Organization Unit</h3>
+              <p class="transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-500'}">Choose an OU from the directory to view its details and manage settings.</p>
             </div>
           </div>
         {/if}
@@ -1318,13 +1325,13 @@
   <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => { showCreateModal = false; parentOUForNewChild = null; }}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden" onclick={(e) => e.stopPropagation()}>
+    <div class="rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-white'}" onclick={(e) => e.stopPropagation()}>
       <div class="flex h-full">
         <!-- Left Side - Form -->
-        <div class="w-1/2 p-6 border-r border-gray-200">
+        <div class="w-1/2 p-6 transition-colors duration-300 {isDarkMode ? 'border-r border-gray-600' : 'border-r border-gray-200'}">
           <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">{parentOUForNewChild ? `Create Child OU under "${parentOUForNewChild.name}"` : 'Create Organization Unit'}</h2>
-            <button onclick={() => { showCreateModal = false; parentOUForNewChild = null; }} class="text-gray-500 hover:text-gray-700">
+            <h2 class="text-2xl font-bold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{parentOUForNewChild ? `Create Child OU under "${parentOUForNewChild.name}"` : 'Create Organization Unit'}</h2>
+            <button onclick={() => { showCreateModal = false; parentOUForNewChild = null; }} class="transition-colors duration-300 {isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
@@ -1333,7 +1340,7 @@
 
           <!-- Error/Success Messages -->
           {#if apiError}
-            <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div class="mb-4 p-4 rounded-lg transition-colors duration-300 {isDarkMode ? 'bg-red-900/30 border border-red-700' : 'bg-red-50 border border-red-200'}">
               <div class="flex">
                 <div class="flex-shrink-0">
                   <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -1341,14 +1348,14 @@
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-red-800">{apiError}</p>
+                  <p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-red-200' : 'text-red-800'}">{apiError}</p>
                 </div>
               </div>
             </div>
           {/if}
 
           {#if apiSuccess}
-            <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div class="mb-4 p-4 rounded-lg transition-colors duration-300 {isDarkMode ? 'bg-green-900/30 border border-green-700' : 'bg-green-50 border border-green-200'}">
               <div class="flex">
                 <div class="flex-shrink-0">
                   <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -1356,7 +1363,7 @@
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-green-800">{apiSuccess}</p>
+                  <p class="text-sm transition-colors duration-300 {isDarkMode ? 'text-green-200' : 'text-green-800'}">{apiSuccess}</p>
                 </div>
               </div>
             </div>
@@ -1364,31 +1371,31 @@
 
           <!-- Parent OU Context (when creating child) -->
           {#if parentOUForNewChild}
-            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="mb-6 p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-blue-900/20 border-blue-700' : 'bg-blue-50 border-blue-200'}">
               <div class="flex items-center space-x-2">
                 <Building2 class="w-4 h-4 text-blue-600" />
-                <span class="text-sm font-medium text-blue-900">Parent Organization:</span>
-                <span class="text-sm text-blue-800">{parentOUForNewChild.name}</span>
+                <span class="text-sm font-medium transition-colors duration-300 {isDarkMode ? 'text-blue-300' : 'text-blue-900'}">Parent Organization:</span>
+                <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-blue-200' : 'text-blue-800'}">{parentOUForNewChild.name}</span>
               </div>
-              <p class="text-xs text-blue-600 mt-1">This new OU will be created as a child under the selected parent organization.</p>
+              <p class="text-xs mt-1 transition-colors duration-300 {isDarkMode ? 'text-blue-400' : 'text-blue-600'}">This new OU will be created as a child under the selected parent organization.</p>
             </div>
           {/if}
 
           <form onsubmit={(e) => { e.preventDefault(); createOU(); }} class="space-y-6">
             <div>
-              <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">Organization Unit Name</label>
+              <label for="name" class="block text-sm font-semibold mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-200' : 'text-gray-700'}">Organization Unit Name</label>
               <input
                 id="name"
                 bind:value={newOU.name}
                 placeholder="Enter unit name"
                 required
                 disabled={isCreatingOU}
-                class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
+                class="input-field disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}"
               />
             </div>
 
             <div>
-              <label for="description" class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+              <label for="description" class="block text-sm font-semibold mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-200' : 'text-gray-700'}">Description</label>
               <textarea
                 id="description"
                 bind:value={newOU.description}
@@ -1396,19 +1403,19 @@
                 required
                 rows="3"
                 disabled={isCreatingOU}
-                class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                class="input-field resize-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300 {isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}"
               ></textarea>
             </div>
 
             <div class="grid grid-cols-1 gap-4">
               <div>
-                <label for="location" class="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+                <label for="location" class="block text-sm font-semibold mb-2 transition-colors duration-300 {isDarkMode ? 'text-gray-200' : 'text-gray-700'}">Location</label>
                 <input
                   id="location"
                   bind:value={newOU.location}
                   placeholder="Enter location"
                   disabled={isCreatingOU}
-                  class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="input-field disabled:opacity-50 disabled:cursor-not-allowed {isDarkMode ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} transition-colors duration-300"
                 />
               </div>
             </div>
@@ -1446,21 +1453,21 @@
         </div>
 
         <!-- Right Side - Rules and Policies -->
-        <div class="w-1/2 p-6 bg-gray-50">
-          <h3 class="text-xl font-semibold text-gray-900 mb-6">Rules & Policies</h3>
+        <div class="w-1/2 p-6 {isDarkMode ? 'bg-gray-750' : 'bg-gray-50'} transition-colors duration-300">
+          <h3 class="text-xl font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} mb-6 transition-colors duration-300">Rules & Policies</h3>
           
           <!-- Tab Navigation -->
           <div class="flex space-x-4 mb-6">
             <button
               onclick={() => activeRulesTab = 'chat'}
-              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'chat' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'chat' ? 'bg-[#01c0a4] text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-100'}"
             >
               <MessageCircle class="w-4 h-4" />
               <span>Chat</span>
             </button>
             <button
               onclick={() => activeRulesTab = 'broadcast'}
-              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'broadcast' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'broadcast' ? 'bg-[#01c0a4] text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-100'}"
             >
               <Radio class="w-4 h-4" />
               <span>Broadcast</span>
@@ -1470,14 +1477,14 @@
           <!-- Chat Rules -->
           {#if activeRulesTab === 'chat'}
             <div class="space-y-4 max-h-127 overflow-y-auto">
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Frontline User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can initiate 1:1 conversations</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'frontlineCanInitiate1v1')}
@@ -1529,14 +1536,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Support User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can initiate 1:1 conversations</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'supportCanInitiate1v1')}
@@ -1588,14 +1595,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <UserCheck class="w-4 h-4 mr-2" />
                   Supervisor Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create group chats</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create group chats</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'supervisorCanCreateGroups')}
@@ -1627,14 +1634,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <Shield class="w-4 h-4 mr-2" />
                   Manager Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can access all group chats</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can access all group chats</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'managerCanAccessAllGroups')}
@@ -1666,11 +1673,11 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3">General Chat Settings</h4>
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">General Chat Settings</h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Allow file sharing</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Allow file sharing</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'allowFileSharing')}
@@ -1707,14 +1714,14 @@
           <!-- Broadcast Rules -->
           {#if activeRulesTab === 'broadcast'}
             <div class="space-y-4 max-h-127 overflow-y-auto">
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Frontline User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'frontlineCanCreateBroadcast')}
@@ -1736,14 +1743,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Support User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'supportCanCreateBroadcast')}
@@ -1765,14 +1772,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <UserCheck class="w-4 h-4 mr-2" />
                   Supervisor Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'supervisorCanCreateBroadcast')}
@@ -1784,14 +1791,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <Shield class="w-4 h-4 mr-2" />
                   Manager Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'managerCanCreateBroadcast')}
@@ -1803,11 +1810,11 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3">General Broadcast Settings</h4>
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">General Broadcast Settings</h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Require approval for broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Require approval for broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'requireApprovalForBroadcast')}
@@ -1864,13 +1871,13 @@
   <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showEditModal = false}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden" onclick={(e) => e.stopPropagation()}>
+    <div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden transition-colors duration-300" onclick={(e) => e.stopPropagation()}>
       <div class="flex h-full">
         <!-- Left Side - Form -->
-        <div class="w-1/2 p-6 border-r border-gray-200">
+        <div class="w-1/2 p-6 border-r {isDarkMode ? 'border-gray-700' : 'border-gray-200'} transition-colors duration-300">
           <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Edit Organization Unit</h2>
-            <button onclick={() => showEditModal = false} class="text-gray-500 hover:text-gray-700">
+            <h2 class="text-2xl font-bold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">Edit Organization Unit</h2>
+            <button onclick={() => showEditModal = false} class="{isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'} transition-colors duration-300">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
@@ -1879,41 +1886,41 @@
 
           <form onsubmit={(e) => { e.preventDefault(); saveEditOU(); }} class="space-y-6">
             <div>
-              <label for="edit-name" class="block text-sm font-semibold text-gray-700 mb-2">Organization Unit Name</label>
+              <label for="edit-name" class="block text-sm font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-700'} mb-2 transition-colors duration-300">Organization Unit Name</label>
               <input
                 id="edit-name"
                 bind:value={editOU.name}
                 placeholder="Enter unit name"
                 required
-                class="input-field"
+                class="input-field {isDarkMode ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} transition-colors duration-300"
               />
             </div>
 
             <div>
-              <label for="edit-description" class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+              <label for="edit-description" class="block text-sm font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-700'} mb-2 transition-colors duration-300">Description</label>
               <textarea
                 id="edit-description"
                 bind:value={editOU.description}
                 placeholder="Describe the purpose and responsibilities of this unit"
                 required
                 rows="3"
-                class="input-field resize-none"
+                class="input-field resize-none {isDarkMode ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} transition-colors duration-300"
               ></textarea>
             </div>
 
             <div>
-              <label for="edit-location" class="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+              <label for="edit-location" class="block text-sm font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-700'} mb-2 transition-colors duration-300">Location</label>
               <input
                 id="edit-location"
                 bind:value={editOU.location}
                 placeholder="Enter location"
-                class="input-field"
+                class="input-field {isDarkMode ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} transition-colors duration-300"
               />
             </div>
 
             <div>
-              <label for="edit-status" class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-              <select id="edit-status" bind:value={editOU.status} class="input-field">
+              <label for="edit-status" class="block text-sm font-semibold {isDarkMode ? 'text-gray-300' : 'text-gray-700'} mb-2 transition-colors duration-300">Status</label>
+              <select id="edit-status" bind:value={editOU.status} class="input-field {isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} transition-colors duration-300">
                 <option value="active">Active</option>
                 <option value="inactive">Deactivated</option>
               </select>
@@ -1935,21 +1942,21 @@
         </div>
 
         <!-- Right Side - Rules and Policies -->
-        <div class="w-1/2 p-6 bg-gray-50">
-          <h3 class="text-xl font-semibold text-gray-900 mb-6">Rules & Policies</h3>
+        <div class="w-1/2 p-6 {isDarkMode ? 'bg-gray-750' : 'bg-gray-50'} transition-colors duration-300">
+          <h3 class="text-xl font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} mb-6 transition-colors duration-300">Rules & Policies</h3>
           
           <!-- Tab Navigation -->
           <div class="flex space-x-4 mb-6">
             <button
               onclick={() => activeRulesTab = 'chat'}
-              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'chat' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'chat' ? 'bg-[#01c0a4] text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-100'}"
             >
               <MessageCircle class="w-4 h-4" />
               <span>Chat</span>
             </button>
             <button
               onclick={() => activeRulesTab = 'broadcast'}
-              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'broadcast' ? 'bg-[#01c0a4] text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}"
+              class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors {activeRulesTab === 'broadcast' ? 'bg-[#01c0a4] text-white' : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-100'}"
             >
               <Radio class="w-4 h-4" />
               <span>Broadcast</span>
@@ -1959,14 +1966,14 @@
           <!-- Chat Rules -->
           {#if activeRulesTab === 'chat'}
             <div class="space-y-4 max-h-96 overflow-y-auto">
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Frontline User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can initiate 1:1 conversations</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'frontlineCanInitiate1v1', true)}
@@ -2018,14 +2025,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Support User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can initiate 1:1 conversations</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can initiate 1:1 conversations</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'supportCanInitiate1v1', true)}
@@ -2077,14 +2084,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <UserCheck class="w-4 h-4 mr-2" />
                   Supervisor Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create group chats</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create group chats</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'supervisorCanCreateGroups', true)}
@@ -2116,14 +2123,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <Shield class="w-4 h-4 mr-2" />
                   Manager Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can access all group chats</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can access all group chats</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'managerCanAccessAllGroups', true)}
@@ -2155,11 +2162,11 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3">General Chat Settings</h4>
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">General Chat Settings</h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Allow file sharing</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Allow file sharing</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('chat', 'allowFileSharing', true)}
@@ -2196,14 +2203,14 @@
           <!-- Broadcast Rules -->
           {#if activeRulesTab === 'broadcast'}
             <div class="space-y-4 max-h-96 overflow-y-auto">
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Frontline User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'frontlineCanCreateBroadcast', true)}
@@ -2225,14 +2232,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <User class="w-4 h-4 mr-2" />
                   Support User Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'supportCanCreateBroadcast', true)}
@@ -2254,14 +2261,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <UserCheck class="w-4 h-4 mr-2" />
                   Supervisor Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'supervisorCanCreateBroadcast', true)}
@@ -2273,14 +2280,14 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 flex items-center transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">
                   <Shield class="w-4 h-4 mr-2" />
                   Manager Permissions
                 </h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Can create broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Can create broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'managerCanCreateBroadcast', true)}
@@ -2292,11 +2299,11 @@
                 </div>
               </div>
 
-              <div class="bg-white p-4 rounded-lg border">
-                <h4 class="font-semibold text-gray-900 mb-3">General Broadcast Settings</h4>
+              <div class="p-4 rounded-lg border transition-colors duration-300 {isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}">
+                <h4 class="font-semibold mb-3 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">General Broadcast Settings</h4>
                 <div class="space-y-3">
                   <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-700">Require approval for broadcasts</span>
+                    <span class="text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-300' : 'text-gray-700'}">Require approval for broadcasts</span>
                     <button
                       type="button"
                       onclick={() => toggleRule('broadcast', 'requireApprovalForBroadcast', true)}
@@ -2352,16 +2359,16 @@
   <div class="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50" onclick={() => showParentDetailsModal = false}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden" onclick={(e) => e.stopPropagation()}>
-      <div class="p-6 border-b border-gray-200 bg-gray-50">
+    <div class="rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-white'}" onclick={(e) => e.stopPropagation()}>
+      <div class="p-6 transition-colors duration-300 {isDarkMode ? 'border-b border-gray-600 bg-gray-700' : 'border-b border-gray-200 bg-gray-50'}">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-4">
             <div class="h-12 w-12 rounded-lg bg-gradient-to-r from-[#01c0a4] to-[#00a085] flex items-center justify-center">
               <Building2 class="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 class="text-2xl font-bold text-gray-900">{selectedOU.name}</h2>
-              <p class="text-gray-600">{selectedOU.description}</p>
+              <h2 class="text-2xl font-bold transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">{selectedOU.name}</h2>
+              <p class="transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">{selectedOU.description}</p>
             </div>
           </div>
           <button onclick={() => showParentDetailsModal = false} class="text-gray-500 hover:text-gray-700">
@@ -2406,26 +2413,26 @@
 
         <!-- Rules & Policies Overview -->
         <div class="mb-20">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Rules & Policies Overview</h3>
+          <h3 class="text-lg font-semibold mb-4 transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Rules & Policies Overview</h3>
           <div class="grid grid-cols-2 gap-4">
-            <div class="bg-gray-50 p-4 rounded-lg">
+            <div class="p-4 rounded-lg transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}">
               <div class="flex items-center space-x-2 mb-2">
                 <MessageCircle class="w-4 h-4 text-[#01c0a4]" />
-                <span class="font-medium text-gray-900">Chat Permissions</span>
+                <span class="font-medium transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Chat Permissions</span>
               </div>
-              <div class="space-y-1 text-sm text-gray-600">
+              <div class="space-y-1 text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">
                 <div>File Sharing: {selectedOU.rules.chat.allowFileSharing ? 'Enabled' : 'Disabled'}</div>
                 <div>Group Creation: {selectedOU.rules.chat.frontlineCanCreateGroups ? 'All Users' : 'Restricted'}</div>
                 <div>Message Retention: {selectedOU.rules.chat.messageRetentionDays} days</div>
               </div>
             </div>
             
-            <div class="bg-gray-50 p-4 rounded-lg">
+            <div class="p-4 rounded-lg transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}">
               <div class="flex items-center space-x-2 mb-2">
                 <Radio class="w-4 h-4 text-[#01c0a4]" />
-                <span class="font-medium text-gray-900">Broadcast Permissions</span>
+                <span class="font-medium transition-colors duration-300 {isDarkMode ? 'text-white' : 'text-gray-900'}">Broadcast Permissions</span>
               </div>
-              <div class="space-y-1 text-sm text-gray-600">
+              <div class="space-y-1 text-sm transition-colors duration-300 {isDarkMode ? 'text-gray-400' : 'text-gray-600'}">
                 <div>Create Broadcasts: {selectedOU.rules.broadcast.frontlineCanCreateBroadcast ? 'All Users' : 'Restricted'}</div>
                 <div>Approval Required: {selectedOU.rules.broadcast.requireApprovalForBroadcast ? 'Yes' : 'No'}</div>
                 <div>Retention: {selectedOU.rules.broadcast.broadcastRetentionDays} days</div>
@@ -2503,9 +2510,9 @@
   <div class="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50" onclick={closeNotification}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onclick={(e) => e.stopPropagation()}>
+    <div class="rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transition-colors duration-300 {isDarkMode ? 'bg-gray-800' : 'bg-white'}" onclick={(e) => e.stopPropagation()}>
       <!-- Progress Bar -->
-      <div class="h-1 bg-gray-200">
+      <div class="h-1 transition-colors duration-300 {isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}">
         <div 
           class="h-full transition-all duration-75 ease-linear {notificationData?.type === 'success' ? 'bg-green-500' : notificationData?.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}"
           style="width: {timerProgress}%"
@@ -2513,7 +2520,7 @@
       </div>
       
       <!-- Header -->
-      <div class="p-6 border-b border-gray-200">
+      <div class="p-6 transition-colors duration-300 {isDarkMode ? 'border-b border-gray-600' : 'border-b border-gray-200'}">
         <div class="flex items-center space-x-3">
           <!-- Icon based on notification type -->
           {#if notificationData.type === 'success'}
@@ -2537,10 +2544,10 @@
           {/if}
           
           <div class="flex-1">
-            <h3 class="text-lg font-semibold text-gray-900">{notificationData.title}</h3>
+            <h3 class="text-lg font-semibold {isDarkMode ? 'text-white' : 'text-gray-900'} transition-colors duration-300">{notificationData.title}</h3>
           </div>
           
-          <button onclick={closeNotification} class="text-gray-400 hover:text-gray-600 transition-colors">
+          <button onclick={closeNotification} class="{isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'} transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -2550,11 +2557,11 @@
       
       <!-- Content -->
       <div class="p-6">
-        <p class="text-gray-600">{notificationData.message}</p>
+        <p class="{isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-colors duration-300">{notificationData.message}</p>
       </div>
       
       <!-- Footer -->
-      <div class="p-6 border-t border-gray-200 bg-gray-50">
+      <div class="p-6 border-t {isDarkMode ? 'border-gray-600 bg-gray-750' : 'border-gray-200 bg-gray-50'} transition-colors duration-300">
         <button
           onclick={closeNotification}
           class="w-full px-4 py-2 {notificationData.type === 'success' ? 'bg-green-600 hover:bg-green-700' : notificationData.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg font-medium transition-colors"

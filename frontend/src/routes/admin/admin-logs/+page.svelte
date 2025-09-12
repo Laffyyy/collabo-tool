@@ -1,5 +1,6 @@
 <script lang="ts">
   import { FileText, Search, Filter, Download, Eye, AlertTriangle, User, Activity, Shield, Database, Calendar, MessageSquare, Radio, Users, Building2, Settings } from 'lucide-svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
 
   interface AdminLog {
     id: string;
@@ -18,6 +19,9 @@
 
   let activeTab = $state<'all' | 'chat' | 'broadcast' | 'user-management' | 'ou-management' | 'global-config'>('all');
   let searchQuery = $state('');
+  
+  // Theme reactive variable
+  const isDarkMode = $derived(themeStore.isDarkMode);
 
   // Mock admin logs data
   const mockLogs: AdminLog[] = [
@@ -296,22 +300,22 @@
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'user': return 'text-blue-600 bg-blue-50';
-      case 'security': return 'text-red-600 bg-red-50';
-      case 'system': return 'text-green-600 bg-green-50';
-      case 'data': return 'text-purple-600 bg-purple-50';
-      case 'configuration': return 'text-indigo-600 bg-indigo-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'user': return isDarkMode ? 'text-blue-300 bg-blue-900' : 'text-blue-600 bg-blue-50';
+      case 'security': return isDarkMode ? 'text-red-300 bg-red-900' : 'text-red-600 bg-red-50';
+      case 'system': return isDarkMode ? 'text-green-300 bg-green-900' : 'text-green-600 bg-green-50';
+      case 'data': return isDarkMode ? 'text-purple-300 bg-purple-900' : 'text-purple-600 bg-purple-50';
+      case 'configuration': return isDarkMode ? 'text-indigo-300 bg-indigo-900' : 'text-indigo-600 bg-indigo-50';
+      default: return isDarkMode ? 'text-gray-300 bg-gray-700' : 'text-gray-600 bg-gray-50';
     }
   };
 
   const getPriorityColor = (priority: string | undefined) => {
-    if (!priority) return 'text-gray-600 bg-gray-50';
+    if (!priority) return isDarkMode ? 'text-gray-300 bg-gray-700' : 'text-gray-600 bg-gray-50';
     switch (priority) {
-      case 'high': return 'text-red-600 bg-red-50';
-      case 'medium': return 'text-yellow-600 bg-yellow-50';
-      case 'low': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'high': return isDarkMode ? 'text-red-300 bg-red-900' : 'text-red-600 bg-red-50';
+      case 'medium': return isDarkMode ? 'text-yellow-300 bg-yellow-900' : 'text-yellow-600 bg-yellow-50';
+      case 'low': return isDarkMode ? 'text-green-300 bg-green-900' : 'text-green-600 bg-green-50';
+      default: return isDarkMode ? 'text-gray-300 bg-gray-700' : 'text-gray-600 bg-gray-50';
     }
   };
 
@@ -350,28 +354,28 @@
   <title>Admin Logs - Admin Controls</title>
 </svelte:head>
 
-<div class="h-screen bg-gray-50 flex flex-col">
+<div class="{isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} h-screen flex flex-col transition-colors duration-300">
 	<div class="w-full max-w-[98%] mx-auto flex-1 flex flex-col p-6 min-h-0">
 		<!-- Header -->
 		<div class="mb-4 fade-in">
-			<h1 class="text-3xl font-bold text-gray-800 mb-2">Admin Logs</h1>
-			<p class="text-gray-600">Monitor administrative activities and system events</p>
+			<h1 class="{isDarkMode ? 'text-white' : 'text-gray-800'} text-3xl font-bold mb-2 transition-colors duration-300">Admin Logs</h1>
+			<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-600'} transition-colors duration-300">Monitor administrative activities and system events</p>
 		</div>
 
 		<!-- Main Panel -->
-		<div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 flex-shrink-0 flex-1 flex flex-col min-h-0 fade-in">
+		<div class="{isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} rounded-xl shadow-sm border mb-4 flex-shrink-0 flex-1 flex flex-col min-h-0 fade-in transition-colors duration-300">
 			<!-- Controls Section -->
-			<div class="p-4 border-b border-gray-200">
+			<div class="{isDarkMode ? 'border-gray-600' : 'border-gray-200'} p-4 border-b transition-colors duration-300">
 				<div class="flex flex-col lg:flex-row gap-3">
 					<!-- Search -->
 					<div class="flex-1 lg:flex-initial lg:min-w-[400px] lg:max-w-[500px]">
 						<div class="relative">
-							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+							<Search class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" />
 							<input
 								bind:value={searchQuery}
 								type="text"
 								placeholder="Search logs by action, user, or details..."
-								class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm"
+								class="{isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-500'} w-full pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#01c0a4] focus:border-transparent text-sm transition-colors duration-300"
 							/>
 						</div>
 					</div>
@@ -391,71 +395,71 @@
 			</div>
 
 			<!-- Tabs -->
-			<div class="border-b border-gray-200">
+			<div class="{isDarkMode ? 'border-gray-600' : 'border-gray-200'} border-b transition-colors duration-300">
 				<nav class="flex space-x-6 px-4">
 					<button
 						onclick={() => activeTab = 'all'}
-						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'all' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'all' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Activity class="w-4 h-4" />
 							<span>All Logs</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().all}</span>
+							<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts().all}</span>
 						</div>
 					</button>
 
 					<button
 						onclick={() => activeTab = 'chat'}
-						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'chat' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'chat' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<MessageSquare class="w-4 h-4" />
 							<span>Chat</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().chat}</span>
+							<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded-full text-xs transition-colors duration-300">{tabCounts().chat}</span>
 						</div>
 					</button>
 
 					<button
 						onclick={() => activeTab = 'broadcast'}
-						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'broadcast' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'broadcast' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Radio class="w-4 h-4" />
 							<span>Broadcast</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts().broadcast}</span>
+							<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} transition-colors duration-300 px-2 py-0.5 rounded-full text-xs">{tabCounts().broadcast}</span>
 						</div>
 					</button>
 
 					<button
 						onclick={() => activeTab = 'user-management'}
-						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'user-management' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'user-management' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Users class="w-4 h-4" />
 							<span>Users</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['user-management']}</span>
+							<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} transition-colors duration-300 px-2 py-0.5 rounded-full text-xs">{tabCounts()['user-management']}</span>
 						</div>
 					</button>
 
 					<button
 						onclick={() => activeTab = 'ou-management'}
-						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'ou-management' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'ou-management' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Building2 class="w-4 h-4" />
 							<span>OU</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['ou-management']}</span>
+							<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} transition-colors duration-300 px-2 py-0.5 rounded-full text-xs">{tabCounts()['ou-management']}</span>
 						</div>
 					</button>
 
 					<button
 						onclick={() => activeTab = 'global-config'}
-						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'global-config' ? 'border-[#01c0a4] text-[#01c0a4]' : 'border-transparent text-gray-500 hover:text-gray-700'}"
+						class="py-3 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'global-config' ? 'border-[#01c0a4] text-[#01c0a4]' : isDarkMode ? 'border-transparent text-gray-400 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}"
 					>
 						<div class="flex items-center space-x-2">
 							<Settings class="w-4 h-4" />
 							<span>Config</span>
-							<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{tabCounts()['global-config']}</span>
+							<span class="{isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} transition-colors duration-300 px-2 py-0.5 rounded-full text-xs">{tabCounts()['global-config']}</span>
 						</div>
 					</button>
 				</nav>
@@ -465,50 +469,50 @@
 			<div class="flex-1 min-h-0 overflow-hidden flex flex-col">
 				<div class="flex-1 overflow-auto">
 					<table class="w-full">
-						<thead class="bg-gray-50 sticky top-0">
+						<thead class="{isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} sticky top-0 transition-colors duration-300">
 							<tr>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+								<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Timestamp</th>
+								<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">User</th>
+								<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Action</th>
+								<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Target</th>
 								{#if activeTab === 'broadcast'}
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+									<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Priority</th>
 								{/if}
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+								<th class="{isDarkMode ? 'text-gray-300' : 'text-gray-500'} px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-300">Actions</th>
 							</tr>
 						</thead>
-						<tbody class="bg-white divide-y divide-gray-200">
+						<tbody class="{isDarkMode ? 'bg-gray-800 divide-gray-600' : 'bg-white divide-gray-200'} divide-y transition-colors duration-300">
 							{#each filteredLogs() as log (log.id)}
-								<tr class="hover:bg-gray-50">
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+								<tr class="{isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors duration-300">
+									<td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
 										{formatTimestamp(log.timestamp)}
 									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+									<td class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
 										{log.user}
 									</td>
 									<td class="px-6 py-4 whitespace-nowrap">
 										<div class="flex items-center">
 											{#if log.category === 'chat'}
-												<MessageSquare class="w-4 h-4 text-gray-400 mr-2" />
+												<MessageSquare class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else if log.category === 'broadcast'}
-												<Radio class="w-4 h-4 text-gray-400 mr-2" />
+												<Radio class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else if log.category === 'user-management'}
-												<Users class="w-4 h-4 text-gray-400 mr-2" />
+												<Users class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else if log.category === 'ou-management'}
-												<Building2 class="w-4 h-4 text-gray-400 mr-2" />
+												<Building2 class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else if log.category === 'global-config'}
-												<Settings class="w-4 h-4 text-gray-400 mr-2" />
+												<Settings class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else if log.category === 'security'}
-												<Shield class="w-4 h-4 text-gray-400 mr-2" />
+												<Shield class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else if log.category === 'system'}
-												<Database class="w-4 h-4 text-gray-400 mr-2" />
+												<Database class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{:else}
-												<Activity class="w-4 h-4 text-gray-400 mr-2" />
+												<Activity class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} w-4 h-4 mr-2 transition-colors duration-300" />
 											{/if}
-											<span class="text-sm text-gray-900">{log.action}</span>
+											<span class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm transition-colors duration-300">{log.action}</span>
 										</div>
 									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+									<td class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} px-6 py-4 whitespace-nowrap text-sm transition-colors duration-300">
 										{log.target || '-'}
 									</td>
 									{#if activeTab === 'broadcast'}
@@ -518,14 +522,14 @@
 													{log.priority}
 												</span>
 											{:else}
-												<span class="text-sm text-gray-400">-</span>
+												<span class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-sm transition-colors duration-300">-</span>
 											{/if}
 										</td>
 									{/if}
 									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 										<button
 											onclick={() => viewLogDetails(log)}
-											class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1"
+											class="text-[#01c0a4] hover:text-[#00a08a] flex items-center space-x-1 transition-colors duration-300"
 										>
 											<Eye class="w-4 h-4" />
 											<span>View</span>
@@ -539,9 +543,9 @@
 					<!-- Empty State -->
 					{#if filteredLogs().length === 0}
 						<div class="text-center py-12">
-							<FileText class="mx-auto h-12 w-12 text-gray-400" />
-							<h3 class="mt-2 text-sm font-medium text-gray-900">No logs found</h3>
-							<p class="mt-1 text-sm text-gray-500">Try adjusting your search criteria or filters.</p>
+							<FileText class="{isDarkMode ? 'text-gray-500' : 'text-gray-400'} mx-auto h-12 w-12 transition-colors duration-300" />
+							<h3 class="{isDarkMode ? 'text-white' : 'text-gray-900'} mt-2 text-sm font-medium transition-colors duration-300">No logs found</h3>
+							<p class="{isDarkMode ? 'text-gray-400' : 'text-gray-500'} mt-1 text-sm transition-colors duration-300">Try adjusting your search criteria or filters.</p>
 						</div>
 					{/if}
 				</div>
@@ -560,14 +564,14 @@
        onkeydown={(e) => e.key === 'Escape' && (showLogDetails = false)}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto" 
+    <div class="{isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto transition-colors duration-300" 
          onclick={(e) => e.stopPropagation()}
          onkeydown={(e) => e.stopPropagation()}>
       <div class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">Log Details</h3>
+          <h3 class="{isDarkMode ? 'text-white' : 'text-gray-900'} text-lg font-semibold transition-colors duration-300">Log Details</h3>
           <button onclick={() => showLogDetails = false} 
-                  class="text-gray-400 hover:text-gray-600"
+                  class="{isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'} transition-colors duration-300"
                   aria-label="Close modal">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -578,24 +582,24 @@
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <div class="block text-sm font-medium text-gray-700">Timestamp</div>
-              <p class="text-sm text-gray-900">{formatTimestamp(selectedLog.timestamp)}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">Timestamp</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm transition-colors duration-300">{formatTimestamp(selectedLog.timestamp)}</p>
             </div>
             <div>
-              <div class="block text-sm font-medium text-gray-700">User</div>
-              <p class="text-sm text-gray-900">{selectedLog.user}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">User</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm transition-colors duration-300">{selectedLog.user}</p>
             </div>
             <div>
-              <div class="block text-sm font-medium text-gray-700">Action</div>
-              <p class="text-sm text-gray-900">{selectedLog.action}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">Action</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm transition-colors duration-300">{selectedLog.action}</p>
             </div>
             <div>
-              <div class="block text-sm font-medium text-gray-700">Category</div>
-              <p class="text-sm text-gray-900 capitalize">{selectedLog.category}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">Category</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm capitalize transition-colors duration-300">{selectedLog.category}</p>
             </div>
             <div>
-              <div class="block text-sm font-medium text-gray-700">Status</div>
-              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {selectedLog.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">Status</div>
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {selectedLog.success ? isDarkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800' : isDarkMode ? 'bg-red-900 text-red-300' : 'bg-red-100 text-red-800'} transition-colors duration-300">
                 {selectedLog.success ? 'Success' : 'Failed'}
               </span>
             </div>
@@ -603,24 +607,24 @@
           
           {#if selectedLog.target}
             <div>
-              <div class="block text-sm font-medium text-gray-700">Target</div>
-              <p class="text-sm text-gray-900">{selectedLog.target}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">Target</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm transition-colors duration-300">{selectedLog.target}</p>
             </div>
           {/if}
           
           <div>
-            <div class="block text-sm font-medium text-gray-700">Details</div>
-            <p class="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedLog.details}</p>
+            <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">Details</div>
+            <p class="{isDarkMode ? 'text-gray-200 bg-gray-700' : 'text-gray-900 bg-gray-50'} text-sm p-3 rounded-lg transition-colors duration-300">{selectedLog.details}</p>
           </div>
           
           <div class="grid grid-cols-1 gap-4">
             <div>
-              <div class="block text-sm font-medium text-gray-700">IP Address</div>
-              <p class="text-sm text-gray-900 font-mono">{selectedLog.ipAddress}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">IP Address</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm font-mono transition-colors duration-300">{selectedLog.ipAddress}</p>
             </div>
             <div>
-              <div class="block text-sm font-medium text-gray-700">User Agent</div>
-              <p class="text-sm text-gray-900 break-all">{selectedLog.userAgent}</p>
+              <div class="{isDarkMode ? 'text-gray-300' : 'text-gray-700'} block text-sm font-medium transition-colors duration-300">User Agent</div>
+              <p class="{isDarkMode ? 'text-gray-200' : 'text-gray-900'} text-sm break-all transition-colors duration-300">{selectedLog.userAgent}</p>
             </div>
           </div>
         </div>
@@ -628,7 +632,7 @@
         <div class="mt-6 flex justify-end">
           <button 
             onclick={() => showLogDetails = false}
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            class="{isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-lg transition-colors duration-300"
           >
             Close
           </button>
