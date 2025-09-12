@@ -594,11 +594,13 @@
 									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
 									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
 									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+									{#if activeTab === 'all'}
+										<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
+									{/if}
 									{#if activeTab === 'broadcast'}
 										<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
 									{/if}
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Options</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
@@ -632,9 +634,11 @@
 											<span class="text-sm text-gray-900">{log.action}</span>
 										</div>
 									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-										{log.target || '-'}
-									</td>
+									{#if activeTab === 'all'}
+										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+											{log.target || '-'}
+										</td>
+									{/if}
 									{#if activeTab === 'broadcast'}
 										<td class="px-6 py-4 whitespace-nowrap">
 											{#if log.priority}
