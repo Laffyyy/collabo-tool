@@ -163,24 +163,23 @@ class UserModel {
     return result.rows.length > 0 ? this.formatUser(result.rows[0]) : null;
   }
 
-  /**
-   * Update user password
-   * @param {string} id - User ID
-   * @param {string} newPassword - New password (plain text)
-   * @returns {Promise<boolean>} Success status
-   */
-  async updatePassword(id, newPassword) {
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-    
-    const query = `
-      UPDATE tblusers 
-      SET dpasswordhash = $1, dmustchangepassword = false, tupdatedat = $2
-      WHERE did = $3
-    `;
+/**
+ * Update user password for management
+ * @param {string} id - User ID
+ * @param {string} hashedPassword - Hashed password (already hashed)
+ * @param {boolean} requirePasswordChange - Require password change on next login
+ * @returns {Promise<boolean>} Success status
+ */
+async updatePassword(id, hashedPassword, requirePasswordChange = false) {
+  const query = `
+    UPDATE tblusers 
+    SET dpasswordhash = $1, dmustchangepassword = $2, tupdatedat = NOW()
+    WHERE did = $3
+  `;
 
-    const result = await this.pool.query(query, [passwordHash, new Date(), id]);
-    return result.rowCount > 0;
-  }
+  const result = await this.pool.query(query, [hashedPassword, requirePasswordChange, id]);
+  return result.rowCount > 0;
+}
 
   /**
    * Update user presence status

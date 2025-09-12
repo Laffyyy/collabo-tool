@@ -592,8 +592,11 @@ async function resetPassword({ token, newPassword }) {
       throw new BadRequestError('Invalid or expired reset token');
     }
 
-    // Update user password
-    const success = await userModel.updatePassword(resetRecord.duserid, newPassword);
+    // Hash the new password before updating
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update user password using the correct method signature
+    const success = await userModel.updatePassword(resetRecord.duserid, hashedPassword, false);
     
     if (!success) {
       throw new BadRequestError('Failed to update password');
