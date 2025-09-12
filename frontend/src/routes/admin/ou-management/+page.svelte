@@ -96,6 +96,7 @@
   let isLoading = $state<boolean>(false);
   let loadError = $state<string>('');
   let parentOUForNewChild = $state<OrganizationUnit | null>(null);
+  let selectedRows = $state<Set<string>>(new Set());
 
   const defaultRules: OURules = {
     chat: {
@@ -252,25 +253,27 @@
 
   const mapBackendToOU = (row: any): OrganizationUnit => {
     const created = row?.tcreatedat ? new Date(row.tcreatedat) : new Date();
-    const isActive = !!row?.bisActive;
+    const isActive = row?.bisActive !== undefined ? !!row.bisActive : true;
     
     console.log('Mapping backend OU:', {
       id: row?.ouid || row?.did,
       name: row?.dname,
-      jsSettings: row?.jsSettings
+      jsSettings: row?.jsSettings,
+      membercount: row?.membercount,
+      bisActive: row?.bisActive
     });
     
     const rules = parseJsSettingsToRules(row?.jsSettings);
     
     const mappedOU: OrganizationUnit = {
-      id: row?.ouid || row?.did || String(Date.now()),
+      id: String(row?.ouid || row?.did || Date.now()),
       name: row?.dname || 'Unknown',
       description: row?.ddescription || '',
-      parentId: row?.dparentouid || null,
+      parentId: row?.dparentouid ? String(row.dparentouid) : null,
       memberCount: Number(row?.membercount) || 0,
       location: row?.dLocation || row?.dlocation || '',
       createdAt: created,
-      modifiedAt: created,
+      modifiedAt: row?.tmodifiedat ? new Date(row.tmodifiedat) : created,
       status: isActive ? 'active' : 'inactive',
       rules,
       // Store original jsSettings for tab determination
@@ -281,243 +284,33 @@
     return mappedOU;
   };
 
-  // Generate sample data for demo purposes
-  const generateSampleData = (): { active: OrganizationUnit[], inactive: OrganizationUnit[] } => {
-    const sampleOUs: OrganizationUnit[] = [];
-    let idCounter = 1;
-
-    // Helper function to create an OU
-    const createOU = (name: string, description: string, location: string, parentId: string | null = null, status: 'active' | 'inactive' = 'active', memberCount: number = 0): OrganizationUnit => ({
-      id: `ou-${idCounter++}`,
-      name,
-      description,
-      parentId,
-      memberCount,
-      location,
-      createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000),
-      modifiedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-      status,
-      rules: JSON.parse(JSON.stringify(defaultRules))
-    });
-
-    // Multiple Root Level Organizations
-    const corporate = createOU('Corporate Headquarters', 'Main corporate office and executive leadership', 'New York, NY', null, 'active', 25);
-    const manufacturing = createOU('Manufacturing Division', 'Global manufacturing operations and production facilities', 'Detroit, MI', null, 'active', 180);
-    const retail = createOU('Retail Operations', 'Customer-facing retail stores and e-commerce', 'Atlanta, GA', null, 'active', 320);
-    const research = createOU('Research & Development', 'Innovation labs and product development centers', 'Palo Alto, CA', null, 'active', 85);
-    const consulting = createOU('Consulting Services', 'Professional consulting and advisory services', 'Boston, MA', null, 'active', 45);
-    const logistics = createOU('Global Logistics', 'Supply chain and distribution network management', 'Memphis, TN', null, 'active', 150);
-    
-    // Root organizations with no children (standalone divisions)
-    const cybersecurity = createOU('Cybersecurity Division', 'Information security and risk management services', 'Austin, TX', null, 'active', 28);
-    const sustainability = createOU('Sustainability Office', 'Environmental initiatives and corporate responsibility', 'Portland, OR', null, 'active', 12);
-    const ventures = createOU('Corporate Ventures', 'Strategic investments and startup partnerships', 'San Francisco, CA', null, 'inactive', 8);
-    
-    // Organizations with no members (newly created or transitioning)
-    const newInitiatives = createOU('New Initiatives Office', 'Exploration of emerging business opportunities', 'Denver, CO', null, 'active', 0);
-    const brandIncubator = createOU('Brand Incubator Lab', 'New brand development and market testing', 'Miami, FL', null, 'active', 0);
-    const emergencyResponse = createOU('Emergency Response Team', 'Crisis management and business continuity', 'Remote', null, 'inactive', 0);
-    
-    sampleOUs.push(corporate, manufacturing, retail, research, consulting, logistics, cybersecurity, sustainability, ventures, newInitiatives, brandIncubator, emergencyResponse);
-
-    // Regional Offices under Corporate
-    const northAmerica = createOU('North America Region', 'Regional operations for North American markets', 'Chicago, IL', corporate.id, 'active', 15);
-    const europe = createOU('Europe Region', 'Regional operations for European markets', 'London, UK', corporate.id, 'active', 18);
-    const asiaPacific = createOU('Asia Pacific Region', 'Regional operations for Asia Pacific markets', 'Singapore', corporate.id, 'active', 12);
-    sampleOUs.push(northAmerica, europe, asiaPacific);
-
-    // Departments under Corporate
-    const humanResources = createOU('Human Resources Department', 'Employee relations, recruitment, and organizational development', 'New York, NY', corporate.id, 'active', 32);
-    const finance = createOU('Finance Department', 'Financial planning, accounting, and budget management', 'New York, NY', corporate.id, 'active', 28);
-    const technology = createOU('Technology Department', 'Information systems, software development, and infrastructure', 'San Francisco, CA', corporate.id, 'active', 45);
-    const marketing = createOU('Marketing Department', 'Brand management, advertising, and market research', 'Los Angeles, CA', corporate.id, 'active', 22);
-    const operations = createOU('Operations Department', 'Supply chain, logistics, and operational efficiency', 'Dallas, TX', corporate.id, 'active', 38);
-    sampleOUs.push(humanResources, finance, technology, marketing, operations);
-
-    // Sub-departments under HR
-    sampleOUs.push(
-      createOU('Recruitment Team', 'Talent acquisition and hiring processes', 'New York, NY', humanResources.id, 'active', 8),
-      createOU('Employee Relations', 'Employee support and conflict resolution', 'New York, NY', humanResources.id, 'active', 6),
-      createOU('Training and Development', 'Employee skill development and career growth', 'New York, NY', humanResources.id, 'active', 12),
-      createOU('Compensation and Benefits', 'Salary administration and employee benefits', 'New York, NY', humanResources.id, 'active', 6)
-    );
-
-    // Sub-departments under Finance
-    sampleOUs.push(
-      createOU('Accounting Team', 'General ledger, accounts payable and receivable', 'New York, NY', finance.id, 'active', 10),
-      createOU('Financial Planning', 'Budget forecasting and strategic financial analysis', 'New York, NY', finance.id, 'active', 8),
-      createOU('Audit and Compliance', 'Internal audit and regulatory compliance', 'New York, NY', finance.id, 'active', 6),
-      createOU('Treasury Services', 'Cash management and investment oversight', 'New York, NY', finance.id, 'active', 4)
-    );
-
-    // Sub-departments under Technology
-    sampleOUs.push(
-      createOU('Software Engineering', 'Application development and maintenance', 'San Francisco, CA', technology.id, 'active', 25),
-      createOU('Infrastructure Team', 'Network, servers, and cloud infrastructure', 'San Francisco, CA', technology.id, 'active', 12),
-      createOU('Data Analytics', 'Business intelligence and data science', 'San Francisco, CA', technology.id, 'active', 8),
-      createOU('Quality Assurance', 'Software testing and quality control', 'San Francisco, CA', technology.id, 'inactive', 6),
-      createOU('DevOps Engineering', 'Deployment automation and system reliability', 'San Francisco, CA', technology.id, 'active', 10)
-    );
-
-    // Teams under Software Engineering
-    const softwareEng = sampleOUs.find(ou => ou.name === 'Software Engineering')!;
-    sampleOUs.push(
-      createOU('Frontend Development Team', 'User interface and user experience development', 'San Francisco, CA', softwareEng.id, 'active', 8),
-      createOU('Backend Development Team', 'Server-side logic and database management', 'San Francisco, CA', softwareEng.id, 'active', 10),
-      createOU('Mobile Development Team', 'iOS and Android application development', 'San Francisco, CA', softwareEng.id, 'active', 7)
-    );
-
-    // Sub-departments under Marketing
-    sampleOUs.push(
-      createOU('Digital Marketing', 'Online advertising and social media campaigns', 'Los Angeles, CA', marketing.id, 'active', 8),
-      createOU('Brand Management', 'Brand strategy and creative development', 'Los Angeles, CA', marketing.id, 'active', 6),
-      createOU('Market Research', 'Consumer insights and competitive analysis', 'Los Angeles, CA', marketing.id, 'active', 5),
-      createOU('Public Relations', 'Media relations and corporate communications', 'Los Angeles, CA', marketing.id, 'inactive', 3)
-    );
-
-    // Sub-departments under Operations
-    sampleOUs.push(
-      createOU('Supply Chain Management', 'Vendor relations and procurement processes', 'Dallas, TX', operations.id, 'active', 12),
-      createOU('Logistics Coordination', 'Shipping, receiving, and warehouse management', 'Dallas, TX', operations.id, 'active', 15),
-      createOU('Quality Control', 'Product quality assurance and testing', 'Dallas, TX', operations.id, 'active', 8),
-      createOU('Facilities Management', 'Building maintenance and office administration', 'Dallas, TX', operations.id, 'active', 3)
-    );
-
-    // Regional sub-offices under North America
-    sampleOUs.push(
-      createOU('US West Coast Office', 'Operations for western United States', 'Seattle, WA', northAmerica.id, 'active', 22),
-      createOU('US East Coast Office', 'Operations for eastern United States', 'Boston, MA', northAmerica.id, 'active', 18),
-      createOU('Canada Office', 'Operations for Canadian markets', 'Toronto, ON', northAmerica.id, 'active', 14),
-      createOU('Mexico Office', 'Operations for Mexican markets', 'Mexico City, MX', northAmerica.id, 'inactive', 8)
-    );
-
-    // Regional sub-offices under Europe
-    sampleOUs.push(
-      createOU('UK and Ireland Office', 'Operations for British Isles', 'London, UK', europe.id, 'active', 20),
-      createOU('Germany Office', 'Operations for German markets', 'Berlin, DE', europe.id, 'active', 16),
-      createOU('France Office', 'Operations for French markets', 'Paris, FR', europe.id, 'active', 12),
-      createOU('Nordic Office', 'Operations for Scandinavian markets', 'Stockholm, SE', europe.id, 'active', 10),
-      createOU('Southern Europe Office', 'Operations for Mediterranean markets', 'Rome, IT', europe.id, 'inactive', 8)
-    );
-
-    // Regional sub-offices under Asia Pacific
-    sampleOUs.push(
-      createOU('Japan Office', 'Operations for Japanese markets', 'Tokyo, JP', asiaPacific.id, 'active', 15),
-      createOU('Australia Office', 'Operations for Australian and New Zealand markets', 'Sydney, AU', asiaPacific.id, 'active', 12),
-      createOU('Southeast Asia Office', 'Operations for ASEAN markets', 'Bangkok, TH', asiaPacific.id, 'active', 10),
-      createOU('China Office', 'Operations for Chinese markets', 'Shanghai, CN', asiaPacific.id, 'inactive', 18)
-    );
-
-    // Manufacturing Division sub-units
-    sampleOUs.push(
-      createOU('Production Planning', 'Manufacturing schedules and capacity management', 'Detroit, MI', manufacturing.id, 'active', 25),
-      createOU('Quality Assurance Manufacturing', 'Product quality control and testing', 'Detroit, MI', manufacturing.id, 'active', 18),
-      createOU('Plant Operations East', 'Eastern manufacturing facilities management', 'Cleveland, OH', manufacturing.id, 'active', 45),
-      createOU('Plant Operations West', 'Western manufacturing facilities management', 'Phoenix, AZ', manufacturing.id, 'active', 38),
-      createOU('Equipment Maintenance', 'Industrial equipment servicing and repairs', 'Detroit, MI', manufacturing.id, 'active', 32),
-      createOU('Safety and Compliance', 'Workplace safety and regulatory compliance', 'Detroit, MI', manufacturing.id, 'active', 22)
-    );
-
-    // Retail Operations sub-units
-    sampleOUs.push(
-      createOU('Store Operations', 'Physical retail store management', 'Atlanta, GA', retail.id, 'active', 85),
-      createOU('E-commerce Platform', 'Online sales and digital customer experience', 'Seattle, WA', retail.id, 'active', 45),
-      createOU('Customer Service Center', 'Customer support and order assistance', 'Nashville, TN', retail.id, 'active', 55),
-      createOU('Merchandising', 'Product placement and inventory management', 'Atlanta, GA', retail.id, 'active', 30),
-      createOU('Regional Managers East', 'Eastern region store oversight', 'Miami, FL', retail.id, 'active', 28),
-      createOU('Regional Managers West', 'Western region store oversight', 'Los Angeles, CA', retail.id, 'active', 25),
-      createOU('Franchise Operations', 'Franchise partner support and management', 'Dallas, TX', retail.id, 'inactive', 18)
-    );
-
-    // Research & Development sub-units
-    sampleOUs.push(
-      createOU('Product Innovation Lab', 'New product research and prototyping', 'Palo Alto, CA', research.id, 'active', 22),
-      createOU('Materials Science Team', 'Advanced materials research and testing', 'Cambridge, MA', research.id, 'active', 15),
-      createOU('User Experience Research', 'Customer behavior and usability studies', 'Palo Alto, CA', research.id, 'active', 12),
-      createOU('Patent Office', 'Intellectual property management and filing', 'Palo Alto, CA', research.id, 'active', 8),
-      createOU('Technology Partnerships', 'External research collaborations', 'Palo Alto, CA', research.id, 'active', 6),
-      createOU('Applied Research Division', 'Practical application development', 'Ann Arbor, MI', research.id, 'inactive', 10)
-    );
-
-    // Consulting Services sub-units
-    sampleOUs.push(
-      createOU('Strategic Consulting', 'Business strategy and transformation', 'Boston, MA', consulting.id, 'active', 18),
-      createOU('Technical Consulting', 'IT and technology implementation', 'Boston, MA', consulting.id, 'active', 15),
-      createOU('Change Management', 'Organizational change and training', 'Boston, MA', consulting.id, 'active', 12)
-    );
-
-    // Global Logistics sub-units
-    sampleOUs.push(
-      createOU('Distribution Centers', 'Warehouse and fulfillment operations', 'Memphis, TN', logistics.id, 'active', 65),
-      createOU('Transportation Management', 'Fleet and shipping coordination', 'Memphis, TN', logistics.id, 'active', 35),
-      createOU('Vendor Relations', 'Supplier partnerships and procurement', 'Chicago, IL', logistics.id, 'active', 28),
-      createOU('Inventory Control', 'Stock management and optimization', 'Memphis, TN', logistics.id, 'active', 22)
-    );
-
-    // Add some specialized teams under Corporate
-    sampleOUs.push(
-      createOU('Innovation Lab', 'Research and development of emerging technologies', 'Austin, TX', corporate.id, 'active', 12),
-      createOU('Customer Success Team', 'Client relationship management and support', 'Remote', corporate.id, 'active', 16),
-      createOU('Legal Department', 'Corporate legal affairs and compliance', 'New York, NY', corporate.id, 'active', 8),
-      createOU('Executive Office', 'CEO, COO, and executive leadership team', 'New York, NY', corporate.id, 'active', 5),
-      createOU('Strategic Planning Unit', 'Long-term business strategy and market analysis', 'New York, NY', corporate.id, 'active', 0),
-      createOU('Merger & Acquisitions Team', 'Corporate development and acquisition evaluation', 'New York, NY', corporate.id, 'inactive', 0)
-    );
-
-    // Add some inactive departments and root organizations
-    sampleOUs.push(
-      createOU('Pilot Program Office', 'Experimental initiatives and pilot projects', 'Various', corporate.id, 'inactive', 4),
-      createOU('Legacy Systems Team', 'Maintenance of deprecated technology systems', 'New York, NY', technology.id, 'inactive', 3),
-      createOU('Special Projects Division', 'Temporary project-based teams', 'Various', corporate.id, 'inactive', 7)
-    );
-
-    // Additional root-level inactive organizations
-    sampleOUs.push(
-      createOU('Aerospace Division', 'Aviation and aerospace technology development', 'Houston, TX', null, 'inactive', 65),
-      createOU('Entertainment Studios', 'Media production and content creation', 'Hollywood, CA', null, 'inactive', 42),
-      createOU('Agriculture Division', 'Farming operations and agricultural technology', 'Des Moines, IA', null, 'inactive', 28)
-    );
-
-    // Some children for inactive Aerospace Division
-    sampleOUs.push(
-      createOU('Flight Testing', 'Aircraft and component testing operations', 'Houston, TX', sampleOUs.find(ou => ou.name === 'Aerospace Division')?.id || '', 'inactive', 25),
-      createOU('Aerospace Engineering', 'Design and development of aerospace systems', 'Houston, TX', sampleOUs.find(ou => ou.name === 'Aerospace Division')?.id || '', 'inactive', 40)
-    );
-
-    const active = sampleOUs.filter(ou => ou.status === 'active');
-    const inactive = sampleOUs.filter(ou => ou.status === 'inactive');
-
-    return { active, inactive };
-  };
 
   const loadLists = async () => {
     isLoading = true;
     loadError = '';
     try {
-      // For demo purposes, use sample data instead of API calls
-      // Uncomment the lines below to use real API data
-      /*
       const [activeRes, inactiveRes] = await Promise.all([
         getActiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' }),
         getInactiveOUs({ start: 0, limit: 50, sort: 'ASC', sortby: 'dname' })
       ]);
+
+      if (!activeRes.success) {
+        throw new Error(activeRes.error || 'Failed to fetch active OUs');
+      }
+      if (!inactiveRes.success) {
+        throw new Error(inactiveRes.error || 'Failed to fetch inactive OUs');
+      }
 
       const activeRows = (activeRes.data as any)?.data || [];
       const inactiveRows = (inactiveRes.data as any)?.data || [];
 
       activeList = activeRows.map(mapBackendToOU);
       inactiveList = inactiveRows.map(mapBackendToOU);
-      */
-      
-      // Use sample data for demo
-      const sampleData = generateSampleData();
-      activeList = sampleData.active;
-      inactiveList = sampleData.inactive;
       
       organizationUnits = currentTab === 'active' ? activeList : inactiveList;
     } catch (e) {
-      console.error(e);
-      loadError = 'Failed to load organization units';
+      console.error('Error loading organization units:', e);
+      loadError = e instanceof Error ? e.message : 'Failed to load organization units';
     } finally {
       isLoading = false;
     }
@@ -649,7 +442,8 @@
         
         // Add parent ID if creating a child OU
         if (parentOUForNewChild) {
-          apiData.parentId = parentOUForNewChild.id;
+          // Note: parentId is handled by the backend, not in the CreateOURequest
+          // The backend will need to be updated to handle parent-child relationships
         }
         
         // Call the API
@@ -975,10 +769,17 @@
   };
 
   // Tab change function
-  const changeTab = (tab: string) => {
+  const changeTab = async (tab: string) => {
+    if (currentTab === tab) return; // No need to change if same tab
+    
     currentTab = tab;
     selectedOU = null; // Clear selection when switching tabs
     organizationUnits = currentTab === 'active' ? activeList : inactiveList;
+    
+    // If we don't have data for this tab yet, load it
+    if ((tab === 'active' && activeList.length === 0) || (tab === 'inactive' && inactiveList.length === 0)) {
+      await loadLists();
+    }
   };
 
   // Directory navigation functions
@@ -1162,17 +963,40 @@
 
         <!-- Directory Tree -->
         <div class="flex-1 overflow-y-auto p-4">
-          {#each hierarchicalOUs as ou}
-            {@render ouTreeNode(ou, 0)}
-          {/each}
-
-          {#if hierarchicalOUs.length === 0}
+          {#if isLoading}
             <div class="text-center py-8">
-              <Building2 class="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p class="text-gray-500 text-sm">
-                {searchQuery ? 'No units match your search.' : 'No organization units found.'}
-              </p>
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#01c0a4] mx-auto mb-3"></div>
+              <p class="text-gray-500 text-sm">Loading organization units...</p>
             </div>
+          {:else if loadError}
+            <div class="text-center py-8">
+              <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
+                <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <p class="text-red-600 text-sm mb-2">Error loading organization units</p>
+              <p class="text-gray-500 text-xs mb-3">{loadError}</p>
+              <button 
+                onclick={loadLists}
+                class="text-sm px-3 py-1 bg-[#01c0a4] text-white rounded hover:bg-[#00a085] transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          {:else}
+            {#each hierarchicalOUs as ou}
+              {@render ouTreeNode(ou, 0)}
+            {/each}
+
+            {#if hierarchicalOUs.length === 0}
+              <div class="text-center py-8">
+                <Building2 class="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p class="text-gray-500 text-sm">
+                  {searchQuery ? 'No units match your search.' : 'No organization units found.'}
+                </p>
+              </div>
+            {/if}
           {/if}
         </div>
       </div>
@@ -1182,7 +1006,7 @@
         {#if selectedOU}
           <!-- Check if this OU has children to determine view type -->
           {@const currentList = currentTab === 'active' ? activeList : inactiveList}
-          {@const hasChildren = currentList.some(ou => ou.parentId === selectedOU.id)}
+          {@const hasChildren = selectedOU ? currentList.some(ou => ou.parentId === selectedOU.id) : false}
           
           <!-- OU Header -->
           <div class="p-6 border-b border-gray-200 bg-gray-50">
@@ -1226,7 +1050,7 @@
                         <h3 class="text-lg font-semibold text-gray-900">Sub-Organization Units</h3>
                       </div>
                       <button
-                        onclick={() => { parentOUForNewChild = selectedOU; showCreateModal = true; }}
+                        onclick={() => { if (selectedOU) { parentOUForNewChild = selectedOU; showCreateModal = true; } }}
                         class="flex items-center space-x-2 px-3 py-1.5 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors text-sm"
                       >
                         <Plus class="w-3 h-3" />
@@ -1247,7 +1071,7 @@
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-200">
-                        {#each currentList.filter(ou => ou.parentId === selectedOU.id) as childOU}
+                        {#each currentList.filter(ou => selectedOU && ou.parentId === selectedOU.id) as childOU}
                           <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4">
                               <div class="flex items-center space-x-3">
@@ -1379,7 +1203,7 @@
                     
                     {#if selectedOU.status === 'active'}
                       <button
-                        onclick={() => confirmDeactivateOU(selectedOU)}
+                        onclick={() => selectedOU && confirmDeactivateOU(selectedOU)}
                         class="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
                       >
                         <X class="w-4 h-4" />
@@ -1396,7 +1220,7 @@
                     {/if}
                     
                     <button
-                      onclick={() => editOUFunction(selectedOU)}
+                      onclick={() => selectedOU && editOUFunction(selectedOU)}
                       class="flex items-center space-x-2 px-4 py-2 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
                     >
                       <Edit class="w-4 h-4" />
@@ -1404,7 +1228,7 @@
                     </button>
                     
                     <button
-                      onclick={() => { parentOUForNewChild = selectedOU; showCreateModal = true; }}
+                      onclick={() => { if (selectedOU) { parentOUForNewChild = selectedOU; showCreateModal = true; } }}
                       class="flex items-center space-x-2 px-4 py-2 bg-[#01c0a4] text-white rounded-lg hover:bg-[#00a085] transition-colors"
                     >
                       <Plus class="w-4 h-4" />
@@ -2557,7 +2381,7 @@
         <div class="absolute bottom-6 right-6">
           <div class="flex space-x-2">
             <button
-              onclick={() => { showParentDetailsModal = false; selectOU(selectedOU); }}
+              onclick={() => { if (selectedOU) { showParentDetailsModal = false; selectOU(selectedOU); } }}
               class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-400 rounded-lg hover:bg-blue-500 transition-colors"
             >
               <FileText class="w-4 h-4 mr-2" />
@@ -2565,7 +2389,7 @@
             </button>
             
             <button
-              onclick={() => { showParentDetailsModal = false; editOUFunction(selectedOU); }}
+              onclick={() => { if (selectedOU) { showParentDetailsModal = false; editOUFunction(selectedOU); } }}
               class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#01c0a4] rounded-lg hover:bg-[#00a085] transition-colors"
             >
               <Edit class="w-4 h-4 mr-2" />
@@ -2574,7 +2398,7 @@
             
             {#if selectedOU.status === 'active'}
               <button
-                onclick={() => { showParentDetailsModal = false; confirmDeactivateOU(selectedOU); }}
+                onclick={() => { if (selectedOU) { showParentDetailsModal = false; confirmDeactivateOU(selectedOU); } }}
                 class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
               >
                 <X class="w-4 h-4 mr-2" />
@@ -2582,7 +2406,7 @@
               </button>
             {:else}
               <button
-                onclick={() => { showParentDetailsModal = false; reactivateOU(selectedOU.id); }}
+                onclick={() => { if (selectedOU) { showParentDetailsModal = false; reactivateOU(selectedOU.id); } }}
                 class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
               >
                 <UserCheck class="w-4 h-4 mr-2" />

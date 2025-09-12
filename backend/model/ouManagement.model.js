@@ -263,7 +263,7 @@ class OUmodel {
                         h."dLocation",
                         h."bisActive",
                         COALESCE(mc.membercount, 0) as membercount,
-                        CASE WHEN ${search === 'true'} THEN (
+                        (
                             SELECT jsonb_agg(
                                 jsonb_build_object(
                                     'ouid', c.did,
@@ -280,7 +280,7 @@ class OUmodel {
                             FROM filtered_hierarchy c
                             LEFT JOIN member_counts mc_child ON mc_child.did = c.did
                             WHERE c.dparentouid = h.did
-                        ) ELSE NULL END as children
+                        ) as children
                     FROM filtered_hierarchy h
                     LEFT JOIN member_counts mc ON mc.did = h.did
                     WHERE h.dparentouid IS NULL
@@ -303,7 +303,7 @@ class OUmodel {
                 dLocation: r.dLocation,
                 bisActive: r.bisActive,
                 membercount: r.membercount,
-                children: search === 'true' ? (r.children || []) : undefined
+                children: r.children || []
             }));
             const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
             return { rows, total };
