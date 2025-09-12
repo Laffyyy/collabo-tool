@@ -11,15 +11,17 @@ const responseBroadcastRoutes = require('./v1/response-broadcast.routes');
 const broadcastManagementRoutes = require('./v1/broadcast-management.routes');
 const globalSettingsRoutes = require('./v1/global-settings.routes');
 const profileRoutes = require('./v1/profile.routes');
-//const chatRoutes = require('./v1/chat.routes');
+const chatRoutes = require('./v1/chat.routes');
+const adminChatRoutes = require('./v1/admin-chat.routes');
 const userRoutes = require('./v1/user.routes');
 
 
 const router = Router();
 
 router.use('/v1/auth', authRoutes);
-//router.use('/chat', chatRoutes);
+router.use('/v1/chat', chatRoutes);
 router.use('/v1/admin', adminRoutes);
+router.use('/v1/admin/chat', adminChatRoutes);
 router.use('/v1/users', userManagementRoutes);
 
 // Development routes (no auth required)
@@ -39,7 +41,6 @@ router.use('/v1/admin/broadcasts', broadcastManagementRoutes);
 router.use('/v1/global-settings', globalSettingsRoutes);
 //Profile
 router.use('/v1/profile', profileRoutes);
-//router.use('/users', require('./v1/user.routes'));
 router.use('/users', userRoutes);
 
 //OU management
