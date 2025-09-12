@@ -18,11 +18,14 @@ class UploadBroadcastModel {
     status = 'sent',
     scheduledFor = null,
     endDate = null,
-    choices = null // Add this parameter
+    choices = null,
+    isRecurring = false,
+    recurrencePattern = null,
+    recurrenceDays = null,
+    recurrenceTimes = null
   }) {
     // Determine sent date based on schedule type
     const now = new Date();
-    // If sending immediately, set sentAt to now. If scheduled, set to scheduledFor
     const sentAt = status === 'sent' ? now : scheduledFor;
     
     const query = `
@@ -38,9 +41,13 @@ class UploadBroadcastModel {
         tsentat,
         teventdate,
         tenddate,
-        dchoices
+        dchoices,
+        drecurring,
+        drecurringtype,
+        drecurringdays,
+        trecurringtime
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
 
@@ -52,11 +59,15 @@ class UploadBroadcastModel {
       status,
       requiresAcknowledgment,
       responseType,
-      scheduledFor,    // tscheduledfor - null if immediate, date if scheduled
-      sentAt,          // tsentat - NOW() if immediate, scheduledFor if scheduled
-      sentAt,          // teventdate - follows same rules as tsentat
-      endDate,         // tenddate - optional end date
-      choices ? JSON.stringify(choices) : null  // Convert choices array to JSON string
+      scheduledFor,
+      sentAt,
+      sentAt,
+      endDate,
+      choices ? JSON.stringify(choices) : null,
+      isRecurring,
+      recurrencePattern,
+      recurrenceDays ? JSON.stringify(recurrenceDays) : null,
+      recurrenceTimes ? JSON.stringify(recurrenceTimes) : null
     ];
 
     const result = await this.pool.query(query, values);
@@ -140,6 +151,43 @@ class UploadBroadcastModel {
   formatBroadcast(broadcast) {
     if (!broadcast) return null;
     
+    // Parse JSON fields
+    let choices = null;
+    if (broadcast.dchoices) {
+      try {
+        choices = JSON.parse(broadcast.dchoices);
+      } catch (error) {
+        console.error('[Upload Broadcast Model] Error parsing choices JSON:', error);
+      }
+    }
+    
+    let recurrenceDays = null;
+    if (broadcast.drecurringdays) {
+      try {
+        recurrenceDays = JSON.parse(broadcast.drecurringdays);
+        
+        // If this is a monthly recurrence and recurrenceDays is an array with a single number,
+        // extract just that number for easier frontend handling
+        if (broadcast.drecurringtype === 'monthly' && 
+            Array.isArray(recurrenceDays) && 
+            recurrenceDays.length === 1 && 
+            typeof recurrenceDays[0] === 'number') {
+          recurrenceDays = recurrenceDays[0];
+        }
+      } catch (error) {
+        console.error('[Upload Broadcast Model] Error parsing recurring days JSON:', error);
+      }
+    }
+    
+    let recurrenceTimes = null;
+    if (broadcast.trecurringtime) {
+      try {
+        recurrenceTimes = JSON.parse(broadcast.trecurringtime);
+      } catch (error) {
+        console.error('[Upload Broadcast Model] Error parsing recurring times JSON:', error);
+      }
+    }
+    
     return {
       id: broadcast.did,
       title: broadcast.dtitle,
@@ -154,7 +202,11 @@ class UploadBroadcastModel {
       status: broadcast.dstatus,
       requiresAcknowledgment: broadcast.drequiresacknowledgment,
       responseType: broadcast.dresponsetype,
-      choices: broadcast.dchoices
+      choices: choices,
+      isRecurring: broadcast.drecurring || false,
+      recurrencePattern: broadcast.drecurringtype,
+      recurrenceDays: recurrenceDays,
+      recurrenceTimes: recurrenceTimes
     };
   }
 

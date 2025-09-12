@@ -149,8 +149,14 @@ export interface CreateBroadcastRequest {
   responseType?: 'none' | 'required' | 'preferred-date' | 'choices' | 'textbox';
   requiresAcknowledgment?: boolean;
   scheduledFor?: string | null;
+  eventDate?: string;
   endDate?: string | null;
-  choices?: string[] | null; // Add this property
+  choices?: string[] | null;
+  isRecurring?: boolean;
+  recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceDays?: string[] | null;
+  recurrenceTimes?: string[] | null;
+  monthlyDay?: number | null;
 }
 
 export interface CreateBroadcastResponse {
