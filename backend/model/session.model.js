@@ -44,12 +44,25 @@ class SessionModel {
    */
   async findBySessionToken(sessionToken) {
     const query = `
-      SELECT * FROM tblusersessions 
+      SELECT * FROM tblusersessions
       WHERE dsessiontoken = $1
     `;
-    
-    const { rows } = await this.pool.query(query, [sessionToken]);
-    return rows.length > 0 ? this.formatSession(rows[0]) : null;
+
+    try {
+      const { rows } = await this.pool.query(query, [sessionToken]);
+      
+      if (rows.length === 0) {
+        return null; // Remove console.log
+      }
+      
+      const session = this.formatSession(rows[0]);
+      // Remove detailed logging - only log errors
+      
+      return session;
+    } catch (error) {
+      console.error('[SessionModel] Error finding session:', error);
+      throw error;
+    }
   }
 
   /**
@@ -133,23 +146,23 @@ class SessionModel {
   }
 
   /**
-   * Format session object
-   * @param {Object} session - Raw session object from database
-   * @returns {Object} Formatted session object
-   */
-  formatSession(session) {
-    if (!session) return null;
-    
-    return {
-      id: session.did,
-      userId: session.duserid,
-      sessionToken: session.dsessiontoken,
-      refreshToken: session.drefreshtoken,
-      expiresAt: session.texpiresat,
-      ipAddress: session.dipaddress,
-      userAgent: session.duseragent,
-      isActive: session.disactive,
-      createdAt: session.tcreatedat,
+ * Format session data from database
+ * @param {Object} row - Database row
+ * @returns {Object} Formatted session
+ */
+formatSession(row) {
+  if (!row) return null;
+  
+  return {
+      id: row.did,
+      userId: row.duserid,
+      sessionToken: row.dsessiontoken,
+      refreshToken: row.drefreshtoken,
+      expiresAt: row.texpiresat, // This should be a Date object or ISO string
+      ipAddress: row.dipaddress,
+      userAgent: row.duseragent,
+      isActive: row.disactive,
+      createdAt: row.tcreatedat
     };
   }
 }

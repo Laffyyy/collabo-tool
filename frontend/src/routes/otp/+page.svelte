@@ -6,6 +6,8 @@
     import { API_CONFIG } from '$lib/api/config';
     import { authStore } from '$lib/stores/auth.svelte';
     import type { OtpVerificationResponse, LoginResponse } from '$lib/api/types';
+    import { toastStore } from '$lib/stores/toast.svelte';
+    import ToastContainer from '$lib/components/ToastContainer.svelte';
     
     let otpValues = $state(['', '', '', '', '', '']);
     let otpTimeLeft = $state(300); // 5 minutes in seconds
@@ -125,6 +127,41 @@ onMount(() => {
             otpShowCancelModal = true;
         }
     };
+
+        // Handle paste events on the OTP container
+    const otpHandlePaste = (event: ClipboardEvent) => {
+        // Get pasted text
+        const pastedText = event.clipboardData?.getData('text') || '';
+        
+        // Filter to keep only alphanumeric characters
+        const filteredText = pastedText.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        
+        // Only proceed if we have text to paste
+        if (filteredText) {
+            // Reset the values first
+            otpValues = ['', '', '', '', '', ''];
+            
+            // Distribute characters to the input fields (up to 6 digits)
+            for (let i = 0; i < Math.min(filteredText.length, 6); i++) {
+                otpValues[i] = filteredText[i];
+            }
+            
+            // If we have exactly 6 characters, auto-submit
+            if (filteredText.length >= 6) {
+                // Focus the last input to provide visual feedback
+                document.getElementById('otp-input-5')?.focus();
+                // Submit after a brief delay to allow the UI to update
+                setTimeout(() => otpHandleSubmit(), 100);
+            } else {
+                // Otherwise, focus the next empty input
+                const nextEmptyIndex = Math.min(filteredText.length, 5);
+                document.getElementById(`otp-input-${nextEmptyIndex}`)?.focus();
+            }
+        }
+        
+        // Prevent the default paste behavior
+        event.preventDefault();
+    };
     
         const otpHandleSubmit = async () => {
         if (otpValues.every(val => val !== '') && !otpIsExpired) {
@@ -155,6 +192,7 @@ onMount(() => {
                         lastName: string;
                         role: string;
                         mustChangePassword?: boolean;
+                        accountStatus?: string;
                         profilePhotoUrl?: string;
                         organizationUnit?: string;
                         onlineStatus?: 'online' | 'away' | 'idle' | 'offline';
@@ -252,8 +290,9 @@ onMount(() => {
                         return;
                     }
                 } else {
-                    otpError = data.message || 'Invalid OTP';
+                    otpError = 'Invalid user data received. Please try again.';
                     otpIsLoading = false;
+                    return;
                 }
             } catch (error: any) {
                 console.error('OTP verification error:', error);
@@ -263,66 +302,69 @@ onMount(() => {
         }
     };
     
-        const otpHandleResend = async () => {
-            // Only allow resend if resend timer has reached zero
-            if (otpResendTimeLeft > 0 || otpIsLoading || otpResendLoading) {
+    const otpHandleResend = async () => {
+        // Only allow resend if resend timer has reached zero
+        if (otpResendTimeLeft > 0 || otpIsLoading || otpResendLoading) {
+            return;
+        }
+        
+        otpResendLoading = true;
+        otpValues = ['', '', '', '', '', ''];
+        otpError = '';
+        otpSuccessMessage = '';
+        
+        try {
+            // Get username from localStorage
+            const username = localStorage.getItem('auth_username') || userEmail;
+            
+            if (!username) {
+                otpError = 'Session expired. Please log in again.';
+                otpResendLoading = false;
                 return;
             }
             
-            otpResendLoading = true;
-            otpValues = ['', '', '', '', '', ''];
-            otpError = '';
-            otpSuccessMessage = '';
+            // Use the API client to call the dedicated resend-otp endpoint
+            const data = await apiClient.post<LoginResponse>(
+                API_CONFIG.endpoints.auth.resendOtp, 
+                { username }
+            );
             
-            try {
-                // Get username from localStorage
-                const username = localStorage.getItem('auth_username') || userEmail;
-                
-                if (!username) {
-                    otpError = 'Session expired. Please log in again.';
-                    otpResendLoading = false;
-                    return;
-                }
-                
-                // Use the API client to call the dedicated resend-otp endpoint
-                const data = await apiClient.post<LoginResponse>(
-                    API_CONFIG.endpoints.auth.resendOtp, 
-                    { username }
-                );
-                
-                if (!data.ok) {
-                    throw new Error(data.message || 'Failed to resend verification code');
-                }
-                
-                // Update stored data in localStorage
-                localStorage.setItem('auth_userId', data.userId);
-                localStorage.setItem('auth_userEmail', data.email);
-                localStorage.setItem('auth_username', data.username);
-                
-                // Set new expiry time (5 minutes from now)
-                const expiryTime = Date.now() + (5 * 60 * 1000);
-                localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
-                
-                // Reset timers
-                otpTimeLeft = 300; // 5 minutes
-                otpResendTimeLeft = 150; // 2:30 minutes
-                otpIsExpired = false;
-                
-                // Restart timers
-                otpStartTimers();
-                
-                // Show success message
-                otpSuccessMessage = 'New verification code sent to your email';
-                
-                // Focus first input
-                document.getElementById('otp-input-0')?.focus();
-            } catch (error: any) {
-                console.error('OTP resend error:', error);
-                otpError = error.message || 'Failed to resend verification code';
-            } finally {
-                otpResendLoading = false;
+            if (!data.ok) {
+                throw new Error(data.message || 'Failed to resend verification code');
             }
-        };
+            
+            // Update stored data in localStorage
+            localStorage.setItem('auth_userId', data.userId);
+            localStorage.setItem('auth_userEmail', data.email);
+            localStorage.setItem('auth_username', data.username);
+            
+            // Set new expiry time (5 minutes from now)
+            const expiryTime = Date.now() + (5 * 60 * 1000);
+            localStorage.setItem('auth_otpExpiresAt', expiryTime.toString());
+            
+            // Reset timers
+            otpTimeLeft = 300; // 5 minutes
+            otpResendTimeLeft = 150; // 2:30 minutes
+            otpIsExpired = false;
+            
+            // Restart timers
+            otpStartTimers();
+            
+            // Show success message
+            otpSuccessMessage = 'New verification code sent to your email';
+            
+            // Add toast notification for OTP resend success
+            toastStore.success('OTP has been resent to your email');
+            
+            // Focus first input
+            document.getElementById('otp-input-0')?.focus();
+        } catch (error: any) {
+            console.error('OTP resend error:', error);
+            otpError = error.message || 'Failed to resend verification code';
+        } finally {
+            otpResendLoading = false;
+        }
+    };
     
     const otpHandleCancel = () => {
         otpShowCancelModal = true;
@@ -340,6 +382,8 @@ onMount(() => {
     };
 </script>
 
+<ToastContainer />
+
 <svelte:head>
     <title>OTP Verification</title>
 </svelte:head>
@@ -352,7 +396,11 @@ onMount(() => {
         </div>
         
         <div class="otp-form">
-            <div class="otp-inputs">
+            <div 
+                class="otp-inputs"
+                onpaste={otpHandlePaste}
+                tabindex="0"
+            >
                 {#each otpValues as value, index}
                     <input
                         id="otp-input-{index}"

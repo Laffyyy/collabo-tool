@@ -99,7 +99,9 @@ async function verifyOtp(req, res, next) {
         email: result.user.email,
         role: result.user.role,
         username: result.user.username,
-        ouId: result.user.ouId
+        ouId: result.user.ouId,
+        mustChangePassword: result.user.mustChangePassword,
+        accountStatus: result.user.accountStatus
       },
       token: result.token,
       sessionToken: result.sessionToken,
@@ -169,12 +171,30 @@ async function setSecurityQuestions(req, res, next) {
   }
 }
 
+// Replace the existing forgotPassword function with this
 async function forgotPassword(req, res, next) {
   try {
     const { username } = req.body;
+    console.log(`Forgot password request for: ${username}`);
+    
     const result = await authService.forgotPassword({ username });
-    res.status(200).json({ ok: true, ...result });
+    res.status(200).json(result);
   } catch (err) {
+    console.error('Error in forgotPassword controller:', err);
+    next(err);
+  }
+}
+
+// Add this new function for password reset
+async function resetPassword(req, res, next) {
+  try {
+    const { token, newPassword } = req.body;
+    console.log(`Password reset request with token: ${token?.substring(0, 8)}...`);
+    
+    const result = await authService.resetPassword({ token, newPassword });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('Error in resetPassword controller:', err);
     next(err);
   }
 }
@@ -242,6 +262,19 @@ async function logout(req, res, next) {
   }
 }
 
+// Add this function to validate reset tokens
+async function validateResetToken(req, res, next) {
+  try {
+    const { token } = req.body;
+    console.log(`Validating reset token: ${token?.substring(0, 8)}...`);
+    
+    const result = await authService.validateResetToken({ token });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('Error in validateResetToken controller:', err);
+    next(err);
+  }
+}
 /**
  * Get session info including expiry time and session timeout configuration
  */
@@ -249,8 +282,23 @@ async function getSessionInfo(req, res, next) {
   try {
     const { session } = req;
     
-    // Get session timeout from global settings
-    let sessionTimeoutMinutes = 480; // Default 8 hours
+    // Remove detailed logging for routine checks
+    if (!session) {
+      return res.status(401).json({
+        ok: false,
+        message: 'No active session found'
+      });
+    }
+    
+    if (!session.expiresAt) {
+      return res.status(500).json({
+        ok: false,
+        message: 'Invalid session data'
+      });
+    }
+    
+    // Get session timeout from global settings (keep this logged since it's configuration)
+    let sessionTimeoutMinutes = 480;
     try {
       const globalSettings = await GlobalSettingsService.getGeneralSettings();
       if (globalSettings) {
@@ -263,20 +311,31 @@ async function getSessionInfo(req, res, next) {
         }
       }
     } catch (error) {
-      console.warn('Failed to load session timeout from global settings:', error);
-      // Continue with default value
+      console.warn('[Auth Controller] Failed to load session timeout from global settings:', error);
+    }
+    
+    const timeRemaining = new Date(session.expiresAt) - new Date();
+    
+    // Only log when session is about to expire or on errors
+    if (timeRemaining <= 5 * 60 * 1000) { // 5 minutes or less
+      console.log('[Auth Controller] Session expiring soon:', {
+        sessionId: session.id,
+        timeRemaining: Math.floor(timeRemaining / 1000) + 's'
+      });
     }
     
     res.status(200).json({
       ok: true,
       data: {
         expiresAt: session.expiresAt,
-        timeRemaining: new Date(session.expiresAt) - new Date(),
-        isActive: session.isActive,
+        timeRemaining: Math.max(0, timeRemaining),
+        isActive: session.isActive !== false,
         sessionTimeout: sessionTimeoutMinutes
       }
     });
+    
   } catch (err) {
+    console.error('[Auth Controller] Error in getSessionInfo:', err);
     next(err);
   }
 }
@@ -288,9 +347,17 @@ async function refreshSession(req, res, next) {
   try {
     const { session } = req;
     
+    if (!session) {
+      return res.status(401).json({
+        ok: false,
+        message: 'No active session found'
+      });
+    }
+    
     // Get session timeout from global settings
     let sessionTimeoutMinutes = 480; // Default 8 hours
     try {
+      // Fix: Use GlobalSettingsService (capital G) instead of globalSettingsService
       const globalSettings = await GlobalSettingsService.getGeneralSettings();
       if (globalSettings) {
         const settings = typeof globalSettings === 'string' 
@@ -302,7 +369,7 @@ async function refreshSession(req, res, next) {
         }
       }
     } catch (error) {
-      console.warn('Failed to load session timeout from global settings:', error);
+      console.warn('[Auth Controller] Failed to load session timeout from global settings:', error);
       // Continue with default value
     }
     
@@ -310,6 +377,13 @@ async function refreshSession(req, res, next) {
     const newExpiresAt = new Date(Date.now() + sessionTimeoutMinutes * 60 * 1000);
     
     const updatedSession = await sessionModel.updateExpiry(session.id, newExpiresAt);
+    
+    if (!updatedSession) {
+      return res.status(500).json({
+        ok: false,
+        message: 'Failed to update session'
+      });
+    }
     
     res.status(200).json({
       ok: true,
@@ -320,10 +394,12 @@ async function refreshSession(req, res, next) {
       }
     });
   } catch (err) {
+    console.error('[Auth Controller] Error in refreshSession:', err);
     next(err);
   }
 }
 
+// Update the module.exports to include validateResetToken
 module.exports = {
   login,
   verifyOtp,
@@ -334,8 +410,9 @@ module.exports = {
   forgotPassword,
   sendResetLink,
   answerSecurityQuestions,
+  resetPassword,
+  validateResetToken, // Add this
   logout,
   getSessionInfo,
   refreshSession
 };
-

@@ -2,12 +2,17 @@ const { Router } = require('express');
 const OUmanagerController = require('../../controllers/oumanegament.controller');
 const { validate } = require('../../utils/validate');
 const { body, query } = require('express-validator');
+const { requireAuth } = require('../../auth/requireAuth');
+const { requireRole } = require('../../auth/requireRole');
+const { auditLogger, auditHelpers } = require('../../middleware/auditLogger');
 
 const router = Router();
 
 
 router.get(
     '/list',
+    requireAuth,
+    requireRole('admin'),
     [
         query('start').optional().isInt({ min: 0 }).withMessage('start must be a non-negative integer'),
         query('isactive').optional().isIn(['true', 'false']).withMessage('isactive must be true or false'),
@@ -19,20 +24,26 @@ router.get(
         query('searchvalue').optional().isString().withMessage('searchvalue must be a string'),
     ],
     validate,
+    auditLogger('RETRIEVE_OUS', 'OU', null, auditHelpers.getRetrieveOUDetails),
     OUmanagerController.getOU
 )
 
 router.get(
     '/getchildren',
+    requireAuth,
+    requireRole('admin'),
     [query('parentid').isString().notEmpty().withMessage('parentid must be a non-empty string')
         .isUUID().withMessage('parentid must be a valid UUID')],
     validate,
+    auditLogger('RETRIEVE_CHILDREN', 'OU', auditHelpers.getChildrenTargetId, auditHelpers.getChildrenDetails),
     OUmanagerController.getChildren
 )
 
 
 router.post(
     '/create',
+    requireAuth,
+    requireRole('admin'),
     [
     body('OrgName').isString().notEmpty(),
     body('Description').isString().notEmpty(),
@@ -73,6 +84,7 @@ router.post(
     body('Settings.broadcast.general.retention').isInt(),
     ],
     validate,
+    auditLogger('CREATE_OU', 'OU', auditHelpers.getCreateOUTargetId, auditHelpers.getCreateOUDetails),
     OUmanagerController.createOUmanager
 )
 
@@ -80,6 +92,8 @@ router.post(
 
 router.post(
     '/update',
+    requireAuth,
+    requireRole('admin'),
     [body('id').isString().notEmpty(),
     body('changes').isObject().notEmpty(),
     body('changes.OrgName').optional().isString().notEmpty(),
@@ -126,35 +140,45 @@ router.post(
     body('changes.Settings.broadcast.general.retention').optional().isInt(),
 ],
     validate,
+    auditLogger('UPDATE_OU', 'OU', auditHelpers.getUpdateOUTargetId, auditHelpers.getUpdateOUDetails),
     OUmanagerController.updateOU
 )
 
 router.get(
     '/getOUsettings',
+    requireAuth,
+    requireRole('admin'),
     [query('id').isString().notEmpty()],
     validate,
+    auditLogger('RETRIEVE_OU_SETTINGS', 'OU', auditHelpers.getOUSettingsTargetId, auditHelpers.getOUSettingsDetails),
     OUmanagerController.getOUsettings
 )
 
 router.post(
     '/deactive',
+    requireAuth,
+    requireRole('admin'),
     [
         body('deativationlist').isArray().notEmpty().withMessage('deativationlist must be a non-empty array'),
         body('deativationlist.*').isString().notEmpty().withMessage('Each OU ID must be a non-empty string')
             .isUUID().withMessage('Each OU ID must be a valid UUID'),
     ],
     validate,
+    auditLogger('DEACTIVATE_OU', 'OU', auditHelpers.getDeactivateOUTargetId, auditHelpers.getDeactivateOUDetails),
     OUmanagerController.deactiveOU
 )
 
 router.post(
     '/reactive',
+    requireAuth,
+    requireRole('admin'),
     [body('reactivationlist').isArray().notEmpty().withMessage('reactivationlist must be a non-empty array'),
     body('reactivationlist.*').isString().notEmpty().withMessage('Each OU ID must be a non-empty string')
         .isUUID().withMessage('Each OU ID must be a valid UUID'),
         
     ],
     validate,
+    auditLogger('REACTIVATE_OU', 'OU', auditHelpers.getReactivateOUTargetId, auditHelpers.getReactivateOUDetails),
     OUmanagerController.reactiveOU
 )
 

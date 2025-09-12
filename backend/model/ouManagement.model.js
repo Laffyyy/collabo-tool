@@ -503,10 +503,10 @@ class OUmodel {
         }
     }
 
-    async InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) {
+    async InsertAuditLog(duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) {
         try {
-            const query = `INSERT INTO tblauditlogs (did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
-            const result = await db.query(query, [did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat]);
+            const query = `INSERT INTO tblauditlogs ( duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
+            const result = await db.query(query, [duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat]);
             return result.rows[0];
         } catch (error) {
             throw new Error(error);
