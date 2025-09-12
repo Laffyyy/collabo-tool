@@ -422,10 +422,11 @@ function mergeSettings(existingSettings, newSettings) {
     if (newSettings.broadcast) {
         if (!merged.broadcast) merged.broadcast = {};
         
-        // Merge broadcast settings
-        if (newSettings.broadcast.Frontline) {
+        // Merge broadcast settings - support both capital and lowercase variants
+        const frontlineBroadcast = newSettings.broadcast.Frontline || newSettings.broadcast.frontline;
+        if (frontlineBroadcast) {
             if (!merged.broadcast.Frontline) merged.broadcast.Frontline = {};
-            Object.assign(merged.broadcast.Frontline, newSettings.broadcast.Frontline);
+            Object.assign(merged.broadcast.Frontline, frontlineBroadcast);
         }
         
         if (newSettings.broadcast.support) {
@@ -438,9 +439,10 @@ function mergeSettings(existingSettings, newSettings) {
             Object.assign(merged.broadcast.supervisor, newSettings.broadcast.supervisor);
         }
         
-        if (newSettings.broadcast.General) {
+        const generalBroadcast = newSettings.broadcast.General || newSettings.broadcast.general;
+        if (generalBroadcast) {
             if (!merged.broadcast.General) merged.broadcast.General = {};
-            Object.assign(merged.broadcast.General, newSettings.broadcast.General);
+            Object.assign(merged.broadcast.General, generalBroadcast);
         }
     }
 

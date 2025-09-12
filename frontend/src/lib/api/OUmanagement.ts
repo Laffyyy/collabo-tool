@@ -129,6 +129,34 @@ interface FrontendOU {
   };
 }
 
+// Helper function to get current user info
+const getCurrentUser = () => {
+  try {
+    const userStr = localStorage.getItem('auth_user');
+    return userStr ? JSON.parse(userStr) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Helper function to get current user ID
+const getCurrentUserId = () => {
+  return localStorage.getItem('auth_userId');
+};
+
+// Helper function to check if user has admin role
+const hasAdminRole = () => {
+  const currentUser = getCurrentUser();
+  return currentUser?.role?.toLowerCase() === 'admin';
+};
+
+// Helper function to check if user has required permissions
+const hasOUManagementPermissions = () => {
+  const currentUser = getCurrentUser();
+  const userRole = currentUser?.role?.toLowerCase();
+  return userRole === 'admin' || userRole === 'manager' || userRole === 'supervisor';
+};
+
 // Create axios instance with default configuration
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -141,11 +169,29 @@ const apiClient = axios.create({
 // Add request interceptor for authentication if needed
 apiClient.interceptors.request.use(
   (config) => {
-    // Add auth token if available
-    const token = localStorage.getItem('authToken');
+    // Add auth token if available - check multiple possible keys
+    const token = localStorage.getItem('auth_token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('jwt') || 
+                  localStorage.getItem('token');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Add user information for audit logging
+    const currentUser = getCurrentUser();
+    const currentUserId = getCurrentUserId();
+    
+    if (currentUser) {
+      config.headers['X-User-ID'] = currentUserId || '';
+      config.headers['X-User-Role'] = currentUser.role || '';
+      config.headers['X-User-Name'] = currentUser.username || currentUser.email || '';
+    }
+    
+    // Also add credentials for cookie-based auth if needed
+    config.withCredentials = true;
+    
     return config;
   },
   (error) => {
@@ -161,9 +207,20 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     // Handle common errors
     if (error.response?.status === 401) {
-      // Unauthorized - redirect to login
+      // Unauthorized - clean up all auth tokens and redirect to login
+      localStorage.removeItem('auth_token');
       localStorage.removeItem('authToken');
+      localStorage.removeItem('jwt');
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_userId');
+      localStorage.removeItem('auth_session');
+      
+      // Redirect to login
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      // Forbidden - user doesn't have permission
+      console.error('Access forbidden: Insufficient permissions');
     }
     return Promise.reject(error);
   }
@@ -176,6 +233,14 @@ apiClient.interceptors.response.use(
  */
 export const createOU = async (ouData: CreateOURequest): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasAdminRole()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to create Organization Units.'
+      };
+    }
+
     const response = await apiClient.post('/create', ouData);
     return {
       success: true,
@@ -200,6 +265,14 @@ export const createOU = async (ouData: CreateOURequest): Promise<APIResponse> =>
  */
 export const getActiveOUs = async (params: OUQueryParams = {}): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasOUManagementPermissions()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to view Organization Units.'
+      };
+    }
+
     const response = await apiClient.get('/list', { params: { ...params, isactive: 'true' } });
     return {
       success: true,
@@ -222,6 +295,14 @@ export const getActiveOUs = async (params: OUQueryParams = {}): Promise<APIRespo
  */
 export const getInactiveOUs = async (params: OUQueryParams = {}): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasOUManagementPermissions()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to view Organization Units.'
+      };
+    }
+
     const response = await apiClient.get('/list', { params: { ...params, isactive: 'false' } });
     return {
       success: true,
@@ -288,6 +369,14 @@ export const deactivateOUs = async (ids: string[]): Promise<APIResponse> => {
  */
 export const updateOU = async (updateData: UpdateOURequest): Promise<APIResponse> => {
   try {
+    // Check permissions before making the request
+    if (!hasAdminRole()) {
+      return {
+        success: false,
+        error: 'Insufficient permissions. Admin role required to update Organization Units.'
+      };
+    }
+
     const response = await apiClient.post('/update', updateData);
     return {
       success: true,
@@ -495,5 +584,9 @@ export default {
   reactivateOUs,
   updateOU,
   transformOUDataForAPI,
-  transformOUDataForUpdate
+  transformOUDataForUpdate,
+  getCurrentUser,
+  getCurrentUserId,
+  hasAdminRole,
+  hasOUManagementPermissions
 };

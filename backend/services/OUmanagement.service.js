@@ -358,9 +358,9 @@ async function getChildren(parentid) {
     }
 }
 
-async function InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat) {
+async function InsertAuditLog(duserid, daction, dtargettype, dtargetid, ddetails, dipaddress = null, duseragent = null, tcreatedat) {
     try {
-        const result = await ouModel.InsertAuditLog(did, duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat);
+        const result = await ouModel.InsertAuditLog(duserid, daction, dtargettype, dtargetid, ddetails, dipaddress, duseragent, tcreatedat);
         return result;
     } catch (error) {
         throw new Error(`Failed to insert audit log: ${error.message}`);
