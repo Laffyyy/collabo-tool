@@ -58,7 +58,7 @@ class AuditLogModel {
         default:
           targetType = category;
       }
-      whereConditions.push(`al.dtargettype = $${paramIndex}`);
+      whereConditions.push(`LOWER(al.dtargettype) = LOWER($${paramIndex})`);
       queryParams.push(targetType);
       paramIndex++;
     }
@@ -140,7 +140,7 @@ class AuditLogModel {
         default:
           targetType = category;
       }
-      whereConditions.push(`al.dtargettype = $${paramIndex}`);
+      whereConditions.push(`LOWER(al.dtargettype) = LOWER($${paramIndex})`);
       queryParams.push(targetType);
       paramIndex++;
     }
@@ -249,7 +249,8 @@ class AuditLogModel {
       };
       
       result.rows.forEach(row => {
-        const category = categoryMapping[row.target_type];
+        // Convert target_type to lowercase for case-insensitive mapping
+        const category = categoryMapping[row.target_type.toLowerCase()];
         if (category && counts.hasOwnProperty(category)) {
           counts[category] = parseInt(row.count);
         }

@@ -154,7 +154,9 @@ class AuditLogService {
       'config': 'global-config'
     };
     
-    const category = categoryMapping[rawLog.target_type] || rawLog.target_type || 'system';
+    // Convert target_type to lowercase for consistent mapping
+    const targetType = rawLog.target_type ? rawLog.target_type.toLowerCase() : '';
+    const category = categoryMapping[targetType] || targetType || 'system';
     
     // Format details for display - show the JSON content or a structured message
     let formattedDetails;
