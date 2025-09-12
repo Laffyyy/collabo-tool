@@ -3,6 +3,16 @@
     import { onMount } from 'svelte';
     import { apiClient } from '$lib/api/client';
     import { API_CONFIG } from '$lib/api/config';
+
+    // Fisher-Yates shuffle algorithm for randomizing array order
+    function shuffleArray<T>(array: T[]): T[] {
+        const shuffled = [...array]; // Create a copy to avoid mutating original
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
     
     let securityQuestions: Array<{ id: string; questionText: string }> = $state([]);
     let currentQuestionIndex = $state(0);
@@ -118,10 +128,14 @@
             }>(`${API_CONFIG.endpoints.securityQuestions.userQuestions}/${userId}`);
 
             if (response.ok && response.questions && response.questions.length > 0) {
-                securityQuestions = response.questions.map(q => ({
+                // Map the questions to the expected format
+                const mappedQuestions = response.questions.map(q => ({
                     id: q.questionId,
                     questionText: q.questionText
                 }));
+                
+                // Randomize the order of questions using Fisher-Yates shuffle
+                securityQuestions = shuffleArray(mappedQuestions);
                 currentQuestionIndex = 0;
             } else {
                 throw new Error('No security questions found for this user');
