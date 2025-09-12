@@ -251,8 +251,8 @@ class OUmodel {
                     FROM full_hierarchy h
                     INNER JOIN relevant_ous ro ON h.did = ro.did
                 ),
-                ou_tree AS (
-                    -- Build the final tree structure
+                root_nodes AS (
+                    -- Get root nodes for pagination
                     SELECT 
                         h.did as ouid,
                         h.dname,
@@ -263,37 +263,48 @@ class OUmodel {
                         h."dLocation",
                         h."bisActive",
                         COALESCE(mc.membercount, 0) as membercount,
-                        (
-                            SELECT jsonb_agg(
-                                jsonb_build_object(
-                                    'ouid', c.did,
-                                    'dname', c.dname,
-                                    'ddescription', c.ddescription,
-                                    'dparentouid', c.dparentouid,
-                                    'tcreatedat', c.tcreatedat,
-                                    'jsSettings', c."jsSettings",
-                                    'dLocation', c."dLocation",
-                                    'bisActive', c."bisActive",
-                                    'membercount', COALESCE(mc_child.membercount, 0)
-                                )
-                            )
-                            FROM filtered_hierarchy c
-                            LEFT JOIN member_counts mc_child ON mc_child.did = c.did
-                            WHERE c.dparentouid = h.did
-                        ) as children
+                        'root' as node_type
                     FROM filtered_hierarchy h
                     LEFT JOIN member_counts mc ON mc.did = h.did
                     WHERE h.dparentouid IS NULL
+                ),
+                all_nodes AS (
+                    -- Get all nodes for tree building
+                    SELECT 
+                        h.did as ouid,
+                        h.dname,
+                        h.ddescription,
+                        h.dparentouid,
+                        h.tcreatedat,
+                        h."jsSettings",
+                        h."dLocation",
+                        h."bisActive",
+                        COALESCE(mc.membercount, 0) as membercount,
+                        'all' as node_type
+                    FROM filtered_hierarchy h
+                    LEFT JOIN member_counts mc ON mc.did = h.did
+                ),
+                paginated_roots AS (
+                    SELECT *, COUNT(*) OVER() AS total_count
+                    FROM root_nodes
+                    ORDER BY ${validSortBy} ${validSort}
+                    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
                 )
-                SELECT *, COUNT(*) OVER() AS total_count
-                FROM ou_tree
-                ORDER BY ${validSortBy} ${validSort}
-                LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+                -- Return both paginated roots and all nodes in one query
+                SELECT * FROM paginated_roots
+                UNION ALL
+                SELECT ouid, dname, ddescription, dparentouid, tcreatedat, "jsSettings", "dLocation", "bisActive", membercount, node_type, 0 as total_count FROM all_nodes
+                ORDER BY node_type, dname
             `;
 
             params.push(limit, start);
             const result = await db.query(query, params);
-            const rows = result.rows.map(r => ({
+            
+            // Separate root nodes and all nodes from the result
+            const rootResults = result.rows.filter(r => r.node_type === 'root');
+            const allNodesResults = result.rows.filter(r => r.node_type === 'all');
+            
+            const rows = rootResults.map(r => ({
                 ouid: r.ouid,
                 dname: r.dname,
                 ddescription: r.ddescription,
@@ -302,11 +313,24 @@ class OUmodel {
                 jsSettings: r.jsSettings,
                 dLocation: r.dLocation,
                 bisActive: r.bisActive,
-                membercount: r.membercount,
-                children: r.children || []
+                membercount: r.membercount
             }));
-            const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
-            return { rows, total };
+            
+            const allNodes = allNodesResults.map(r => ({
+                ouid: r.ouid,
+                dname: r.dname,
+                ddescription: r.ddescription,
+                dparentouid: r.dparentouid,
+                tcreatedat: r.tcreatedat,
+                jsSettings: r.jsSettings,
+                dLocation: r.dLocation,
+                bisActive: r.bisActive,
+                membercount: r.membercount
+            }));
+            
+            const total = rootResults.length > 0 ? parseInt(rootResults[0].total_count) : 0;
+
+            return { rows, total, allNodes };
         } catch (error) {
             throw new Error(error);
         }

@@ -71,7 +71,7 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
         const startInt = Number.isInteger(start) ? start : parseInt(start || 0);
         const limitInt = Number.isInteger(limit) ? limit : parseInt(limit || 10);
 
-        const { rows, total } = await ouModel.getOUsWithTotal(
+        const { rows, total, allNodes } = await ouModel.getOUsWithTotal(
             startInt,
             limitInt,
             sort,
@@ -82,7 +82,17 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
             isactive
         );
 
-        // Recursively deserialize jsSettings for all rows and their children
+        // Build complete tree structure recursively
+        function buildTreeStructure(nodes, parentId = null) {
+            return nodes
+                .filter(node => node.dparentouid === parentId)
+                .map(node => ({
+                    ...node,
+                    children: buildTreeStructure(nodes, node.ouid)
+                }));
+        }
+
+        // Recursively deserialize jsSettings for all nodes and their children
         function deserializeOUSettings(ou) {
             if (Object.prototype.hasOwnProperty.call(ou, 'jsSettings')) {
                 ou.jsSettings = deserializeJsSettings(ou.jsSettings);
@@ -93,7 +103,14 @@ async function getOU(start, limit, sort, sortby, search, searchby, searchvalue, 
             return ou;
         }
 
-        const processedRows = rows.map(row => deserializeOUSettings({...row}));
+        // Build the complete tree for each root node
+        const processedRows = rows.map(row => {
+            const nodeWithTree = {
+                ...row,
+                children: buildTreeStructure(allNodes, row.ouid)
+            };
+            return deserializeOUSettings({...nodeWithTree});
+        });
 
         const totalPages = limitInt > 0 ? Math.ceil(total / limitInt) : 0;
         const page = limitInt > 0 ? Math.floor(startInt / limitInt) + 1 : 1;
